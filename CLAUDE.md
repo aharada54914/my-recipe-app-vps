@@ -2030,3 +2030,76 @@ Keep 4 tabs in TabId, add search as a modal/overlay triggered by a floating butt
 - [ ] Update BottomNav to show Favorites tab
 - [ ] Test favorite toggle functionality
 - [ ] Test favorites persistence across app restarts
+
+
+---
+
+## CSV Data Import
+
+The app supports importing recipe data from SHARP appliance CSV files (Hotcook, Healsio).
+
+### Quick Overview
+
+**Supported devices**:
+- Hotcook (KN-HW24H) - with menu number
+- Healsio (AX-XA20) - without menu number
+
+**Key features**:
+- Automatic parsing of multi-line ingredients and steps
+- Optional menu number handling
+- Image URL and recipe source URL storage
+- Clickable external link icon in RecipeDetail
+
+### Database Schema
+
+**Add these fields to Recipe interface**:
+
+```typescript
+export interface Recipe {
+  id?: number
+  title: string
+  device: 'hotcook' | 'healsio'
+  category: RecipeCategory
+  recipeNumber?: string | null // Optional menu number (e.g., "0395")
+  servings?: string // e.g., "2人分"
+  calories?: string // e.g., "約115kcal"
+  cookingTime?: string // e.g., "30分"
+  imageUrl?: string // Image URL from CSV
+  sourceUrl?: string // Recipe page URL (clickable external link)
+  ingredients: Ingredient[]
+  steps: string[]
+}
+```
+
+### UI Integration
+
+**RecipeDetail.tsx** - Add external link icon in header:
+
+```typescript
+import { ExternalLink } from 'lucide-react'
+
+{recipe.sourceUrl && (
+  <a
+    href={recipe.sourceUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex items-center gap-2 rounded-xl bg-bg-card px-3 py-2 text-sm"
+  >
+    <ExternalLink className="h-4 w-4 text-accent" />
+    <span>公式レシピ</span>
+  </a>
+)}
+```
+
+### Detailed Documentation
+
+For full implementation details, CSV structure analysis, and parsing logic, see:
+
+📄 **[CSV_IMPORT.md](./CSV_IMPORT.md)**
+
+This includes:
+- CSV column structure comparison
+- Ingredient parsing algorithm (handling fractions, units, notes)
+- Step parsing (removing numbering)
+- Import page UI implementation
+- Error handling and testing checklist
