@@ -873,3 +873,143 @@ const favoriteRecipes = useLiveQuery(() => db.recipes.where('id').anyOf(favorite
 - **iPhone 13 (iOS 26.2.1)**: Standard model
 - **iPhone 15 Pro (iOS 26.2.1)**: Dynamic Island + 120Hz
 - **iPhone 17 Pro (iOS 26.2.1)**: Latest model
+## Code Style Preferences
+
+- Use `useLiveQuery` for reactive database queries
+- Keep components small and focused (single responsibility)
+- Extract complex calculations to `src/utils/` as pure functions
+- Type everything strictly (no `any` types)
+
+---
+
+## Memory Budget Guidelines
+
+- **Per-page data**: Keep <1MB in memory at any time
+- **Image storage**: Store URLs only, not blobs (IndexedDB has 50MB limit on Safari)
+- **AI parsing**: Clear DOM after extracting text from fetched HTML
+
+---
+
+## CSV Data Import
+
+The app supports importing recipe data from SHARP appliance CSV files (Hotcook, Healsio).
+
+### Quick Overview
+
+**Supported devices**:
+- Hotcook (KN-HW24H) - with menu number
+- Healsio (AX-XA20) - without menu number
+
+**Key features**:
+- Automatic parsing of multi-line ingredients and steps
+- Optional menu number handling
+- Image URL and recipe source URL storage
+- Clickable external link icon in RecipeDetail
+
+### Detailed Documentation
+
+For full implementation details, CSV structure analysis, and parsing logic, see:
+
+📄 **[CSV_IMPORT.md](./CSV_IMPORT.md)**
+
+---
+
+## Image Handling Strategy (Future-Proof)
+
+**Target data scale**: ~2000 recipes, each with a high-resolution image
+
+### 1. Storage Strategy: URL-based, Cache on Demand
+
+- **Database**: Store only the `imageUrl` (string) in IndexedDB. **NEVER store image blobs**.
+- **Image Source**: Images are hosted on an external CDN or web server.
+- **Loading**: When a recipe is opened, the image is downloaded from the `imageUrl`.
+- **Caching**: Downloaded images are cached using the **Cache API** (part of Service Workers). This allows for offline access without filling up IndexedDB.
+- **Cache Eviction**: Implement a **Least Recently Used (LRU)** cache eviction policy to manage storage. For example, keep the last 100 viewed images.
+
+### 2. UI Implementation: Placeholder & Progressive Loading
+
+- **Placeholder**: While the image is downloading, display a placeholder to prevent layout shifts. This can be a simple gray box with the correct aspect ratio, or a low-quality image placeholder (LQIP) like a BlurHash string.
+- **Progressive Loading**: First, show the low-quality placeholder. Once the high-resolution image is downloaded, fade it in for a smooth user experience.
+
+```typescript
+// Example of a progressive image component
+const ProgressiveImage = ({ src, placeholder }) => {
+  const [isLoaded, setIsLoaded] = useState(false)
+  const imageRef = useRef(null)
+
+  useEffect(() => {
+    const img = new Image()
+    img.src = src
+    img.onload = () => setIsLoaded(true)
+  }, [src])
+
+  return (
+    <div className="aspect-w-16 aspect-h-9">
+      <img
+        src={isLoaded ? src : placeholder}
+        alt="Recipe Image"
+        className={`transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-20'}`}
+      />
+    </div>
+  )
+}
+```
+
+### 3. AI Recipe Parser Enhancement
+
+- The AI parser, when extracting recipes from URLs, should also identify the main recipe image (e.g., from Open Graph tags or schema.org metadata) and save its URL to the `imageUrl` field.
+
+---
+
+## Performance Optimization for iPhone
+
+To ensure the app runs smoothly on all target iPhones (13 and newer), focus on these critical optimizations.
+
+### 1. Virtual Scrolling (Essential for 2000+ recipes)
+
+- **Problem**: Rendering a list of 2000 recipes crashes the browser.
+- **Solution**: Use a virtual scrolling library like `@tanstack/react-virtual`.
+- **Impact**: Only renders the ~10 items visible on screen, keeping the app fast and responsive.
+
+```typescript
+// Example with @tanstack/react-virtual
+const rowVirtualizer = useVirtualizer({
+  count: recipes.length,
+  getScrollElement: () => parentRef.current,
+  estimateSize: () => 150, // Estimated height of a recipe card
+})
+
+return (
+  <div ref={parentRef} style={{ height: '100%', overflow: 'auto' }}>
+    <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+      {rowVirtualizer.getVirtualItems().map(virtualItem => (
+        <div key={virtualItem.key} style={{...}}>
+          <RecipeCard recipe={recipes[virtualItem.index]} />
+        </div>
+      ))}
+    </div>
+  </div>
+)
+```
+
+### 2. Offload Heavy Computations to Web Workers
+
+- **Problem**: Complex calculations like fuzzy search or match rate sorting can freeze the UI.
+- **Solution**: Move these tasks to a background thread using Web Workers.
+- **Impact**: The UI remains interactive and smooth even during heavy processing.
+
+### 3. Judicious Use of `React.memo` and `useMemo`
+
+- **Problem**: Unnecessary re-renders of complex components like `RecipeCard` can slow down the app.
+- **Solution**: Wrap `RecipeCard` in `React.memo` and use `useMemo` for expensive calculations within components.
+
+### 4. CSS Containment for Rendering Performance
+
+- **Problem**: The browser recalculates the layout for the entire page on every change.
+- **Solution**: Use the `contain` CSS property on `RecipeCard` to isolate its rendering from the rest of the page.
+
+```css
+.recipe-card {
+  contain: content;
+}
+```
