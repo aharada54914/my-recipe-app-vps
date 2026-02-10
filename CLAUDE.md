@@ -2103,3 +2103,244 @@ This includes:
 - Step parsing (removing numbering)
 - Import page UI implementation
 - Error handling and testing checklist
+# iOS版Google Chrome対応ガイドライン
+
+## 重要な背景知識
+
+iOS版のすべてのブラウザ（Chrome、Firefox、Edgeなど）は、Appleのポリシーにより**WebKitエンジンを使用することが義務付けられています**。つまり、iOS版ChromeはAndroid版Chromeとは異なり、実質的には「Chromeの見た目をしたSafari」です。
+
+したがって、**iOS版Chrome対応 = iOS版Safari対応**となります。
+
+---
+
+## 対応が必要な主要項目
+
+### 1. **Wake Lock API (画面常時点灯)**
+
+**問題点**:
+- iOS版Safari/Chromeは `navigator.wakeLock` API に対応していません（2024年2月時点）
+
+**対応方法**:
+```typescript
+// src/hooks/useWakeLock.ts
+
+export function useWakeLock() {
+  const [isSupported, setIsSupported] = useState(false);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  useEffect(() => {
+    // Wake Lock APIのサポート確認
+    setIsSupported('wakeLock' in navigator);
+  }, []);
+
+  const requestWakeLock = async () => {
+    if (!isSupported) {
+      console.warn('Wake Lock API is not supported on this device (iOS)');
+      // iOS向けフォールバック: NoSleep.js ライブラリを使用
+      // または、ユーザーに「画面の自動ロックをオフにしてください」と案内
+      return;
+    }
+
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request('screen');
+    } catch (err) {
+      console.error('Wake Lock request failed:', err);
+    }
+  };
+
+  // ... 以下省略
+}
+```
+
+**推奨フォールバック**:
+- [NoSleep.js](https://github.com/richtr/NoSleep.js) ライブラリを使用
+- または、設定画面で「iOS版では手動で画面ロックをオフにしてください」と案内
+
+---
+
+### 2. **IndexedDB (オフラインストレージ)**
+
+**問題点**:
+- iOS版Safariは、プライベートブラウジングモードでIndexedDBが使えない
+- ストレージ容量制限が厳しい（約50MB、デバイスによって異なる）
+
+**対応方法**:
+```typescript
+// src/db/db.ts
+
+// IndexedDBの利用可能性チェック
+export async function checkIndexedDBAvailability(): Promise<boolean> {
+  try {
+    const testDB = await Dexie.exists('_test_db');
+    return true;
+  } catch (err) {
+    console.error('IndexedDB is not available:', err);
+    alert('このブラウザではオフライン機能が利用できません。通常モードでアクセスしてください。');
+    return false;
+  }
+}
+```
+
+**注意事項**:
+- 画像はURLのみ保存し、blobデータは保存しない（容量制限対策）
+- 2000件のレシピでも、テキストデータのみなら問題なく保存可能
+
+---
+
+### 3. **PWA (ホーム画面への追加)**
+
+**問題点**:
+- iOS版ChromeからはPWAをホーム画面に追加できない
+- **iOS版Safariからのみ**「ホーム画面に追加」が可能
+
+**対応方法**:
+```typescript
+// src/components/InstallPrompt.tsx
+
+export function InstallPrompt() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator.standalone);
+  const isChrome = /CriOS/.test(navigator.userAgent);
+
+  if (isIOS && !isInStandaloneMode) {
+    if (isChrome) {
+      return (
+        <div className="install-prompt">
+          このアプリをホーム画面に追加するには、Safariで開いてください。
+        </div>
+      );
+    } else {
+      return (
+        <div className="install-prompt">
+          共有ボタン → 「ホーム画面に追加」でアプリとして使えます。
+        </div>
+      );
+    }
+  }
+
+  return null;
+}
+```
+
+---
+
+### 4. **タッチ操作とスクロール**
+
+**問題点**:
+- iOSでは慣性スクロール（momentum scrolling）が独特
+- `-webkit-overflow-scrolling: touch` が必要な場合がある（ただし非推奨）
+
+**対応方法**:
+```css
+/* src/index.css */
+
+/* スムーズなスクロール */
+* {
+  -webkit-overflow-scrolling: touch; /* iOS向け */
+}
+
+/* タップ時のハイライト除去 */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 長押しメニューの無効化（画像など） */
+img {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+```
+
+---
+
+### 5. **100vh問題 (アドレスバーの高さ)**
+
+**問題点**:
+- iOSでは `100vh` がアドレスバーを含む高さになり、画面下部が隠れる
+
+**対応方法**:
+```typescript
+// src/App.tsx
+
+useEffect(() => {
+  // iOS向け: 実際のビューポート高さを計算
+  const setViewportHeight = () => {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+  };
+
+  setViewportHeight();
+  window.addEventListener('resize', setViewportHeight);
+
+  return () => window.removeEventListener('resize', setViewportHeight);
+}, []);
+```
+
+```css
+/* src/index.css */
+
+/* 100vh の代わりに使用 */
+.full-height {
+  height: 100vh; /* フォールバック */
+  height: calc(var(--vh, 1vh) * 100); /* iOS対応 */
+}
+```
+
+---
+
+### 6. **日付入力 (Date Picker)**
+
+**問題点**:
+- iOS版では `<input type="date">` のスタイルが独特
+
+**対応方法**:
+- ネイティブのdate pickerを使用する（iOSのUIが優れているため）
+- カスタムスタイルは最小限に
+
+---
+
+### 7. **フォント表示**
+
+**問題点**:
+- iOSでは日本語フォントのレンダリングが異なる
+
+**対応方法**:
+```css
+/* src/index.css */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+```
+
+---
+
+## テスト推奨環境
+
+### **必須テスト環境**:
+1. **iOS版Safari** (最優先)
+2. **iOS版Chrome** (Safari対応で自動的にカバーされる)
+
+### **テスト項目**:
+- [ ] IndexedDBへのデータ保存・読み込み
+- [ ] 2000件のレシピでのスクロール性能
+- [ ] タッチ操作（タップ、スワイプ、ピンチズーム）
+- [ ] PWAとしてのホーム画面追加
+- [ ] オフライン動作
+- [ ] 画面の向き変更（縦↔横）
+
+---
+
+## まとめ
+
+**iOS版Chrome対応のポイント**:
+1. **iOS版Chrome = iOS版Safari** と考える
+2. Wake Lock APIは使えないので、NoSleep.jsか手動案内
+3. IndexedDBの容量制限に注意（画像はURL保存）
+4. PWAインストールはSafariからのみ
+5. 100vh問題に対応
+6. タッチ操作の最適化
+
+これらの対応を行えば、iOS版ChromeでもAndroid版と同等の体験を提供できます。
