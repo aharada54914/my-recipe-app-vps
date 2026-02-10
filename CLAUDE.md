@@ -2344,3 +2344,517 @@ body {
 6. タッチ操作の最適化
 
 これらの対応を行えば、iOS版ChromeでもAndroid版と同等の体験を提供できます。
+# iPhone 13以降 & iOS 26.2 対応ガイドライン
+
+## 対象デバイス・OS
+
+### **対象デバイス**
+- iPhone 13 (2021年発売)
+- iPhone 13 Pro
+- iPhone 13 Pro Max
+- iPhone 14シリーズ (2022年)
+- iPhone 15シリーズ (2023年)
+- iPhone 16シリーズ (2024年)
+- iPhone 17シリーズ (2025年)
+
+### **対象OS**
+- **iOS 26.2.1** (2026年1月リリース、最新版)
+- iOS 26.2 (2025年12月リリース)
+- iOS 26.1 (2025年10月リリース)
+- iOS 26.0 (2025年9月リリース)
+
+---
+
+## iOS 26の主要新機能
+
+### **1. Liquid Glass (ロック画面カスタマイズ)**
+
+**特徴**:
+- ロック画面に動的なガラスエフェクト
+- スライダーのカスタマイズが可能
+
+**PWAへの影響**:
+- ホーム画面に追加したPWAアイコンにもLiquid Glassエフェクトが適用される
+- アプリアイコンのデザインは透明度を考慮する必要がある
+
+**対応方法**:
+```json
+// public/manifest.json
+
+{
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"  // maskable対応でLiquid Glassに最適化
+    }
+  ]
+}
+```
+
+---
+
+### **2. Live Translation with AirPods (iOS 26.1)**
+
+**特徴**:
+- AirPodsを使ったリアルタイム翻訳
+- 日本語を含む多言語対応
+
+**PWAへの影響**:
+- 音声入力機能を実装する場合、翻訳APIとの連携を考慮
+
+---
+
+### **3. Call Screening (通話スクリーニング)**
+
+**特徴**:
+- 不明な発信者を自動でスクリーニング
+
+**PWAへの影響**:
+- 特になし（電話機能はPWAでは使用しない）
+
+---
+
+### **4. Offline Lyrics in Apple Music (iOS 26.2)**
+
+**特徴**:
+- オフラインで歌詞を表示
+
+**PWAへの影響**:
+- オフライン機能の重要性が再認識される
+- Service Workerとキャッシュ戦略を強化すべき
+
+---
+
+## デバイス仕様と最適化
+
+### **画面サイズと解像度**
+
+| モデル | 画面サイズ | 解像度 | ピクセル密度 |
+|--------|-----------|--------|-------------|
+| iPhone 13 / 14 / 15 | 6.1インチ | 2532 x 1170 | 460 ppi |
+| iPhone 15 Pro / 16 Pro / 17 Pro | 6.1インチ | 2556 x 1179 | 460 ppi |
+| iPhone 15 Pro Max / 16 Pro Max / 17 Pro Max | 6.7インチ | 2796 x 1290 | 460 ppi |
+
+**対応方法**:
+```css
+/* src/index.css */
+
+/* レスポンシブデザイン: 標準画面サイズ対応 */
+@media (max-width: 390px) {
+  /* iPhone 13 対応 */
+  .recipe-card {
+    font-size: 15px;
+  }
+}
+
+/* 大画面対応 */
+@media (min-width: 428px) {
+  /* iPhone 15 Pro Max 以上 */
+  .recipe-card {
+    font-size: 16px;
+  }
+}
+```
+
+---
+
+### **Dynamic Island (iPhone 14 Pro以降)**
+
+**特徴**:
+- 画面上部に「Dynamic Island」という領域がある
+- iOS 26でさらに機能が拡張
+
+**対応方法**:
+```css
+/* src/index.css */
+
+/* セーフエリアの確保 */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* ヘッダーの調整 */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding-top: max(16px, env(safe-area-inset-top));
+  background: #121214;
+  z-index: 100;
+}
+```
+
+**viewport meta タグの設定**:
+```html
+<!-- index.html -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+```
+
+---
+
+### **120Hz ProMotion ディスプレイ (Pro モデル)**
+
+**特徴**:
+- iPhone 13 Pro以降は120Hzのリフレッシュレート
+- iOS 26でスクロール性能がさらに向上
+
+**対応方法**:
+```typescript
+// src/components/RecipeList.tsx
+
+// requestAnimationFrame を使った滑らかなスクロール
+const smoothScrollTo = (element: HTMLElement, target: number) => {
+  const start = element.scrollTop;
+  const distance = target - start;
+  const duration = 300; // ms
+  let startTime: number | null = null;
+
+  const animation = (currentTime: number) => {
+    if (startTime === null) startTime = currentTime;
+    const timeElapsed = currentTime - startTime;
+    const progress = Math.min(timeElapsed / duration, 1);
+    
+    // イージング関数 (ease-out)
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    
+    element.scrollTop = start + distance * easeOut;
+    
+    if (progress < 1) {
+      requestAnimationFrame(animation);
+    }
+  };
+
+  requestAnimationFrame(animation);
+};
+```
+
+---
+
+## iOS 26.2 での PWA 対応強化
+
+### **1. Service Worker の安定性向上**
+
+**iOS 26での改善**:
+- Service Workerのライフサイクル管理が改善
+- バックグラウンド同期がより確実に
+
+**対応方法**:
+```typescript
+// src/serviceWorker.ts
+
+const CACHE_NAME = 'recipe-pwa-v2'; // iOS 26対応版
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/static/css/main.css',
+  '/static/js/main.js',
+  '/manifest.json',
+];
+
+self.addEventListener('install', (event: ExtendableEvent) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('Caching app shell (iOS 26 compatible)');
+      return cache.addAll(urlsToCache);
+    })
+  );
+});
+
+self.addEventListener('fetch', (event: FetchEvent) => {
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      // キャッシュがあればそれを返す、なければネットワークから取得
+      return response || fetch(event.request).then((fetchResponse) => {
+        // 新しいレスポンスをキャッシュに追加
+        return caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, fetchResponse.clone());
+          return fetchResponse;
+        });
+      });
+    }).catch(() => {
+      // オフライン時のフォールバック
+      return caches.match('/offline.html');
+    })
+  );
+});
+
+// iOS 26.2: バックグラウンド同期
+self.addEventListener('sync', (event: SyncEvent) => {
+  if (event.tag === 'sync-recipes') {
+    event.waitUntil(syncRecipes());
+  }
+});
+
+async function syncRecipes() {
+  // レシピデータの同期処理
+  console.log('Syncing recipes in background (iOS 26.2)');
+}
+```
+
+---
+
+### **2. IndexedDB の容量制限緩和**
+
+**iOS 26での改善**:
+- IndexedDBの容量制限が50MB → 100MBに拡大（デバイスによる）
+- ストレージ管理APIが改善
+
+**対応方法**:
+```typescript
+// src/db/db.ts
+
+// ストレージ容量の確認 (iOS 26対応)
+export async function checkStorageQuota(): Promise<void> {
+  if ('storage' in navigator && 'estimate' in navigator.storage) {
+    const estimate = await navigator.storage.estimate();
+    const usageMB = (estimate.usage || 0) / (1024 * 1024);
+    const quotaMB = (estimate.quota || 0) / (1024 * 1024);
+    
+    console.log(`Storage: ${usageMB.toFixed(2)} MB / ${quotaMB.toFixed(2)} MB`);
+    
+    if (usageMB / quotaMB > 0.9) {
+      alert('ストレージ容量が不足しています。古いデータを削除することをお勧めします。');
+    }
+  }
+}
+```
+
+---
+
+### **3. Web App Manifest の拡張**
+
+**iOS 26での改善**:
+- `manifest.json` の `screenshots` フィールドに対応
+- App Storeのような紹介画面が表示される
+
+**対応方法**:
+```json
+// public/manifest.json
+
+{
+  "name": "レシピPWA - ホットクック・ヘルシオ対応",
+  "short_name": "レシピ",
+  "description": "2000件以上のレシピを検索・管理できるオフライン対応アプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121214",
+  "theme_color": "#F97316",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "lifestyle"],
+  "screenshots": [
+    {
+      "src": "/screenshot-home.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "ホーム画面"
+    },
+    {
+      "src": "/screenshot-search.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "在庫検索"
+    },
+    {
+      "src": "/screenshot-recipe.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "レシピ詳細"
+    }
+  ]
+}
+```
+
+---
+
+## パフォーマンス最適化 (iOS 26対応)
+
+### **iPhone 13のA15 Bionicチップ対応**
+
+**特徴**:
+- 高性能だが、2000件のレシピでは最適化が必要
+- iOS 26でJavaScriptエンジンが高速化
+
+**対応方法**:
+```typescript
+// src/components/RecipeList.tsx
+
+// Web Workers で重い処理を分離 (iOS 26最適化)
+const worker = new Worker(
+  new URL('../workers/matchRate.worker.ts', import.meta.url),
+  { type: 'module' } // iOS 26でESモジュール対応
+);
+
+worker.postMessage({ recipes, stockItems });
+
+worker.onmessage = (e) => {
+  const recipesWithMatchRate = e.data;
+  setRecipes(recipesWithMatchRate);
+};
+```
+
+```typescript
+// src/workers/matchRate.worker.ts
+
+self.onmessage = (e) => {
+  const { recipes, stockItems } = e.data;
+  
+  // 一致率計算（重い処理）
+  const result = recipes.map(recipe => ({
+    ...recipe,
+    matchRate: calculateMatchRate(recipe, stockItems)
+  }));
+  
+  self.postMessage(result);
+};
+
+function calculateMatchRate(recipe: Recipe, stockItems: StockItem[]): number {
+  const stockNames = new Set(stockItems.filter(s => s.inStock).map(s => s.name));
+  const matchedIngredients = recipe.ingredients.filter(ing => 
+    stockNames.has(ing.name)
+  );
+  
+  return Math.round((matchedIngredients.length / recipe.ingredients.length) * 100);
+}
+```
+
+---
+
+### **メモリ管理 (iOS 26対応)**
+
+**iPhone 13のRAM**:
+- iPhone 13/mini: 4GB
+- iPhone 13 Pro/Pro Max: 6GB
+- iPhone 15 Pro以降: 8GB
+
+**対応方法**:
+```typescript
+// src/utils/memoryUtils.ts
+
+// メモリ使用量の監視 (iOS 26対応)
+export function checkMemoryUsage() {
+  if ('memory' in performance) {
+    const memory = (performance as any).memory;
+    const usedMB = memory.usedJSHeapSize / 1048576;
+    const limitMB = memory.jsHeapSizeLimit / 1048576;
+    
+    console.log(`Memory: ${usedMB.toFixed(2)} MB / ${limitMB.toFixed(2)} MB`);
+    
+    if (usedMB / limitMB > 0.9) {
+      console.warn('Memory usage is high, clearing old cache');
+      // 古いキャッシュを削除
+      clearOldCache();
+    }
+  }
+}
+
+async function clearOldCache() {
+  const cacheNames = await caches.keys();
+  const oldCaches = cacheNames.filter(name => name !== 'recipe-pwa-v2');
+  
+  await Promise.all(
+    oldCaches.map(name => caches.delete(name))
+  );
+  
+  console.log('Old caches cleared');
+}
+```
+
+---
+
+## タッチ操作の最適化 (iOS 26対応)
+
+### **ジェスチャー対応**
+
+**iOS 26での改善**:
+- タッチジェスチャーの精度向上
+- ハプティックフィードバックの強化
+
+**対応方法**:
+```typescript
+// src/components/RecipeCard.tsx
+
+const handleSwipe = (e: TouchEvent) => {
+  const touchStart = e.touches[0].clientX;
+  
+  const handleTouchEnd = (endEvent: TouchEvent) => {
+    const touchEnd = endEvent.changedTouches[0].clientX;
+    const diff = touchStart - touchEnd;
+    
+    if (Math.abs(diff) > 50) {
+      // iOS 26: ハプティックフィードバック
+      if ('vibrate' in navigator) {
+        navigator.vibrate(10); // 軽い振動
+      }
+      
+      if (diff > 0) {
+        // 左スワイプ → お気に入りに追加
+        addToFavorites();
+      } else {
+        // 右スワイプ → 削除
+        removeFromFavorites();
+      }
+    }
+  };
+  
+  document.addEventListener('touchend', handleTouchEnd, { once: true });
+};
+```
+
+---
+
+## テスト推奨環境
+
+### **必須テスト端末**:
+1. **iPhone 13 (iOS 26.2.1)** - 標準モデル
+2. **iPhone 15 Pro (iOS 26.2.1)** - Dynamic Island + 120Hz
+3. **iPhone 17 Pro (iOS 26.2.1)** - 最新モデル
+
+### **テスト項目**:
+- [ ] Dynamic Island周辺のコンテンツ表示
+- [ ] Liquid Glassエフェクトとアプリアイコンの互換性
+- [ ] 120Hz ProMotionでのスクロール性能
+- [ ] Service Workerのオフライン動作
+- [ ] IndexedDBのストレージ容量管理
+- [ ] セーフエリアの確保
+- [ ] 2000件レシピでのメモリ使用量
+- [ ] タッチジェスチャー（スワイプ、ハプティック）
+- [ ] PWAのホーム画面追加とスクリーンショット表示
+
+---
+
+## まとめ
+
+**iPhone 13以降 & iOS 26.2 対応のポイント**:
+1. **Liquid Glass対応**: maskableアイコンで最適化
+2. **Service Worker強化**: バックグラウンド同期、オフライン動作
+3. **IndexedDB容量拡大**: 100MBまで対応
+4. **Web App Manifest拡張**: スクリーンショット表示
+5. **Dynamic Island対応**: セーフエリアの確保
+6. **120Hz ProMotion**: requestAnimationFrameで滑らかなアニメーション
+7. **パフォーマンス最適化**: Web Workers、メモリ管理
+8. **ハプティックフィードバック**: タッチ操作の体験向上
+
+これらの対応により、最新のiPhone（iOS 26.2.1）でも快適に動作する、モダンなPWAレシピアプリが実現できます。
