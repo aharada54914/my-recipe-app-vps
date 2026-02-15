@@ -39,21 +39,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   // T-11: Keep screen on during recipe viewing
   useWakeLock()
 
-  if (!recipe) return null
-
-  // Initialize note text from DB on first render
-  const displayNote = noteText ?? existingNote?.content ?? ''
-
-  const currentServings = servings ?? recipe.baseServings
-  const adjusted = adjustIngredients(recipe.ingredients, recipe.baseServings, currentServings)
-  const mainIngredients = adjusted.filter((i) => i.category === 'main')
-  const subIngredients = adjusted.filter((i) => i.category === 'sub')
-  const favorited = (isFav ?? 0) > 0
-
-  // T-18: Shopping list calculations
-  const missing = stockItems ? getMissingIngredients(recipe.ingredients, stockItems) : []
-
-  // T-13: Save note handler
+  // T-13: Save note handler (must be before early return — Rules of Hooks)
   const handleSaveNote = useCallback(async () => {
     const content = (noteText ?? '').trim()
     if (!content && !existingNote) return
@@ -71,15 +57,33 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
     setTimeout(() => setNoteSaved(false), 2000)
   }, [noteText, existingNote, recipeId])
 
-  // T-18: Copy shopping list
+  // T-18: Copy shopping list (must be before early return — Rules of Hooks)
   const handleCopyShoppingList = useCallback(async () => {
-    const text = formatShoppingListForLine(recipe.title, missing)
+    if (!recipe) return
+    const ingredients = recipe.ingredients
+    const stock = stockItems ?? []
+    const missingItems = getMissingIngredients(ingredients, stock)
+    const text = formatShoppingListForLine(recipe.title, missingItems)
     const ok = await copyToClipboard(text)
     if (ok) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
-  }, [recipe.title, missing])
+  }, [recipe, stockItems])
+
+  if (!recipe) return null
+
+  // Initialize note text from DB on first render
+  const displayNote = noteText ?? existingNote?.content ?? ''
+
+  const currentServings = servings ?? recipe.baseServings
+  const adjusted = adjustIngredients(recipe.ingredients, recipe.baseServings, currentServings)
+  const mainIngredients = adjusted.filter((i) => i.category === 'main')
+  const subIngredients = adjusted.filter((i) => i.category === 'sub')
+  const favorited = (isFav ?? 0) > 0
+
+  // T-18: Shopping list calculations
+  const missing = stockItems ? getMissingIngredients(recipe.ingredients, stockItems) : []
 
   return (
     <div className="min-h-dvh bg-bg-primary">
