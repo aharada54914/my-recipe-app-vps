@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft, Star, ShoppingCart, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { db } from '../db/db'
 import type { DeviceType } from '../db/db'
 import { adjustIngredients, formatQuantityVibe } from '../utils/recipeUtils'
@@ -35,6 +35,8 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   // T-18: Shopping list state
   const [showShoppingList, setShowShoppingList] = useState(false)
   const [copied, setCopied] = useState(false)
+  // T-26: raw steps expand
+  const [showRawSteps, setShowRawSteps] = useState(false)
 
   // T-11: Keep screen on during recipe viewing
   useWakeLock()
@@ -103,8 +105,21 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             </span>
             <span>No.{recipe.recipeNumber}</span>
             <span>{recipe.totalTimeMinutes}分</span>
+            {recipe.calories && <span>{recipe.calories}</span>}
+            {recipe.saltContent && <span>塩分{recipe.saltContent}</span>}
           </div>
         </div>
+        {/* T-26: External link for CSV recipes */}
+        {recipe.sourceUrl && (
+          <a
+            href={recipe.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+          >
+            <ExternalLink className="h-5 w-5 text-accent" />
+          </a>
+        )}
         <button
           onClick={() => toggleFavorite(recipeId)}
           className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
@@ -209,6 +224,31 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
 
         {/* Schedule */}
         <ScheduleGantt steps={recipe.steps} />
+
+        {/* T-26: Raw steps from CSV */}
+        {recipe.rawSteps && recipe.rawSteps.length > 0 && (
+          <div className="rounded-2xl bg-bg-card p-4">
+            <button
+              onClick={() => setShowRawSteps(!showRawSteps)}
+              className="flex w-full items-center justify-between text-sm font-bold text-text-secondary"
+            >
+              <span>📋 元の手順テキスト</span>
+              {showRawSteps ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {showRawSteps && (
+              <ol className="mt-3 space-y-2">
+                {recipe.rawSteps.map((step, i) => (
+                  <li key={i} className="flex items-start gap-3 text-sm">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold">
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 text-text-secondary">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
 
         {/* T-13: Personal Notes */}
         <div className="rounded-2xl bg-bg-card p-4">

@@ -33,16 +33,26 @@ export interface Recipe {
   ingredients: Ingredient[]
   steps: CookingStep[]
   totalTimeMinutes: number
-  // T-21: Image fields (optional — existing recipes without images continue to work)
+  // T-21: Image fields
   imageUrl?: string
   thumbnailUrl?: string
   imageBlurHash?: string
+  // T-23: CSV import fields
+  sourceUrl?: string
+  servings?: string
+  calories?: string
+  saltContent?: string
+  cookingTime?: string
+  rawSteps?: string[]
 }
 
 export interface StockItem {
   id?: number
   name: string
   inStock: boolean
+  // T-27: Quantity fields
+  quantity?: number
+  unit?: string
 }
 
 export interface SaltResult {
@@ -108,8 +118,15 @@ class RecipeDB extends Dexie {
       favorites: '++id, &recipeId, addedAt',
       userNotes: '++id, &recipeId, updatedAt',
     })
-    // T-21: Add imageUrl index for image-aware queries
+    // T-21: Add imageUrl index
     this.version(3).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+    })
+    // T-23/T-27: CSV import fields + stock quantity (data-only, no index changes needed)
+    this.version(4).stores({
       recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
       stock: '++id, &name, inStock',
       favorites: '++id, &recipeId, addedAt',

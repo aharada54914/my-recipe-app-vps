@@ -26,7 +26,7 @@ interface MultiScheduleViewProps {
 export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
   // T-20: Lightweight listing — only id, title, totalTimeMinutes for selector
   const recipeSummaries = useLiveQuery(
-    () => db.recipes.toArray().then(rs => rs.map(r => ({ id: r.id!, title: r.title, totalTimeMinutes: r.totalTimeMinutes }))),
+    () => db.recipes.toArray().then(rs => rs.map(r => ({ id: r.id!, title: r.title, totalTimeMinutes: r.totalTimeMinutes, device: r.device }))),
     []
   )
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
@@ -63,7 +63,7 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
     if (selectedRecipes.length === 0) return null
     return calculateMultiRecipeSchedule(
       targetTime,
-      selectedRecipes.map((r) => ({ recipeId: r.id!, title: r.title, steps: r.steps }))
+      selectedRecipes.map((r) => ({ recipeId: r.id!, title: r.title, steps: r.steps, device: r.device }))
     )
   }, [selectedRecipes, targetTime])
 
@@ -108,6 +108,9 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
                     }`}
                 >
                   {r.title}
+                  <span className="ml-1 opacity-50">
+                    {recipeSummaries.find(s => s.id === r.id)?.device === 'hotcook' ? '🍲' : recipeSummaries.find(s => s.id === r.id)?.device === 'healsio' ? '♨️' : ''}
+                  </span>
                 </button>
               )
             })}
@@ -147,6 +150,18 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
               </span>
             </div>
 
+            {/* Device conflict warnings */}
+            {multiSchedule.conflicts.length > 0 && (
+              <div className="mb-3 rounded-xl bg-yellow-500/10 px-3 py-2">
+                <div className="text-xs font-bold text-yellow-400 mb-1">⚠️ デバイス競合あり</div>
+                {multiSchedule.conflicts.map((c, i) => (
+                  <div key={i} className="text-[10px] text-yellow-300">
+                    {c.device === 'hotcook' ? '🍲' : '♨️'} {c.recipeTitle}: {c.shiftMinutes}分前倒し
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Lanes */}
             <div className="space-y-3">
               {multiSchedule.recipes.map((rs) => {
@@ -158,6 +173,8 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
                       style={{ color: color.text }}
                     >
                       {rs.recipeTitle}
+                      {selectedRecipes.find(r => r.id === rs.recipeId)?.device === 'hotcook' && ' 🍲'}
+                      {selectedRecipes.find(r => r.id === rs.recipeId)?.device === 'healsio' && ' ♨️'}
                     </div>
                     <div className="relative h-9 rounded-lg bg-white/5">
                       {rs.entries.map((entry, i) => {

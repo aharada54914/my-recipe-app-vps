@@ -9,6 +9,8 @@ import { StockManager } from './components/StockManager'
 import { AiRecipeParser } from './components/AiRecipeParser'
 import { MultiScheduleView } from './components/MultiScheduleView'
 import { FavoritesPage } from './pages/FavoritesPage'
+import { ImportPage } from './pages/ImportPage'
+import { SettingsPage } from './pages/SettingsPage'
 import type { TabId } from './db/db'
 
 function AppShell() {
@@ -58,6 +60,8 @@ function AppShell() {
       <Header
         onAiParse={() => navigate('/ai-parse')}
         onMultiSchedule={() => navigate('/multi-schedule')}
+        onImport={() => navigate('/import')}
+        onSettings={() => navigate('/settings')}
       />
       <main className="px-4 pb-24">
         <Routes>
@@ -133,6 +137,25 @@ function MultiSchedulePage() {
   return <MultiScheduleView onBack={() => navigate(-1)} />
 }
 
+function ImportPageWrapper() {
+  const navigate = useNavigate()
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    initDb().then(() => setReady(true))
+  }, [])
+
+  if (!ready) return null
+
+  return <ImportPage onBack={() => navigate(-1)} />
+}
+
+function SettingsPageWrapper() {
+  const navigate = useNavigate()
+
+  return <SettingsPage onBack={() => navigate(-1)} />
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -140,6 +163,8 @@ function App() {
         <Route path="/recipe/:id" element={<RecipeDetailPage />} />
         <Route path="/ai-parse" element={<AiParsePage />} />
         <Route path="/multi-schedule" element={<MultiSchedulePage />} />
+        <Route path="/import" element={<ImportPageWrapper />} />
+        <Route path="/settings" element={<SettingsPageWrapper />} />
         <Route path="/*" element={<AppShell />} />
       </Routes>
     </BrowserRouter>

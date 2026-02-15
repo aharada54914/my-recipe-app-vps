@@ -1,5 +1,5 @@
 import { subMinutes } from 'date-fns'
-import type { Ingredient, SaltMode, SaltResult, CookingStep, ScheduleEntry, RecipeSchedule } from '../db/db'
+import type { Ingredient, SaltMode, SaltResult, CookingStep, ScheduleEntry, RecipeSchedule, DeviceType } from '../db/db'
 
 /**
  * Format a quantity with Japanese vibes:
@@ -104,12 +104,12 @@ export function adjustIngredients(
 
 /**
  * Calculate salt/soy sauce/miso from total weight and salt mode.
- * - Salt = totalWeight × mode% → round to nearest 10g
+ * - Salt = totalWeight × mode% → round to 1 decimal
  * - Soy sauce = salt / 0.16 / 1.17 → ml
  * - Miso = salt / 0.12 → g
  */
 export function calculateSalt(totalWeightG: number, mode: SaltMode): SaltResult {
-  const saltG = Math.round((totalWeightG * mode) / 100 / 10) * 10
+  const saltG = Math.round((totalWeightG * mode) / 100 * 10) / 10
   const soySauceMl = Math.round((saltG / 0.16 / 1.17) * 10) / 10
   const misoG = Math.round((saltG / 0.12) * 10) / 10
   return { saltG, soySauceMl, misoG }
@@ -141,18 +141,79 @@ export function calculateSchedule(
 }
 
 /**
+ * Device conflict info for the Gantt chart.
+ */
+export interface DeviceConflict {
+  recipeTitle: string
+  device: DeviceType
+  shiftMinutes: number
+}
+
+/**
  * Calculate schedules for multiple recipes against a single target time.
+ * Enforces device constraints: only one hotcook and one healsio at a time.
  */
 export function calculateMultiRecipeSchedule(
   targetTime: Date,
-  recipesWithSteps: Array<{ recipeId: number; title: string; steps: CookingStep[] }>
-): { targetTime: Date; recipes: RecipeSchedule[]; overallStart: Date } {
-  const recipes: RecipeSchedule[] = recipesWithSteps.map((r, index) => ({
+  recipesWithSteps: Array<{ recipeId: number; title: string; steps: CookingStep[]; device: DeviceType }>
+): { targetTime: Date; recipes: RecipeSchedule[]; overallStart: Date; conflicts: DeviceConflict[] } {
+  const conflicts: DeviceConflict[] = []
+
+  // First pass: calculate all schedules without conflicts
+  const recipes: (RecipeSchedule & { device: DeviceType })[] = recipesWithSteps.map((r, index) => ({
     recipeId: r.recipeId,
     recipeTitle: r.title,
     colorIndex: index,
     entries: calculateSchedule(targetTime, r.steps),
+    device: r.device,
   }))
+
+  // Second pass: detect and resolve device conflicts
+  // Track occupied device time slots
+  const deviceSlots: Map<DeviceType, Array<{ start: Date; end: Date }>> = new Map()
+
+  for (let i = 0; i < recipes.length; i++) {
+    const recipe = recipes[i]
+    if (recipe.device === 'manual') continue
+
+    const deviceEntries = recipe.entries.filter((e) => e.isDeviceStep)
+    if (deviceEntries.length === 0) continue
+
+    const existingSlots = deviceSlots.get(recipe.device) || []
+    let totalShift = 0
+
+    for (const entry of deviceEntries) {
+      for (const slot of existingSlots) {
+        // Check overlap
+        const entryStart = new Date(entry.start.getTime() - totalShift * 60000)
+        const entryEnd = new Date(entry.end.getTime() - totalShift * 60000)
+        if (entryStart < slot.end && entryEnd > slot.start) {
+          // Conflict: shift this recipe earlier by the overlap + original position
+          const overlapMinutes = Math.ceil((slot.end.getTime() - entryStart.getTime()) / 60000)
+          totalShift += overlapMinutes
+        }
+      }
+    }
+
+    if (totalShift > 0) {
+      // Shift all entries for this recipe earlier
+      recipe.entries = recipe.entries.map((e) => ({
+        ...e,
+        start: subMinutes(e.start, totalShift),
+        end: subMinutes(e.end, totalShift),
+      }))
+      conflicts.push({
+        recipeTitle: recipe.recipeTitle,
+        device: recipe.device,
+        shiftMinutes: totalShift,
+      })
+    }
+
+    // Register device slots
+    const updatedDeviceEntries = recipe.entries.filter((e) => e.isDeviceStep)
+    existingSlots.push(...updatedDeviceEntries.map((e) => ({ start: e.start, end: e.end })))
+    deviceSlots.set(recipe.device, existingSlots)
+  }
 
   const overallStart = recipes.reduce(
     (earliest, rs) => {
@@ -162,7 +223,7 @@ export function calculateMultiRecipeSchedule(
     targetTime,
   )
 
-  return { targetTime, recipes, overallStart }
+  return { targetTime, recipes, overallStart, conflicts }
 }
 
 /**
