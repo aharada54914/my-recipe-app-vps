@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { ViewState, TabId } from './db/db'
+import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import { initDb } from './db/initDb'
 import { Header } from './components/Header'
 import { BottomNav } from './components/BottomNav'
@@ -8,11 +8,13 @@ import { RecipeDetail } from './components/RecipeDetail'
 import { StockManager } from './components/StockManager'
 import { AiRecipeParser } from './components/AiRecipeParser'
 import { MultiScheduleView } from './components/MultiScheduleView'
+import { FavoritesPage } from './pages/FavoritesPage'
+import type { TabId } from './db/db'
 
-function App() {
+function AppShell() {
   const [ready, setReady] = useState(false)
-  const [viewState, setViewState] = useState<ViewState>({ view: 'list' })
   const [activeTab, setActiveTab] = useState<TabId>('search')
+  const navigate = useNavigate()
 
   useEffect(() => {
     initDb().then(() => setReady(true))
@@ -26,59 +28,96 @@ function App() {
     )
   }
 
-  // Full-screen views (no header/bottom nav)
-  if (viewState.view === 'detail') {
-    return (
-      <RecipeDetail
-        recipeId={viewState.recipeId}
-        onBack={() => setViewState({ view: 'list' })}
-      />
-    )
+  const handleTabChange = (tab: TabId) => {
+    setActiveTab(tab)
+    if (tab === 'search') navigate('/')
+    if (tab === 'favorites') navigate('/favorites')
+    if (tab === 'stock') navigate('/')
+    if (tab === 'history') navigate('/')
   }
 
-  if (viewState.view === 'ai-parse') {
-    return (
-      <AiRecipeParser
-        onBack={() => setViewState({ view: 'list' })}
-      />
-    )
-  }
-
-  if (viewState.view === 'multi-schedule') {
-    return (
-      <MultiScheduleView
-        onBack={() => setViewState({ view: 'list' })}
-      />
-    )
-  }
-
-  // List view
   return (
     <div className="min-h-dvh bg-bg-primary">
       <Header
-        onAiParse={() => setViewState({ view: 'ai-parse' })}
-        onMultiSchedule={() => setViewState({ view: 'multi-schedule' })}
+        onAiParse={() => navigate('/ai-parse')}
+        onMultiSchedule={() => navigate('/multi-schedule')}
       />
       <main className="px-4 pb-24">
-        {activeTab === 'search' && (
-          <RecipeList
-            onSelectRecipe={(id) => setViewState({ view: 'detail', recipeId: id })}
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <>
+                {activeTab === 'search' && (
+                  <RecipeList onSelectRecipe={(id) => navigate(`/recipe/${id}`)} />
+                )}
+                {activeTab === 'stock' && <StockManager />}
+                {activeTab === 'history' && (
+                  <p className="py-12 text-center text-sm text-text-secondary">
+                    履歴機能は準備中です
+                  </p>
+                )}
+              </>
+            }
           />
-        )}
-        {activeTab === 'stock' && <StockManager />}
-        {activeTab === 'favorites' && (
-          <p className="py-12 text-center text-sm text-text-secondary">
-            お気に入り機能は準備中です
-          </p>
-        )}
-        {activeTab === 'history' && (
-          <p className="py-12 text-center text-sm text-text-secondary">
-            履歴機能は準備中です
-          </p>
-        )}
+          <Route path="/favorites" element={<FavoritesPage />} />
+        </Routes>
       </main>
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
+  )
+}
+
+function RecipeDetailPage() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    initDb().then(() => setReady(true))
+  }, [])
+
+  if (!ready || !id) return null
+
+  return <RecipeDetail recipeId={Number(id)} onBack={() => navigate(-1)} />
+}
+
+function AiParsePage() {
+  const navigate = useNavigate()
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    initDb().then(() => setReady(true))
+  }, [])
+
+  if (!ready) return null
+
+  return <AiRecipeParser onBack={() => navigate(-1)} />
+}
+
+function MultiSchedulePage() {
+  const navigate = useNavigate()
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    initDb().then(() => setReady(true))
+  }, [])
+
+  if (!ready) return null
+
+  return <MultiScheduleView onBack={() => navigate(-1)} />
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+        <Route path="/ai-parse" element={<AiParsePage />} />
+        <Route path="/multi-schedule" element={<MultiSchedulePage />} />
+        <Route path="/*" element={<AppShell />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 

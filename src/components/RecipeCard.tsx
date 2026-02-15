@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Clock } from 'lucide-react'
 import type { Recipe, DeviceType } from '../db/db'
 
@@ -13,11 +14,16 @@ interface RecipeCardProps {
   onClick: () => void
 }
 
-export function RecipeCard({ recipe, matchRate, onClick }: RecipeCardProps) {
+// T-08: React.memo to prevent unnecessary re-renders
+export const RecipeCard = memo(function RecipeCard({
+  recipe,
+  matchRate,
+  onClick,
+}: RecipeCardProps) {
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-2xl bg-bg-card p-4 text-left transition-colors hover:bg-bg-card-hover"
+      className="recipe-card w-full rounded-2xl bg-bg-card p-4 text-left transition-colors hover:bg-bg-card-hover"
     >
       <div className="mb-3 flex items-start justify-between">
         <div>
@@ -38,13 +44,12 @@ export function RecipeCard({ recipe, matchRate, onClick }: RecipeCardProps) {
         <span>{recipe.baseServings}人分</span>
         {matchRate !== undefined && (
           <span
-            className={`ml-auto rounded-lg px-2 py-0.5 text-xs font-bold ${
-              matchRate >= 80
+            className={`ml-auto rounded-lg px-2 py-0.5 text-xs font-bold ${matchRate >= 80
                 ? 'bg-green-500/20 text-green-400'
                 : matchRate >= 50
                   ? 'bg-yellow-500/20 text-yellow-400'
                   : 'bg-bg-card text-text-secondary'
-            }`}
+              }`}
           >
             在庫 {matchRate}%
           </span>
@@ -52,4 +57,4 @@ export function RecipeCard({ recipe, matchRate, onClick }: RecipeCardProps) {
       </div>
     </button>
   )
-}
+})

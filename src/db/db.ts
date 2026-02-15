@@ -65,6 +65,19 @@ export interface RecipeSchedule {
   entries: ScheduleEntry[]
 }
 
+export interface Favorite {
+  id?: number
+  recipeId: number
+  addedAt: Date
+}
+
+export interface UserNote {
+  id?: number
+  recipeId: number
+  content: string
+  updatedAt: Date
+}
+
 export type ViewState =
   | { view: 'list' }
   | { view: 'detail'; recipeId: number }
@@ -76,12 +89,20 @@ export type ViewState =
 class RecipeDB extends Dexie {
   recipes!: Table<Recipe, number>
   stock!: Table<StockItem, number>
+  favorites!: Table<Favorite, number>
+  userNotes!: Table<UserNote, number>
 
   constructor() {
     super('RecipeDB')
     this.version(1).stores({
       recipes: '++id, title, device, category',
       stock: '++id, &name',
+    })
+    this.version(2).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device]',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
     })
   }
 }

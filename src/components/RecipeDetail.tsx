@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Star } from 'lucide-react'
 import { db } from '../db/db'
 import type { DeviceType } from '../db/db'
 import { adjustIngredients, formatQuantityVibe } from '../utils/recipeUtils'
+import { toggleFavorite } from '../utils/favoritesUtils'
+import { useWakeLock } from '../hooks/useWakeLock'
 import { ServingAdjuster } from './ServingAdjuster'
 import { SaltCalculator } from './SaltCalculator'
 import { ScheduleGantt } from './ScheduleGantt'
@@ -21,7 +23,11 @@ interface RecipeDetailProps {
 
 export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   const recipe = useLiveQuery(() => db.recipes.get(recipeId), [recipeId])
+  const isFav = useLiveQuery(() => db.favorites.where('recipeId').equals(recipeId).count(), [recipeId])
   const [servings, setServings] = useState<number | null>(null)
+
+  // T-11: Keep screen on during recipe viewing
+  useWakeLock()
 
   if (!recipe) return null
 
@@ -29,6 +35,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   const adjusted = adjustIngredients(recipe.ingredients, recipe.baseServings, currentServings)
   const mainIngredients = adjusted.filter((i) => i.category === 'main')
   const subIngredients = adjusted.filter((i) => i.category === 'sub')
+  const favorited = (isFav ?? 0) > 0
 
   return (
     <div className="min-h-dvh bg-bg-primary">
@@ -50,6 +57,12 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             <span>{recipe.totalTimeMinutes}分</span>
           </div>
         </div>
+        <button
+          onClick={() => toggleFavorite(recipeId)}
+          className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+        >
+          <Star className={`h-5 w-5 ${favorited ? 'fill-accent text-accent' : 'text-text-secondary'}`} />
+        </button>
       </header>
 
       <main className="space-y-6 px-4 pb-8">
