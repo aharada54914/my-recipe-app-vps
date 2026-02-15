@@ -1,0 +1,19 @@
+{
+  "name": "recipe-pwa",
+  "short_name": "レシピ",
+  "description": "ホットクック・ヘルシオ対応レシピ管理PWA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121214",
+  "theme_color": "#F97316",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "utilities"]
+}

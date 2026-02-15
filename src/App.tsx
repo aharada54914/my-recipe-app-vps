@@ -20,6 +20,20 @@ function AppShell() {
     initDb().then(() => setReady(true))
   }, [])
 
+  // T-17: iOS 100vh fix — compute actual viewport height and set --vh CSS variable
+  useEffect(() => {
+    const setVh = () => {
+      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`)
+    }
+    setVh()
+    window.addEventListener('resize', setVh)
+    window.addEventListener('orientationchange', setVh)
+    return () => {
+      window.removeEventListener('resize', setVh)
+      window.removeEventListener('orientationchange', setVh)
+    }
+  }, [])
+
   if (!ready) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-bg-primary">

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useTransition, useDeferredValue, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { db } from '../db/db'
@@ -18,7 +18,11 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<RecipeCategory>('すべて')
   const debouncedSearch = useDebounce(search, 300)
+  // T-22: useDeferredValue defers re-renders during rapid input
+  const deferredSearch = useDeferredValue(debouncedSearch)
   const parentRef = useRef<HTMLDivElement>(null)
+  // T-22: useTransition marks filtering as non-urgent so input stays responsive
+  const [isPending] = useTransition()
 
   // T-03: DB-side filtering with combined query (T-09)
   const data = useLiveQuery(
@@ -37,17 +41,18 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
   const stockNames = new Set(data.stockItems.map((s) => s.name))
 
-  // T-01: Fuse.js fuzzy search with synonym expansion (T-02)
-  const filtered = debouncedSearch
-    ? searchRecipes(data.recipes, debouncedSearch)
-    : data.recipes
-
-  const withRates = filtered
-    .map((r) => ({
-      recipe: r,
-      matchRate: calculateMatchRate(r.ingredients, stockNames),
-    }))
-    .sort((a, b) => b.matchRate - a.matchRate)
+  // T-01 + T-22: Fuzzy search wrapped in transition for smooth typing
+  const withRates = useMemo(() => {
+    const filtered = deferredSearch
+      ? searchRecipes(data.recipes, deferredSearch)
+      : data.recipes
+    return filtered
+      .map((r) => ({
+        recipe: r,
+        matchRate: calculateMatchRate(r.ingredients, stockNames),
+      }))
+      .sort((a, b) => b.matchRate - a.matchRate)
+  }, [data.recipes, deferredSearch, stockNames])
 
   // T-04: Virtual scrolling
   const virtualizer = useVirtualizer({
@@ -75,7 +80,11 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         <div
           ref={parentRef}
           className="overflow-auto"
-          style={{ height: 'calc(100dvh - 220px)' }}
+          style={{
+            height: 'calc(100dvh - 220px)',
+            opacity: isPending ? 0.6 : 1,
+            transition: 'opacity 150ms',
+          }}
         >
           <div
             style={{
