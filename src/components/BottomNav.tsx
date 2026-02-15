@@ -1,4 +1,4 @@
-import { Search, Heart, ShoppingCart, Clock } from 'lucide-react'
+import { Home, Search, Package, Star, Clock } from 'lucide-react'
 import type { TabId } from '../db/db'
 
 interface BottomNavProps {
@@ -7,9 +7,10 @@ interface BottomNavProps {
 }
 
 const tabs: { id: TabId; icon: typeof Search; label: string }[] = [
+  { id: 'home', icon: Home, label: 'ホーム' },
   { id: 'search', icon: Search, label: '検索' },
-  { id: 'favorites', icon: Heart, label: 'お気に入り' },
-  { id: 'stock', icon: ShoppingCart, label: '在庫' },
+  { id: 'stock', icon: Package, label: '在庫' },
+  { id: 'favorites', icon: Star, label: 'お気に入り' },
   { id: 'history', icon: Clock, label: '履歴' },
 ]
 
@@ -21,9 +22,8 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           <button
             key={id}
             onClick={() => onTabChange(id)}
-            className={`flex flex-col items-center gap-1 px-3 py-1 transition-colors ${
-              activeTab === id ? 'text-accent' : 'text-text-secondary hover:text-accent'
-            }`}
+            className={`flex flex-col items-center gap-1 px-3 py-1 transition-colors ${activeTab === id ? 'text-accent' : 'text-text-secondary hover:text-accent'
+              }`}
           >
             <Icon className="h-5 w-5" />
             <span className="text-[10px]">{label}</span>

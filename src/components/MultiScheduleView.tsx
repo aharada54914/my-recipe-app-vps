@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { format, addMinutes } from 'date-fns'
 import { ArrowLeft, CalendarClock } from 'lucide-react'
 import { db } from '../db/db'
+import type { Recipe } from '../db/db'
 import { calculateMultiRecipeSchedule } from '../utils/recipeUtils'
 
 const LANE_COLORS = [
@@ -23,9 +24,24 @@ interface MultiScheduleViewProps {
 }
 
 export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
-  const recipes = useLiveQuery(() => db.recipes.toArray())
+  // T-20: Lightweight listing — only id, title, totalTimeMinutes for selector
+  const recipeSummaries = useLiveQuery(
+    () => db.recipes.toArray().then(rs => rs.map(r => ({ id: r.id!, title: r.title, totalTimeMinutes: r.totalTimeMinutes }))),
+    []
+  )
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [targetTime, setTargetTime] = useState(() => roundToNext15(addMinutes(new Date(), 90)))
+
+  // T-20: Fetch full recipe data only for selected items (steps needed for schedule)
+  const selectedRecipes = useLiveQuery(
+    async () => {
+      const ids = Array.from(selectedIds)
+      if (ids.length === 0) return []
+      return db.recipes.where('id').anyOf(ids).toArray()
+    },
+    [selectedIds],
+    [] as Recipe[]
+  )
 
   const toggleRecipe = (id: number) => {
     setSelectedIds((prev) => {
@@ -44,16 +60,14 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
   }
 
   const multiSchedule = useMemo(() => {
-    if (!recipes) return null
-    const selected = recipes.filter((r) => selectedIds.has(r.id!))
-    if (selected.length === 0) return null
+    if (selectedRecipes.length === 0) return null
     return calculateMultiRecipeSchedule(
       targetTime,
-      selected.map((r) => ({ recipeId: r.id!, title: r.title, steps: r.steps }))
+      selectedRecipes.map((r) => ({ recipeId: r.id!, title: r.title, steps: r.steps }))
     )
-  }, [recipes, selectedIds, targetTime])
+  }, [selectedRecipes, targetTime])
 
-  if (!recipes) return null
+  if (!recipeSummaries) return null
 
   const totalSpanMs = multiSchedule
     ? targetTime.getTime() - multiSchedule.overallStart.getTime()
@@ -82,17 +96,16 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
             レシピを選択（最大5つ）
           </h4>
           <div className="flex flex-wrap gap-2">
-            {recipes.map((r) => {
+            {recipeSummaries.map((r) => {
               const isSelected = selectedIds.has(r.id!)
               return (
                 <button
                   key={r.id}
                   onClick={() => toggleRecipe(r.id!)}
-                  className={`rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-                    isSelected
-                      ? 'border border-accent bg-accent/20 text-accent'
-                      : 'bg-bg-card text-text-secondary hover:bg-bg-card-hover'
-                  }`}
+                  className={`rounded-xl px-3 py-2 text-xs font-medium transition-colors ${isSelected
+                    ? 'border border-accent bg-accent/20 text-accent'
+                    : 'bg-bg-card text-text-secondary hover:bg-bg-card-hover'
+                    }`}
                 >
                   {r.title}
                 </button>

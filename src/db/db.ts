@@ -6,7 +6,7 @@ export type DeviceType = 'hotcook' | 'healsio' | 'manual'
 export type IngredientCategory = 'main' | 'sub'
 export type SaltMode = 0.6 | 0.8 | 1.2
 export type RecipeCategory = 'すべて' | '主菜' | '副菜' | 'スープ' | 'ご飯もの' | 'デザート'
-export type TabId = 'search' | 'favorites' | 'stock' | 'history'
+export type TabId = 'home' | 'search' | 'favorites' | 'stock' | 'history'
 
 export interface Ingredient {
   name: string
@@ -33,6 +33,10 @@ export interface Recipe {
   ingredients: Ingredient[]
   steps: CookingStep[]
   totalTimeMinutes: number
+  // T-21: Image fields (optional — existing recipes without images continue to work)
+  imageUrl?: string
+  thumbnailUrl?: string
+  imageBlurHash?: string
 }
 
 export interface StockItem {
@@ -100,6 +104,13 @@ class RecipeDB extends Dexie {
     })
     this.version(2).stores({
       recipes: '++id, title, device, category, recipeNumber, [category+device]',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+    })
+    // T-21: Add imageUrl index for image-aware queries
+    this.version(3).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
       stock: '++id, &name, inStock',
       favorites: '++id, &recipeId, addedAt',
       userNotes: '++id, &recipeId, updatedAt',

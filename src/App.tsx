@@ -13,7 +13,7 @@ import type { TabId } from './db/db'
 
 function AppShell() {
   const [ready, setReady] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabId>('search')
+  const [activeTab, setActiveTab] = useState<TabId>('home')
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -30,10 +30,13 @@ function AppShell() {
 
   const handleTabChange = (tab: TabId) => {
     setActiveTab(tab)
-    if (tab === 'search') navigate('/')
-    if (tab === 'favorites') navigate('/favorites')
-    if (tab === 'stock') navigate('/')
-    if (tab === 'history') navigate('/')
+    switch (tab) {
+      case 'home': navigate('/'); break
+      case 'search': navigate('/'); break
+      case 'favorites': navigate('/favorites'); break
+      case 'stock': navigate('/'); break
+      case 'history': navigate('/'); break
+    }
   }
 
   return (
@@ -48,6 +51,14 @@ function AppShell() {
             path="/"
             element={
               <>
+                {activeTab === 'home' && (
+                  <div className="py-8 text-center">
+                    <h2 className="text-lg font-bold text-text-primary mb-2">ようこそ</h2>
+                    <p className="text-sm text-text-secondary">
+                      下のタブで検索・在庫管理・お気に入りをご利用ください
+                    </p>
+                  </div>
+                )}
                 {activeTab === 'search' && (
                   <RecipeList onSelectRecipe={(id) => navigate(`/recipe/${id}`)} />
                 )}
