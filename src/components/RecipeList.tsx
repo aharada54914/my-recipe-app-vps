@@ -31,7 +31,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     async () => {
       const [recipes, stockItems] = await Promise.all([
         category !== 'すべて'
-          ? db.recipes.where('category').equals(category).toArray()
+          ? db.recipes.where('category').equals(category).limit(PAGE_SIZE).toArray()
           : db.recipes.limit(PAGE_SIZE).toArray(),
         db.stock.where('inStock').equals(1).toArray(),
       ])

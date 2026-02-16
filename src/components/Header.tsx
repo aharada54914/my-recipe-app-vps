@@ -20,7 +20,8 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
           {onAiParse && (
             <button
               onClick={onAiParse}
-              className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+              aria-label="AIレシピ解析"
+              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
             >
               <Sparkles className="h-5 w-5 text-text-secondary" />
             </button>
@@ -28,7 +29,8 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
           {onMultiSchedule && (
             <button
               onClick={onMultiSchedule}
-              className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+              aria-label="複数レシピスケジュール"
+              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
             >
               <CalendarClock className="h-5 w-5 text-text-secondary" />
             </button>
@@ -36,7 +38,8 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
           {onSettings && (
             <button
               onClick={onSettings}
-              className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+              aria-label="設定"
+              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
             >
               <Settings className="h-5 w-5 text-text-secondary" />
             </button>
@@ -44,7 +47,8 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
           {onSearchToggle && (
             <button
               onClick={onSearchToggle}
-              className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+              aria-label="検索"
+              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
             >
               <Search className="h-5 w-5 text-text-secondary" />
             </button>
