@@ -16,12 +16,13 @@ const tabs: { id: TabId; icon: typeof Search; label: string }[] = [
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t border-border bg-bg-primary/90 backdrop-blur-lg">
+    <nav className="fixed bottom-0 left-0 right-0 border-t border-border bg-bg-primary/90 backdrop-blur-lg" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="flex justify-around py-2">
         {tabs.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
             onClick={() => onTabChange(id)}
+            aria-label={label}
             className={`flex flex-col items-center gap-1 px-3 py-1 transition-colors ${activeTab === id ? 'text-accent' : 'text-text-secondary hover:text-accent'
               }`}
           >

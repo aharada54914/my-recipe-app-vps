@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#121214"/>
+  <g transform="translate(256,270)" fill="none" stroke="#F97316" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <!-- pot body -->
+    <ellipse cx="0" cy="40" rx="120" ry="36"/>
+    <path d="M-120,40 L-120,-20 Q-120,-70 -70,-70 L70,-70 Q120,-70 120,-20 L120,40"/>
+    <!-- lid -->
+    <path d="M-130,-70 Q-130,-90 -100,-90 L100,-90 Q130,-90 130,-70"/>
+    <!-- lid handle -->
+    <line x1="-30" y1="-90" x2="-30" y2="-110"/>
+    <line x1="30" y1="-90" x2="30" y2="-110"/>
+    <line x1="-30" y1="-110" x2="30" y2="-110"/>
+    <!-- steam -->
+    <path d="M-40,-130 Q-40,-160 -20,-150 Q0,-140 0,-170" opacity="0.6"/>
+    <path d="M20,-130 Q20,-155 40,-145 Q60,-135 60,-165" opacity="0.6"/>
+  </g>
+</svg>

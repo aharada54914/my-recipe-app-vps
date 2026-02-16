@@ -218,8 +218,8 @@ export async function importHealsioCSV(csvText: string): Promise<{ imported: num
 
     const dataRows = rows.slice(1).filter((r) => r.length >= 9 && r[0]?.trim())
 
-    // Get existing titles
-    const existingTitles = new Set((await db.recipes.toArray()).map((r) => r.title))
+    // Get existing titles using index for efficiency
+    const existingTitles = new Set(await db.recipes.orderBy('title').uniqueKeys() as string[])
 
     let imported = 0
     let skipped = 0
@@ -294,7 +294,7 @@ export async function importHotcookCSV(csvText: string): Promise<{ imported: num
 
     const dataRows = rows.slice(1).filter((r) => r.length >= 9 && r[0]?.trim())
 
-    const existingTitles = new Set((await db.recipes.toArray()).map((r) => r.title))
+    const existingTitles = new Set(await db.recipes.orderBy('title').uniqueKeys() as string[])
 
     let imported = 0
     let skipped = 0

@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react'
  */
 export function useWakeLock() {
     const noSleepRef = useRef<import('nosleep.js').default | null>(null)
+    const wakeLockRef = useRef<{ release: () => void } | null>(null)
 
     useEffect(() => {
         let noSleep: import('nosleep.js').default | null = null
@@ -14,11 +15,9 @@ export function useWakeLock() {
             try {
                 // Try native Wake Lock API first (non-iOS)
                 if ('wakeLock' in navigator) {
-                    const wakeLock = await (navigator as Navigator & { wakeLock: { request: (type: string) => Promise<unknown> } }).wakeLock.request('screen')
-                    noSleepRef.current = null
-                    return () => {
-                        (wakeLock as { release: () => void }).release()
-                    }
+                    const wl = await (navigator as Navigator & { wakeLock: { request: (type: string) => Promise<{ release: () => void }> } }).wakeLock.request('screen')
+                    wakeLockRef.current = wl
+                    return
                 }
 
                 // Fallback to NoSleep.js (iOS)
@@ -34,6 +33,10 @@ export function useWakeLock() {
         enable()
 
         return () => {
+            if (wakeLockRef.current) {
+                wakeLockRef.current.release()
+                wakeLockRef.current = null
+            }
             if (noSleepRef.current) {
                 noSleepRef.current.disable()
                 noSleepRef.current = null

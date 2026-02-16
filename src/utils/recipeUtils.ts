@@ -10,7 +10,7 @@ import type { Ingredient, SaltMode, SaltResult, CookingStep, ScheduleEntry, Reci
  */
 export function formatQuantityVibe(value: number, unit: string): string {
   if (unit === '適量') return '適量'
-  if (value === 0) return unit === '適量' ? '適量' : `0${unit}`
+  if (value === 0) return `0${unit}`
 
   // Weight / volume: round to nearest 1g
   if (unit === 'g' || unit === 'ml') {

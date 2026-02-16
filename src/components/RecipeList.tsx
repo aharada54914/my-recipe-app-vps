@@ -24,13 +24,15 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   // T-22: useTransition marks filtering as non-urgent so input stays responsive
   const [isPending] = useTransition()
 
+  const PAGE_SIZE = 200
+
   // T-03: DB-side filtering with combined query (T-09)
   const data = useLiveQuery(
     async () => {
       const [recipes, stockItems] = await Promise.all([
         category !== 'すべて'
           ? db.recipes.where('category').equals(category).toArray()
-          : db.recipes.toArray(),
+          : db.recipes.limit(PAGE_SIZE).toArray(),
         db.stock.where('inStock').equals(1).toArray(),
       ])
       return { recipes, stockItems }
@@ -39,7 +41,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     { recipes: [], stockItems: [] }
   )
 
-  const stockNames = new Set(data.stockItems.map((s) => s.name))
+  const stockNames = useMemo(() => new Set(data.stockItems.map((s) => s.name)), [data.stockItems])
 
   // T-01 + T-22: Fuzzy search wrapped in transition for smooth typing
   const withRates = useMemo(() => {
