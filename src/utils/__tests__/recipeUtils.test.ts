@@ -18,14 +18,14 @@ describe('formatQuantityVibe', () => {
     expect(formatQuantityVibe(0, '個')).toBe('0個')
   })
 
-  it('rounds g to nearest 10', () => {
-    expect(formatQuantityVibe(123, 'g')).toBe('120g')
-    expect(formatQuantityVibe(125, 'g')).toBe('130g')
+  it('rounds g to nearest 1', () => {
+    expect(formatQuantityVibe(123, 'g')).toBe('123g')
+    expect(formatQuantityVibe(125, 'g')).toBe('125g')
     expect(formatQuantityVibe(200, 'g')).toBe('200g')
   })
 
-  it('rounds ml to nearest 10', () => {
-    expect(formatQuantityVibe(55, 'ml')).toBe('60ml')
+  it('rounds ml to nearest 1', () => {
+    expect(formatQuantityVibe(55, 'ml')).toBe('55ml')
     expect(formatQuantityVibe(600, 'ml')).toBe('600ml')
   })
 
@@ -131,7 +131,7 @@ describe('calculateSchedule', () => {
 })
 
 describe('calculateMatchRate', () => {
-  it('returns percentage of matched main ingredients', () => {
+  it('returns percentage of matched ingredients', () => {
     const ingredients: Ingredient[] = [
       { name: '肉', quantity: 200, unit: 'g', category: 'main' },
       { name: '玉ねぎ', quantity: 1, unit: '個', category: 'main' },
@@ -139,7 +139,8 @@ describe('calculateMatchRate', () => {
     ]
     const stock = new Set(['肉'])
 
-    expect(calculateMatchRate(ingredients, stock)).toBe(50)
+    // 1 out of 3 total ingredients = 33%
+    expect(calculateMatchRate(ingredients, stock)).toBe(33)
   })
 
   it('returns 0 when no main ingredients', () => {

@@ -13,35 +13,8 @@ import { SettingsPage } from './pages/SettingsPage'
 import type { TabId } from './db/db'
 
 function AppShell() {
-  const [ready, setReady] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('home')
   const navigate = useNavigate()
-
-  useEffect(() => {
-    initDb().then(() => setReady(true))
-  }, [])
-
-  // T-17: iOS 100vh fix — compute actual viewport height and set --vh CSS variable
-  useEffect(() => {
-    const setVh = () => {
-      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`)
-    }
-    setVh()
-    window.addEventListener('resize', setVh)
-    window.addEventListener('orientationchange', setVh)
-    return () => {
-      window.removeEventListener('resize', setVh)
-      window.removeEventListener('orientationchange', setVh)
-    }
-  }, [])
-
-  if (!ready) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-bg-primary">
-        <div className="text-text-secondary">読み込み中...</div>
-      </div>
-    )
-  }
 
   const handleTabChange = (tab: TabId) => {
     setActiveTab(tab)
@@ -123,6 +96,34 @@ function SettingsPageWrapper() {
 }
 
 function App() {
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    initDb().then(() => setReady(true))
+  }, [])
+
+  // iOS 100vh fix — compute actual viewport height and set --vh CSS variable
+  useEffect(() => {
+    const setVh = () => {
+      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`)
+    }
+    setVh()
+    window.addEventListener('resize', setVh)
+    window.addEventListener('orientationchange', setVh)
+    return () => {
+      window.removeEventListener('resize', setVh)
+      window.removeEventListener('orientationchange', setVh)
+    }
+  }, [])
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-bg-primary">
+        <div className="text-text-secondary">読み込み中...</div>
+      </div>
+    )
+  }
+
   return (
     <BrowserRouter>
       <Routes>
