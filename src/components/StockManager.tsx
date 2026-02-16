@@ -1,14 +1,118 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { db } from '../db/db'
+import type { StockItem } from '../db/db'
 
 const UNIT_OPTIONS = ['g', 'ml', '個', '本', '株', 'パック', '袋', '枚', '片', '缶']
+const SWIPE_THRESHOLD = 80
+
+interface SwipeState {
+  startX: number
+  offsetX: number
+  swiping: boolean
+}
+
+function StockRow({
+  item,
+  onToggle,
+  onDelete,
+  onUpdateQuantity,
+  onUpdateUnit,
+}: {
+  item: StockItem
+  onToggle: () => void
+  onDelete: () => void
+  onUpdateQuantity: (quantity: number) => void
+  onUpdateUnit: (unit: string) => void
+}) {
+  const [swipe, setSwipe] = useState<SwipeState>({ startX: 0, offsetX: 0, swiping: false })
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setSwipe({ startX: e.touches[0].clientX, offsetX: 0, swiping: true })
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!swipe.swiping) return
+    const diff = swipe.startX - e.touches[0].clientX
+    // Only allow swiping left (positive diff)
+    setSwipe((prev) => ({ ...prev, offsetX: Math.max(0, diff) }))
+  }, [swipe.swiping, swipe.startX])
+
+  const handleTouchEnd = useCallback(() => {
+    if (swipe.offsetX > SWIPE_THRESHOLD) {
+      onDelete()
+    }
+    setSwipe({ startX: 0, offsetX: 0, swiping: false })
+  }, [swipe.offsetX, onDelete])
+
+  const translateX = Math.min(swipe.offsetX, 120)
+
+  return (
+    <div className="relative rounded-xl overflow-hidden">
+      {/* Delete background */}
+      <div className="absolute inset-0 flex items-center justify-end bg-red-500 px-4">
+        <Trash2 className="h-5 w-5 text-white" />
+      </div>
+
+      {/* Swipeable content */}
+      <div
+        ref={rowRef}
+        className="relative bg-bg-card transition-transform"
+        style={{ transform: `translateX(-${translateX}px)` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="flex items-center gap-2 px-4 py-3">
+          {/* Toggle */}
+          <button
+            onClick={onToggle}
+            className="flex shrink-0 items-center"
+          >
+            <div
+              className={`h-6 w-11 rounded-full p-0.5 transition-colors ${item.inStock ? 'bg-accent' : 'bg-white/10'}`}
+            >
+              <div
+                className={`h-5 w-5 rounded-full bg-white transition-transform ${item.inStock ? 'translate-x-5' : 'translate-x-0'}`}
+              />
+            </div>
+          </button>
+
+          {/* Name */}
+          <span className={`min-w-0 flex-1 truncate text-sm ${item.inStock ? 'text-text-primary' : 'text-text-secondary'}`}>
+            {item.name}
+          </span>
+
+          {/* Inline quantity + unit */}
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={item.quantity ?? ''}
+            onChange={(e) => onUpdateQuantity(parseFloat(e.target.value) || 0)}
+            placeholder="0"
+            className="w-16 rounded-lg bg-white/5 px-2 py-1.5 text-sm text-text-primary text-right outline-none"
+          />
+          <select
+            value={item.unit || 'g'}
+            onChange={(e) => onUpdateUnit(e.target.value)}
+            className="rounded-lg bg-white/5 px-1.5 py-1.5 text-sm text-text-primary outline-none"
+          >
+            {UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function StockManager() {
   const items = useLiveQuery(() => db.stock.orderBy('name').toArray())
   const [newName, setNewName] = useState('')
-  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   const toggle = async (id: number, current: boolean) => {
     await db.stock.update(id, { inStock: !current })
@@ -25,7 +129,6 @@ export function StockManager() {
 
   const deleteItem = async (id: number) => {
     await db.stock.delete(id)
-    if (expandedId === id) setExpandedId(null)
   }
 
   const updateQuantity = async (id: number, quantity: number) => {
@@ -63,79 +166,14 @@ export function StockManager() {
       {/* Item list */}
       <div className="space-y-2">
         {items.map((item) => (
-          <div key={item.id} className="rounded-xl bg-bg-card overflow-hidden">
-            {/* Main row */}
-            <div className="flex items-center gap-2 px-4 py-3">
-              {/* Toggle */}
-              <button
-                onClick={() => toggle(item.id!, item.inStock)}
-                className="flex flex-1 items-center justify-between text-left"
-              >
-                <span className={item.inStock ? 'text-text-primary' : 'text-text-secondary'}>
-                  {item.name}
-                  {item.quantity != null && item.quantity > 0 && (
-                    <span className="ml-2 text-xs text-text-secondary">
-                      ({item.quantity}{item.unit || ''})
-                    </span>
-                  )}
-                </span>
-                <div
-                  className={`h-6 w-11 rounded-full p-0.5 transition-colors ${item.inStock ? 'bg-accent' : 'bg-white/10'
-                    }`}
-                >
-                  <div
-                    className={`h-5 w-5 rounded-full bg-white transition-transform ${item.inStock ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                  />
-                </div>
-              </button>
-
-              {/* Expand button */}
-              <button
-                onClick={() => setExpandedId(expandedId === item.id ? null : item.id!)}
-                className="ml-1 rounded-lg p-1 text-text-secondary transition-colors hover:text-accent"
-              >
-                {expandedId === item.id
-                  ? <ChevronUp className="h-4 w-4" />
-                  : <ChevronDown className="h-4 w-4" />
-                }
-              </button>
-            </div>
-
-            {/* Expanded: quantity editor */}
-            {expandedId === item.id && (
-              <div className="border-t border-white/5 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-text-secondary whitespace-nowrap">数量</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={item.quantity ?? ''}
-                    onChange={(e) => updateQuantity(item.id!, parseFloat(e.target.value) || 0)}
-                    placeholder="0"
-                    className="w-20 rounded-lg bg-white/5 px-3 py-1.5 text-sm text-text-primary text-right outline-none"
-                  />
-                  <select
-                    value={item.unit || 'g'}
-                    onChange={(e) => updateUnit(item.id!, e.target.value)}
-                    className="rounded-lg bg-white/5 px-2 py-1.5 text-sm text-text-primary outline-none"
-                  >
-                    {UNIT_OPTIONS.map((u) => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
-                  </select>
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => deleteItem(item.id!)}
-                    className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-500/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <StockRow
+            key={item.id}
+            item={item}
+            onToggle={() => toggle(item.id!, item.inStock)}
+            onDelete={() => deleteItem(item.id!)}
+            onUpdateQuantity={(q) => updateQuantity(item.id!, q)}
+            onUpdateUnit={(u) => updateUnit(item.id!, u)}
+          />
         ))}
       </div>
     </div>
