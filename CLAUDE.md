@@ -45,7 +45,7 @@ A recipe management PWA with a dark-themed modern UI, targeting Japanese home co
 ### Integrations
 
 - **Gemini API**: AI recipe analysis
-- **PWA**: Offline support, installable app (to be configured)
+- **PWA**: Offline support, installable app (vite-plugin-pwa + workbox 設定済み)
 
 ---
 
@@ -64,14 +64,9 @@ A recipe management PWA with a dark-themed modern UI, targeting Japanese home co
 // ❌ BAD: Loads all 2000 recipes
 const recipes = useLiveQuery(() => db.recipes.toArray())
 
-// ✅ GOOD: Load only what's needed
-const PAGE_SIZE = 50
-const recipes = useLiveQuery(() => 
-  db.recipes
-    .offset(page * PAGE_SIZE)
-    .limit(PAGE_SIZE)
-    .toArray(),
-  [page]
+// ✅ GOOD: Always apply .limit() to prevent unbounded queries
+const recipes = useLiveQuery(() =>
+  db.recipes.limit(200).toArray()
 )
 ```
 
@@ -158,10 +153,9 @@ const [hotcookRecipes, healsioRecipes] = useLiveQuery(() =>
 - **API**: Intersection Observer API
 - **Placeholder**: `/placeholder.png`
 
-### 🚀 Offload heavy computations to Web Workers
-- **Goal**: Keep the UI thread responsive by moving heavy JS tasks to a background thread
-- **Target**: Match rate calculation, complex filtering
-- Use `new Worker(new URL('../workers/matchRate.worker.ts', import.meta.url))`
+### 🚀 Heavy computation strategy
+- **Current approach**: `useTransition` + `useDeferredValue` で十分な応答性を確保
+- **将来**: データ規模拡大時に Web Worker への移行を再検討
 
 ### 🚀 React 19 Concurrent Features
 - **Goal**: Improve UI responsiveness during state updates
@@ -171,71 +165,6 @@ const [hotcookRecipes, healsioRecipes] = useLiveQuery(() =>
 ### 🚀 Optimize Tailwind CSS
 - **Goal**: Reduce CSS bundle size by purging unused styles
 - Ensure `tailwind.config.js` includes all source files in `content` array
-
----
-
-## Image Handling Strategy (Future-Proof)
-
-### 1. Data Model Design
-- **Fields**: `imageUrl?`, `thumbnailUrl?`, `imageBlurHash?` (optional)
-- **Benefit**: Existing recipes without images will continue to work
-
-```typescript
-// src/db/db.ts
-export interface Recipe {
-  // ... other fields
-  imageUrl?: string
-  thumbnailUrl?: string
-  imageBlurHash?: string
-}
-```
-
-### 2. Storage Strategy
-- 🔴 **DO NOT store image blobs in IndexedDB**. This will hit storage limits quickly.
-- ✅ **Store image URLs only**. Upload images to a CDN (Cloudinary, S3, etc.)
-
-### 3. Null-Safe Component Implementation
-- **Goal**: Prevent bugs when `imageUrl` is `undefined`
-
-```typescript
-// src/components/RecipeCard.tsx
-import { Utensils } from 'lucide-react'
-
-const RecipeImage = ({ recipe }: { recipe: Recipe }) => {
-  const [error, setError] = useState(false)
-
-  if (!recipe.imageUrl || error) {
-    return <div className="flex items-center justify-center h-32 bg-gray-800"><Utensils className="w-8 h-8 text-gray-500" /></div>
-  }
-
-  return <img src={recipe.imageUrl} alt={recipe.title} onError={() => setError(true)} />
-}
-```
-
-### 4. Progressive Image Loading
-- **Library**: `react-blurhash` (requires npm install)
-- **Benefit**: Show a blurred placeholder while the full image loads
-- Encode images to BlurHash strings, store in `imageBlurHash` field
-
-### 5. Image Optimization Checklist
-- [ ] Add `imageUrl?`, `thumbnailUrl?`, `imageBlurHash?` to Recipe interface
-- [ ] Update CSV import to handle image URLs
-- [ ] Create `RecipeImage` component with error handling
-- [ ] Install and configure `react-blurhash`
-- [ ] Test with recipes that have no images
-
-### 6. Database Migration
-- When adding image fields, use Dexie schema versioning to avoid breaking existing data
-
-```typescript
-// src/db/db.ts
-this.version(2).stores({
-  recipes: '++id, title, device, category, imageUrl'
-})
-```
-
-### 7. AI Parsing for Images
-- When AI extracts recipes from URLs, it should also identify the main recipe image (e.g., from Open Graph tags or schema.org metadata) and save its URL to the `imageUrl` field
 
 ---
 
@@ -270,9 +199,9 @@ this.version(2).stores({
 
 ## Stock-Based Recipe Search
 
-### 1. Stock Selector UI
-- **Goal**: Allow users to select ingredients from their stock
-- **Component**: `src/components/StockSelector.tsx` with button list
+### 1. Stock Manager UI
+- **Goal**: Allow users to manage ingredients in their stock
+- **Component**: `src/components/StockManager.tsx` — toggle, inline quantity editing, swipe-to-delete
 
 ### 2. Match Rate Calculation
 - **Goal**: Calculate the percentage of recipe ingredients available in stock
@@ -290,12 +219,11 @@ this.version(2).stores({
 ## UI Design Guidelines
 
 ### 1. Header with Search Bar
-- **Component**: `src/components/SearchHeader.tsx`
-- **Features**: Search input with `Search` icon, notification `Bell` icon
+- **Component**: `src/components/SearchBar.tsx`
+- **Features**: Search input with `Search` icon
 
 ### 2. Home Page Layout
-- **Component**: `src/pages/HomePage.tsx`
-- **Layout**: `SearchHeader` + "至高のカテゴリー" section + `CategoryGrid` + "その他のカテゴリー" section + `IconGrid`
+- **Component**: `src/pages/HomePage.tsx` (旬のおすすめ + ウェルカム表示)
 - **旬の食材セクション**: Display seasonal ingredients with recipe suggestions based on current month
 
 ### 3. Bottom Navigation (5 Tabs)
@@ -370,17 +298,11 @@ this.version(2).stores({
 
 ---
 
-## iPhone 13+ & iOS 26.2 Compatibility
+## iPhone 13+ & iOS 18 Compatibility
 
 ### Target Devices & OS
-- **Devices**: iPhone 13, 13 Pro, 13 Pro Max, 14 series, 15 series, 16 series, 17 series
-- **OS**: iOS 26.2.1 (latest), 26.2, 26.1, 26.0
-
-### iOS 26 Key Features
-
-- **Liquid Glass**: Dynamic lock screen effect. Optimize PWA icon with `maskable`.
-- **Live Translation**: Real-time translation with AirPods.
-- **Offline Lyrics**: Reinforces the importance of offline-first PWA design.
+- **Devices**: iPhone 13, 13 Pro, 13 Pro Max, 14 series, 15 series, 16 series
+- **OS**: iOS 18.x
 
 ### Device-Specific Optimizations
 
@@ -388,21 +310,10 @@ this.version(2).stores({
 - **120Hz ProMotion (Pro models)**: Use `requestAnimationFrame` for smooth animations.
 - **Responsive Design**: Support screen sizes from 6.1" to 6.7".
 
-### iOS 26.2 PWA Enhancements
-
-- **Service Worker Stability**: Improved lifecycle management and background sync.
-- **IndexedDB Capacity**: Increased from 50MB to ~100MB.
-
-### Performance on A15 Bionic & Newer
-
-- **Web Workers**: Use `type: 'module'` for ES module support (iOS 26+).
-- **Memory Management**: Monitor usage and clear old caches.
-- **Haptic Feedback**: Use `navigator.vibrate(10)` for enhanced touch interactions.
-
 ### Testing Environment
-- **iPhone 13 (iOS 26.2.1)**: Standard model
-- **iPhone 15 Pro (iOS 26.2.1)**: Dynamic Island + 120Hz
-- **iPhone 17 Pro (iOS 26.2.1)**: Latest model
+- **iPhone 13 (iOS 18)**: Standard model
+- **iPhone 15 Pro (iOS 18)**: Dynamic Island + 120Hz
+- **iPhone 16 Pro (iOS 18)**: Latest model
 
 ---
 
@@ -412,9 +323,10 @@ this.version(2).stores({
 - Keep components small and focused (single responsibility)
 - Extract complex calculations to `src/utils/` as pure functions
 - Type everything strictly (no `any` types)
-- **DB Initialization**: `initDb()` is called exactly once at the app entry point (`AppShell`). Individual page components must NOT call `initDb()` independently.
+- **DB Initialization**: `initDb()` is called exactly once at the App component level (BrowserRouter の外). Individual page components must NOT call `initDb()` independently.
 - **Routing**: Future migration to `Outlet` + nested routes pattern recommended (currently uses `activeTab` + `navigate()` dual management).
 - **Input Font Size**: All `<input>`, `<select>`, `<textarea>` elements must use `font-size: 16px` or larger to prevent iOS auto-zoom.
+- **Known Limitation**: Gemini API キーは localStorage に保存。個人利用前提のため許容するが、共有環境では注意が必要。
 
 ---
 
@@ -451,57 +363,10 @@ Recipe data is loaded via a **pre-build pipeline**, not runtime CSV import.
 
 ---
 
-## Image Handling Strategy (Future-Proof)
+## Image Handling
 
-**Target data scale**: ~2000 recipes, each with a high-resolution image
+- **Storage**: `imageUrl` (string) のみ IndexedDB に保存。画像 blob は保存しない。
+- **Source**: 外部 CDN (`cocoroplus.jp.sharp`) からロード。Service Worker の CacheFirst 戦略でオフラインキャッシュ。
+- **Component**: `src/components/RecipeImage.tsx` — エラー時はフォールバックアイコン表示。
+- **AI Parser**: URL からレシピ抽出時に OGP / schema.org から画像 URL も取得して `imageUrl` に保存。
 
-### 1. Storage Strategy: URL-based, Cache on Demand
-
-- **Database**: Store only the `imageUrl` (string) in IndexedDB. **NEVER store image blobs**.
-- **Image Source**: Images are hosted on an external CDN or web server.
-- **Loading**: When a recipe is opened, the image is downloaded from the `imageUrl`.
-- **Caching**: Downloaded images are cached using the **Cache API** (part of Service Workers). This allows for offline access without filling up IndexedDB.
-- **Cache Eviction**: Implement a **Least Recently Used (LRU)** cache eviction policy to manage storage. For example, keep the last 100 viewed images.
-
-### 2. UI Implementation: Placeholder & Progressive Loading
-
-- **Placeholder**: While the image is downloading, display a placeholder to prevent layout shifts. This can be a simple gray box with the correct aspect ratio, or a low-quality image placeholder (LQIP) like a BlurHash string.
-- **Progressive Loading**: First, show the low-quality placeholder. Once the high-resolution image is downloaded, fade it in for a smooth user experience.
-
-### 3. AI Recipe Parser Enhancement
-
-- The AI parser, when extracting recipes from URLs, should also identify the main recipe image (e.g., from Open Graph tags or schema.org metadata) and save its URL to the `imageUrl` field.
-
----
-
-## Performance Optimization for iPhone
-
-To ensure the app runs smoothly on all target iPhones (13 and newer), focus on these critical optimizations.
-
-### 1. Virtual Scrolling (Essential for 2000+ recipes)
-
-- **Problem**: Rendering a list of 2000 recipes crashes the browser.
-- **Solution**: Use `@tanstack/react-virtual` (see Advanced Performance Techniques section)
-- **Impact**: Only renders the ~10 items visible on screen, keeping the app fast and responsive.
-
-### 2. Offload Heavy Computations to Web Workers
-
-- **Problem**: Complex calculations like fuzzy search or match rate sorting can freeze the UI.
-- **Solution**: Move these tasks to a background thread using Web Workers.
-- **Impact**: The UI remains interactive and smooth even during heavy processing.
-
-### 3. Judicious Use of `React.memo` and `useMemo`
-
-- **Problem**: Unnecessary re-renders of complex components like `RecipeCard` can slow down the app.
-- **Solution**: Wrap `RecipeCard` in `React.memo` and use `useMemo` for expensive calculations within components.
-
-### 4. CSS Containment for Rendering Performance
-
-- **Problem**: The browser recalculates the layout for the entire page on every change.
-- **Solution**: Use the `contain` CSS property on `RecipeCard` to isolate its rendering from the rest of the page.
-
-```css
-.recipe-card {
-  contain: layout style paint;
-}
-```
