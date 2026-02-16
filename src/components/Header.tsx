@@ -1,4 +1,5 @@
-import { ChefHat, Search, Sparkles, CalendarClock, Upload, Settings } from 'lucide-react'
+import { Search, Sparkles, CalendarClock, Upload, Settings } from 'lucide-react'
+import { ForkKnifeIcon } from './ForkKnifeIcon'
 
 interface HeaderProps {
   onSearchToggle?: () => void
@@ -13,8 +14,8 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onImport, o
     <header className="px-4 pt-6 pb-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ChefHat className="h-7 w-7 text-accent" />
-          <h1 className="text-xl font-bold tracking-tight">レシピ</h1>
+          <ForkKnifeIcon className="h-7 w-7 text-accent" />
+          <h1 className="text-xl font-bold tracking-tight">Kitchen App</h1>
         </div>
         <div className="flex items-center gap-2">
           {onImport && (

@@ -1,6 +1,6 @@
 {
-  "name": "recipe-pwa",
-  "short_name": "レシピ",
+  "name": "Kitchen App",
+  "short_name": "Kitchen App",
   "description": "ホットクック・ヘルシオ対応レシピ管理PWA",
   "start_url": "/",
   "display": "standalone",
@@ -9,9 +9,15 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/vite.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
