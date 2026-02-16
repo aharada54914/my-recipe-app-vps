@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, Clock, Hash } from 'lucide-react'
 import { db } from '../db/db'
 import type { DeviceType } from '../db/db'
 import { adjustIngredients, formatQuantityVibe } from '../utils/recipeUtils'
 import { toggleFavorite } from '../utils/favoritesUtils'
 import { getMissingIngredients, formatShoppingListForLine, copyToClipboard } from '../utils/shoppingUtils'
 import { useWakeLock } from '../hooks/useWakeLock'
+import { RecipeImage } from './RecipeImage'
 import { ServingAdjuster } from './ServingAdjuster'
 import { SaltCalculator } from './SaltCalculator'
 import { ScheduleGantt } from './ScheduleGantt'
@@ -35,8 +36,6 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   // T-18: Shopping list state
   const [showShoppingList, setShowShoppingList] = useState(false)
   const [copied, setCopied] = useState(false)
-  // T-26: raw steps expand
-  const [showRawSteps, setShowRawSteps] = useState(false)
 
   // T-11: Keep screen on during recipe viewing
   useWakeLock()
@@ -93,7 +92,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
       <header className="flex items-center gap-3 px-4 pt-6 pb-4">
         <button
           onClick={onBack}
-          className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+          className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -103,32 +102,61 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             <span className="rounded-lg bg-accent/20 px-2 py-0.5 font-medium text-accent">
               {deviceLabels[recipe.device]}
             </span>
-            <span>No.{recipe.recipeNumber}</span>
-            <span>{recipe.totalTimeMinutes}分</span>
-            {recipe.calories && <span>{recipe.calories}</span>}
-            {recipe.saltContent && <span>塩分{recipe.saltContent}</span>}
           </div>
         </div>
-        {/* T-26: External link for CSV recipes */}
+        {/* External link for CSV recipes */}
         {recipe.sourceUrl && (
           <a
             href={recipe.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+            className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
           >
             <ExternalLink className="h-5 w-5 text-accent" />
           </a>
         )}
         <button
           onClick={() => toggleFavorite(recipeId)}
-          className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+          className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
         >
           <Star className={`h-5 w-5 ${favorited ? 'fill-accent text-accent' : 'text-text-secondary'}`} />
         </button>
       </header>
 
       <main className="space-y-6 px-4 pb-8">
+        {/* Recipe Image */}
+        <RecipeImage
+          recipe={recipe}
+          placeholderHeight="h-48"
+          className="w-full"
+        />
+
+        {/* Info Badges */}
+        <div className="flex flex-wrap gap-2">
+          {recipe.totalTimeMinutes > 0 && (
+            <div className="flex items-center gap-1.5 rounded-xl bg-bg-card px-3 py-2">
+              <Clock className="h-4 w-4 text-accent" />
+              <span className="text-sm font-medium">{recipe.totalTimeMinutes}分</span>
+            </div>
+          )}
+          {recipe.recipeNumber && (
+            <div className="flex items-center gap-1.5 rounded-xl bg-bg-card px-3 py-2">
+              <Hash className="h-4 w-4 text-accent" />
+              <span className="text-sm font-medium">{recipe.recipeNumber}</span>
+            </div>
+          )}
+          {recipe.calories && (
+            <div className="rounded-xl bg-bg-card px-3 py-2">
+              <span className="text-sm font-medium">{recipe.calories}</span>
+            </div>
+          )}
+          {recipe.saltContent && (
+            <div className="rounded-xl bg-bg-card px-3 py-2">
+              <span className="text-sm font-medium">塩分 {recipe.saltContent}</span>
+            </div>
+          )}
+        </div>
+
         {/* Servings */}
         <div className="flex justify-center">
           <ServingAdjuster
@@ -137,11 +165,11 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
           />
         </div>
 
-        {/* Ingredients */}
+        {/* Ingredients — Table Layout */}
         <div className="rounded-2xl bg-bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h4 className="text-sm font-bold text-text-secondary">材料</h4>
-            {/* T-18: Shopping list button */}
+            {/* Shopping list button */}
             <button
               onClick={() => setShowShoppingList(prev => !prev)}
               className="flex items-center gap-1 rounded-lg bg-accent/20 px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/30"
@@ -156,7 +184,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             </button>
           </div>
 
-          {/* T-18: Shopping list panel */}
+          {/* Shopping list panel */}
           {showShoppingList && (
             <div className="mb-4 rounded-xl bg-white/5 p-3">
               <div className="mb-2 flex items-center justify-between">
@@ -186,35 +214,45 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             </div>
           )}
 
+          {/* Main ingredients table */}
           {mainIngredients.length > 0 && (
             <div className="mb-3">
               <div className="mb-1 text-xs font-medium text-accent">主材料</div>
-              <ul className="space-y-1.5">
-                {mainIngredients.map((ing) => (
-                  <li key={ing.name} className="flex justify-between text-sm">
-                    <span>{ing.name}{ing.optional ? ' (任意)' : ''}</span>
-                    <span className="font-medium text-text-secondary">
-                      {formatQuantityVibe(ing.quantity, ing.unit)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <table className="w-full">
+                <tbody>
+                  {mainIngredients.map((ing) => (
+                    <tr key={ing.name} className="border-b border-white/5 last:border-0">
+                      <td className="py-1.5 text-sm">
+                        {ing.name}{ing.optional ? ' (任意)' : ''}
+                      </td>
+                      <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
+                        {formatQuantityVibe(ing.quantity, ing.unit)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
+          {/* Sub ingredients table */}
           {subIngredients.length > 0 && (
             <div>
               <div className="mb-1 text-xs font-medium text-text-secondary">調味料・その他</div>
-              <ul className="space-y-1.5">
-                {subIngredients.map((ing) => (
-                  <li key={ing.name} className="flex justify-between text-sm">
-                    <span>{ing.name}{ing.optional ? ' (任意)' : ''}</span>
-                    <span className="font-medium text-text-secondary">
-                      {formatQuantityVibe(ing.quantity, ing.unit)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <table className="w-full">
+                <tbody>
+                  {subIngredients.map((ing) => (
+                    <tr key={ing.name} className="border-b border-white/5 last:border-0">
+                      <td className="py-1.5 text-sm">
+                        {ing.name}{ing.optional ? ' (任意)' : ''}
+                      </td>
+                      <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
+                        {formatQuantityVibe(ing.quantity, ing.unit)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -225,32 +263,24 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
         {/* Schedule */}
         <ScheduleGantt steps={recipe.steps} />
 
-        {/* T-26: Raw steps from CSV */}
+        {/* Raw Steps — numbered card format, default expanded */}
         {recipe.rawSteps && recipe.rawSteps.length > 0 && (
           <div className="rounded-2xl bg-bg-card p-4">
-            <button
-              onClick={() => setShowRawSteps(!showRawSteps)}
-              className="flex w-full items-center justify-between text-sm font-bold text-text-secondary"
-            >
-              <span>📋 元の手順テキスト</span>
-              {showRawSteps ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-            {showRawSteps && (
-              <ol className="mt-3 space-y-2">
-                {recipe.rawSteps.map((step, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold">
-                      {i + 1}
-                    </span>
-                    <span className="flex-1 text-text-secondary">{step}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
+            <h4 className="mb-3 text-sm font-bold text-text-secondary">📋 調理手順</h4>
+            <div className="space-y-3">
+              {recipe.rawSteps.map((step, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-xl bg-white/5 p-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
+                    {i + 1}
+                  </span>
+                  <span className="flex-1 text-sm leading-relaxed text-text-secondary">{step}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* T-13: Personal Notes */}
+        {/* Personal Notes */}
         <div className="rounded-2xl bg-bg-card p-4">
           <h4 className="mb-3 text-sm font-bold text-text-secondary">📝 メモ</h4>
           <textarea
@@ -258,7 +288,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             onChange={(e) => setNoteText(e.target.value)}
             placeholder="調理メモを記入...（例：塩をやや少なめにした）"
             rows={3}
-            className="w-full resize-none rounded-xl bg-white/5 px-4 py-3 text-sm text-text-primary placeholder:text-text-secondary outline-none"
+            className="w-full resize-none rounded-xl bg-white/5 px-4 py-3 text-base text-text-primary placeholder:text-text-secondary outline-none"
           />
           <div className="mt-2 flex items-center justify-end gap-2">
             {noteSaved && (
@@ -276,4 +306,3 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
     </div>
   )
 }
-

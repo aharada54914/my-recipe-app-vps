@@ -1,15 +1,14 @@
-import { Search, Sparkles, CalendarClock, Upload, Settings } from 'lucide-react'
+import { Search, Sparkles, CalendarClock, Settings } from 'lucide-react'
 import { ForkKnifeIcon } from './ForkKnifeIcon'
 
 interface HeaderProps {
   onSearchToggle?: () => void
   onAiParse?: () => void
   onMultiSchedule?: () => void
-  onImport?: () => void
   onSettings?: () => void
 }
 
-export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onImport, onSettings }: HeaderProps) {
+export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings }: HeaderProps) {
   return (
     <header className="px-4 pt-6 pb-4">
       <div className="flex items-center justify-between">
@@ -18,14 +17,6 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onImport, o
           <h1 className="text-xl font-bold tracking-tight">Kitchen App</h1>
         </div>
         <div className="flex items-center gap-2">
-          {onImport && (
-            <button
-              onClick={onImport}
-              className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
-            >
-              <Upload className="h-5 w-5 text-text-secondary" />
-            </button>
-          )}
           {onAiParse && (
             <button
               onClick={onAiParse}

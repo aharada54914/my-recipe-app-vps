@@ -92,6 +92,12 @@ export interface UserNote {
   updatedAt: Date
 }
 
+export interface ViewHistory {
+  id?: number
+  recipeId: number
+  viewedAt: Date
+}
+
 export type ViewState =
   | { view: 'list' }
   | { view: 'detail'; recipeId: number }
@@ -105,6 +111,7 @@ class RecipeDB extends Dexie {
   stock!: Table<StockItem, number>
   favorites!: Table<Favorite, number>
   userNotes!: Table<UserNote, number>
+  viewHistory!: Table<ViewHistory, number>
 
   constructor() {
     super('RecipeDB')
@@ -131,6 +138,14 @@ class RecipeDB extends Dexie {
       stock: '++id, &name, inStock',
       favorites: '++id, &recipeId, addedAt',
       userNotes: '++id, &recipeId, updatedAt',
+    })
+    // v5: Add viewHistory table
+    this.version(5).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
     })
   }
 }

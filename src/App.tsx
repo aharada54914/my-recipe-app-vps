@@ -9,7 +9,6 @@ import { StockManager } from './components/StockManager'
 import { AiRecipeParser } from './components/AiRecipeParser'
 import { MultiScheduleView } from './components/MultiScheduleView'
 import { FavoritesPage } from './pages/FavoritesPage'
-import { ImportPage } from './pages/ImportPage'
 import { SettingsPage } from './pages/SettingsPage'
 import type { TabId } from './db/db'
 
@@ -60,7 +59,6 @@ function AppShell() {
       <Header
         onAiParse={() => navigate('/ai-parse')}
         onMultiSchedule={() => navigate('/multi-schedule')}
-        onImport={() => navigate('/import')}
         onSettings={() => navigate('/settings')}
       />
       <main className="px-4 pb-24">
@@ -100,54 +98,22 @@ function AppShell() {
 function RecipeDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [ready, setReady] = useState(false)
 
-  useEffect(() => {
-    initDb().then(() => setReady(true))
-  }, [])
-
-  if (!ready || !id) return null
+  if (!id) return null
 
   return <RecipeDetail recipeId={Number(id)} onBack={() => navigate(-1)} />
 }
 
 function AiParsePage() {
   const navigate = useNavigate()
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    initDb().then(() => setReady(true))
-  }, [])
-
-  if (!ready) return null
 
   return <AiRecipeParser onBack={() => navigate(-1)} />
 }
 
 function MultiSchedulePage() {
   const navigate = useNavigate()
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    initDb().then(() => setReady(true))
-  }, [])
-
-  if (!ready) return null
 
   return <MultiScheduleView onBack={() => navigate(-1)} />
-}
-
-function ImportPageWrapper() {
-  const navigate = useNavigate()
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    initDb().then(() => setReady(true))
-  }, [])
-
-  if (!ready) return null
-
-  return <ImportPage onBack={() => navigate(-1)} />
 }
 
 function SettingsPageWrapper() {
@@ -163,7 +129,6 @@ function App() {
         <Route path="/recipe/:id" element={<RecipeDetailPage />} />
         <Route path="/ai-parse" element={<AiParsePage />} />
         <Route path="/multi-schedule" element={<MultiSchedulePage />} />
-        <Route path="/import" element={<ImportPageWrapper />} />
         <Route path="/settings" element={<SettingsPageWrapper />} />
         <Route path="/*" element={<AppShell />} />
       </Routes>

@@ -38,7 +38,7 @@ A recipe management PWA with a dark-themed modern UI, targeting Japanese home co
 ### Cooking Logic Rules
 
 - **Quantity display**: Use `formatQuantityVibe` — convert to intuitive Japanese expressions ("1個強", "約1/2")
-- **Weight rounding**: All gram values round to nearest 10g
+- **Weight rounding**: Calculate values retain decimal precision (1dp). Display rounds to nearest 1g (values <1g also round)
 - **Salt calculation presets**: 0.6% (薄味), 0.8% (標準), 1.2% (濃いめ) — auto-convert to soy sauce (~16% salt) and miso (~12% salt) in g/ml
 - **Reverse schedule**: Calculate start times backward from target "いただきます" time, display as Gantt-style chart
 
@@ -261,6 +261,11 @@ this.version(2).stores({
 - **DB Schema**: Add `userNotes` table with `id`, `recipeId`, `content`, `updatedAt`
 - **UI**: Add textarea and save button to `RecipeDetail.tsx`
 
+### 5. View History
+- **Goal**: Track recipe viewing history for quick access
+- **DB Schema**: `viewHistory` table with `id`, `recipeId`, `viewedAt`
+- **Type**: `ViewHistory { id?: number; recipeId: number; viewedAt: Date }`
+
 ---
 
 ## Stock-Based Recipe Search
@@ -291,6 +296,7 @@ this.version(2).stores({
 ### 2. Home Page Layout
 - **Component**: `src/pages/HomePage.tsx`
 - **Layout**: `SearchHeader` + "至高のカテゴリー" section + `CategoryGrid` + "その他のカテゴリー" section + `IconGrid`
+- **旬の食材セクション**: Display seasonal ingredients with recipe suggestions based on current month
 
 ### 3. Bottom Navigation (5 Tabs)
 - **Component**: `src/components/BottomNav.tsx`
@@ -337,6 +343,11 @@ this.version(2).stores({
 ### 3. PWA (Add to Home Screen)
 - ❌ Not possible from iOS Chrome
 - ✅ **Solution**: Possible only from Safari. Guide users to "Open in Safari".
+- **PWA Implementation**: Use `vite-plugin-pwa` with `registerType: 'autoUpdate'`. Service Worker handles offline caching, especially for external recipe images (`cocoroplus.jp.sharp`) via `CacheFirst` strategy.
+- **PWA Name**: "Kitchen App"
+
+### 3.1 iOS Viewport
+- **maximum-scale=1**: Always set `maximum-scale=1` in viewport meta to prevent user zoom (ensures consistent mobile UI).
 
 ### 4. Touch & Scroll
 - ✅ `-webkit-overflow-scrolling: touch` for inertial scrolling
@@ -401,6 +412,9 @@ this.version(2).stores({
 - Keep components small and focused (single responsibility)
 - Extract complex calculations to `src/utils/` as pure functions
 - Type everything strictly (no `any` types)
+- **DB Initialization**: `initDb()` is called exactly once at the app entry point (`AppShell`). Individual page components must NOT call `initDb()` independently.
+- **Routing**: Future migration to `Outlet` + nested routes pattern recommended (currently uses `activeTab` + `navigate()` dual management).
+- **Input Font Size**: All `<input>`, `<select>`, `<textarea>` elements must use `font-size: 16px` or larger to prevent iOS auto-zoom.
 
 ---
 
@@ -412,27 +426,28 @@ this.version(2).stores({
 
 ---
 
-## CSV Data Import
+## Recipe Data: Pre-build Strategy
 
-The app supports importing recipe data from SHARP appliance CSV files (Hotcook, Healsio).
+Recipe data is loaded via a **pre-build pipeline**, not runtime CSV import.
 
-### Quick Overview
+### Pipeline
 
-**Supported devices**:
-- Hotcook (KN-HW24H) - with menu number
-- Healsio (AX-XA20) - without menu number
+1. **Build-time**: `scripts/prebuild-recipes.mjs` reads CSV files → outputs JSON to `src/data/`
+2. **Bundle**: JSON files are imported at compile time and bundled into the app
+3. **Runtime**: `initDb()` checks if DB is empty → bulk-inserts JSON data on first launch
 
-**Key features**:
-- Automatic parsing of multi-line ingredients and steps
-- Optional menu number handling
-- Image URL and recipe source URL storage
-- Clickable external link icon in RecipeDetail
+### Data Sources
 
-### Detailed Documentation
+| Device | CSV File | Recipes | Notes |
+|--------|----------|---------|-------|
+| Hotcook (KN-HW24H) | `KN-HW24H_recipes_complete_complete.csv` | ~350 | Has menu number |
+| Healsio (AX-XA20) | `AX-XA20_recipes_complete.csv` | ~1,372 | Has salt content, no menu number |
 
-For full implementation details, CSV structure analysis, and parsing logic, see:
+### Key Design Decisions
 
-📄 **[CSV_IMPORT.md](./CSV_IMPORT.md)**
+- **No runtime CSV import**: The `ImportPage` has been removed. All data is pre-built.
+- **JSON files are git-tracked**: They are build artifacts but committed for reproducibility.
+- **Image URLs**: External (`cocoroplus.jp.sharp`), cached via Service Worker for offline access.
 
 ---
 
@@ -487,6 +502,6 @@ To ensure the app runs smoothly on all target iPhones (13 and newer), focus on t
 
 ```css
 .recipe-card {
-  contain: content;
+  contain: layout style paint;
 }
 ```

@@ -12,6 +12,7 @@
 * **Components**:
     * Cards: `rounded-2xl`, `bg-[#1A1A1C]` (または透過背景)
     * Buttons: タップしやすいサイズ確保、角丸 (`rounded-xl`)
+    * **最小タップ領域**: 44×44px 以上を確保（`p-3` 推奨）
     * Font: 視認性の高いサンセリフ (Noto Sans JP等)、数値は太字強調
 
 ## 📱 UX要件
@@ -19,7 +20,7 @@
 * **Interaction**:
     * **Wake Lock**: `RecipeDetail` 表示中は画面消灯を阻止する（`useWakeLock`使用）。
     * **Feedback**: ボタン押下時のリップルエフェクトや、ローディング表示を忘れない。
-    * **Performance**: `react-virtuoso` 等を使用し、大量リストでもヌルヌル動く描画を心がける。
+    * **Performance**: `@tanstack/react-virtual` を使用し、大量リストでもヌルヌル動く描画を心がける。
 
 ## 🛠️ 行動指針
 * `RecipeCard` や `IngredientList` など、`CLAUDE.md` で指定されたコンポーネント構成を守る。

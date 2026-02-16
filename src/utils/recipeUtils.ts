@@ -3,7 +3,7 @@ import type { Ingredient, SaltMode, SaltResult, CookingStep, ScheduleEntry, Reci
 
 /**
  * Format a quantity with Japanese vibes:
- * - g/ml → round to nearest 10g
+ * - g/ml → round to nearest 1g
  * - 個/本/株/片 → express with 半, 強, 約
  * - 大さじ/小さじ → fractions
  * - 適量 → return as-is
@@ -12,9 +12,9 @@ export function formatQuantityVibe(value: number, unit: string): string {
   if (unit === '適量') return '適量'
   if (value === 0) return unit === '適量' ? '適量' : `0${unit}`
 
-  // Weight / volume: round to nearest 10
+  // Weight / volume: round to nearest 1g
   if (unit === 'g' || unit === 'ml') {
-    const rounded = Math.round(value / 10) * 10
+    const rounded = Math.round(value)
     return `${rounded}${unit}`
   }
 
@@ -228,14 +228,13 @@ export function calculateMultiRecipeSchedule(
 
 /**
  * Calculate ingredient match rate based on stock.
- * Only considers 'main' category ingredients.
+ * Considers all ingredients (not just 'main' category).
  */
 export function calculateMatchRate(
   ingredients: Ingredient[],
   stockNames: Set<string>
 ): number {
-  const mainIngredients = ingredients.filter((i) => i.category === 'main')
-  if (mainIngredients.length === 0) return 0
-  const matched = mainIngredients.filter((i) => stockNames.has(i.name)).length
-  return Math.round((matched / mainIngredients.length) * 100)
+  if (ingredients.length === 0) return 0
+  const matched = ingredients.filter((i) => stockNames.has(i.name)).length
+  return Math.round((matched / ingredients.length) * 100)
 }
