@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet, useNavigate, useParams } from 'react-router-dom'
 import { initDb } from './db/initDb'
 import { Header } from './components/Header'
 import { BottomNav } from './components/BottomNav'
@@ -8,24 +8,13 @@ import { RecipeDetail } from './components/RecipeDetail'
 import { StockManager } from './components/StockManager'
 import { AiRecipeParser } from './components/AiRecipeParser'
 import { MultiScheduleView } from './components/MultiScheduleView'
+import { HomePage } from './pages/HomePage'
+import { HistoryPage } from './pages/HistoryPage'
 import { FavoritesPage } from './pages/FavoritesPage'
 import { SettingsPage } from './pages/SettingsPage'
-import type { TabId } from './db/db'
 
-function AppShell() {
-  const [activeTab, setActiveTab] = useState<TabId>('home')
+function AppLayout() {
   const navigate = useNavigate()
-
-  const handleTabChange = (tab: TabId) => {
-    setActiveTab(tab)
-    switch (tab) {
-      case 'home': navigate('/'); break
-      case 'search': navigate('/'); break
-      case 'favorites': navigate('/favorites'); break
-      case 'stock': navigate('/'); break
-      case 'history': navigate('/'); break
-    }
-  }
 
   return (
     <div className="min-h-dvh bg-bg-primary">
@@ -35,37 +24,16 @@ function AppShell() {
         onSettings={() => navigate('/settings')}
       />
       <main className="px-4 pb-24">
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <>
-                {activeTab === 'home' && (
-                  <div className="py-8 text-center">
-                    <h2 className="text-lg font-bold text-text-primary mb-2">ようこそ</h2>
-                    <p className="text-sm text-text-secondary">
-                      下のタブで検索・在庫管理・お気に入りをご利用ください
-                    </p>
-                  </div>
-                )}
-                {activeTab === 'search' && (
-                  <RecipeList onSelectRecipe={(id) => navigate(`/recipe/${id}`)} />
-                )}
-                {activeTab === 'stock' && <StockManager />}
-                {activeTab === 'history' && (
-                  <p className="py-12 text-center text-sm text-text-secondary">
-                    履歴機能は準備中です
-                  </p>
-                )}
-              </>
-            }
-          />
-          <Route path="/favorites" element={<FavoritesPage />} />
-        </Routes>
+        <Outlet />
       </main>
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      <BottomNav />
     </div>
   )
+}
+
+function SearchPage() {
+  const navigate = useNavigate()
+  return <RecipeList onSelectRecipe={(id) => navigate(`/recipe/${id}`)} />
 }
 
 function RecipeDetailPage() {
@@ -127,11 +95,17 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route element={<AppLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="search" element={<SearchPage />} />
+          <Route path="stock" element={<StockManager />} />
+          <Route path="history" element={<HistoryPage />} />
+          <Route path="favorites" element={<FavoritesPage />} />
+        </Route>
         <Route path="/recipe/:id" element={<RecipeDetailPage />} />
         <Route path="/ai-parse" element={<AiParsePage />} />
         <Route path="/multi-schedule" element={<MultiSchedulePage />} />
         <Route path="/settings" element={<SettingsPageWrapper />} />
-        <Route path="/*" element={<AppShell />} />
       </Routes>
     </BrowserRouter>
   )

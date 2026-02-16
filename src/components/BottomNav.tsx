@@ -1,35 +1,37 @@
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Home, Search, Package, Star, Clock } from 'lucide-react'
 import type { TabId } from '../db/db'
 
-interface BottomNavProps {
-  activeTab: TabId
-  onTabChange: (tab: TabId) => void
-}
-
-const tabs: { id: TabId; icon: typeof Search; label: string }[] = [
-  { id: 'home', icon: Home, label: 'ホーム' },
-  { id: 'search', icon: Search, label: '検索' },
-  { id: 'stock', icon: Package, label: '在庫' },
-  { id: 'favorites', icon: Star, label: 'お気に入り' },
-  { id: 'history', icon: Clock, label: '履歴' },
+const tabs: { id: TabId; path: string; icon: typeof Search; label: string }[] = [
+  { id: 'home', path: '/', icon: Home, label: 'ホーム' },
+  { id: 'search', path: '/search', icon: Search, label: '検索' },
+  { id: 'stock', path: '/stock', icon: Package, label: '在庫' },
+  { id: 'favorites', path: '/favorites', icon: Star, label: 'お気に入り' },
+  { id: 'history', path: '/history', icon: Clock, label: '履歴' },
 ]
 
-export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+export function BottomNav() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-border bg-bg-primary/90 backdrop-blur-lg" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="flex justify-around py-2">
-        {tabs.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            onClick={() => onTabChange(id)}
-            aria-label={label}
-            className={`flex flex-col items-center gap-1 px-3 py-1 transition-colors ${activeTab === id ? 'text-accent' : 'text-text-secondary hover:text-accent'
-              }`}
-          >
-            <Icon className="h-5 w-5" />
-            <span className="text-[10px]">{label}</span>
-          </button>
-        ))}
+        {tabs.map(({ id, path, icon: Icon, label }) => {
+          const isActive = location.pathname === path
+          return (
+            <button
+              key={id}
+              onClick={() => navigate(path)}
+              aria-label={label}
+              className={`flex flex-col items-center gap-1 px-3 py-1 transition-colors ${isActive ? 'text-accent' : 'text-text-secondary hover:text-accent'
+                }`}
+            >
+              <Icon className="h-5 w-5" />
+              <span className="text-[10px]">{label}</span>
+            </button>
+          )
+        })}
       </div>
     </nav>
   )
