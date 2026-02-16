@@ -163,18 +163,21 @@ Phase E3: 機能追加（並行可能、FEAT-3 は BUG-1 完了後）
 
 | コミット | 内容 |
 |----------|------|
-| `bbfc7be` (HEAD) | fix: QA修正一括 — safe-area, aria-label, stockNames memo, Wake Lock修正, Worker削除, テスト追加, geminiParser検証 |
+| `ce108aa` (HEAD) | docs: PLAN.md v4.0 — 6件のバグ/UI/機能課題の根本原因分析と修正計画 |
+| `3c84de4` | Phase D-3 + D-4: 在庫UI改善 + Gantt 再帰競合チェック |
+| `badd8ec` | Phase D-1 + D-2: 閲覧履歴機能 + ホーム画面旬のおすすめ |
+| `a2de02c` | Phase C-5: searchUtils テスト追加 |
+| `c6efa32` | Phase C-2/3/4: Header aria-label + タップ領域拡大 + カテゴリ limit |
+| `c751028` | Phase C-1: Outlet ベースのルーティングに再構成 |
+| `710220b` | Phase B: CLAUDE.md ドキュメント整合性修正 (B-1〜B-7 + 追加) |
+| `ca079b4` | Phase A-1 + A-2: initDb を App レベルに移動 + テスト基盤構築 |
+| `bbfc7be` | fix: QA修正一括 — safe-area, aria-label, stockNames memo, Wake Lock修正, Worker削除, テスト追加, geminiParser検証 |
 | `3dc2224` | docs: PLAN.md統合 + PM_REVIEW.md/REVIEW.md 削除 |
 | `af1fd8b` | v2 Refactoring — プリビルドパイプライン, ブランディング(Kitchen App), PNGアイコン, エージェント定義更新, ImportPage削除 |
-| `deb3f51` | Phase 4 — CSV Import, Gantt, Stock, Settings, Salt Fix |
-| `76a17b0` | Phase 3b — RecipeImage, iOS 100vh, PWA, Concurrent, Worker |
-| `fc6f453` | fix: RecipeDetail hooks order |
-| `7517d63` | Phase 3a — userNotes, 買い物リスト, 5タブ化 |
-| `84b70a9` | Phase 1+2 — Fuse.js, 仮想スクロール, Router, DB最適化, favorites, Wake Lock |
 
 ### 1-2. ワーキングツリー
 
-PLAN.md のみローカル修正あり（本ドキュメントの v3.1 更新）。コード変更なし。
+v4 新規課題（Phase E1〜E3）は未実装。Phase A〜D は全て実装済み。
 
 ### 1-3. レビュー文書（統合済み — 元ファイルは削除）
 
@@ -224,220 +227,169 @@ PLAN.md のみローカル修正あり（本ドキュメントの v3.1 更新）
 
 | # | QA指摘 | 重要度 | 状態 | 詳細 |
 |---|--------|--------|------|------|
-| 4 | APIキー localStorage保存 | 🟡Medium | ❌未対応 | 個人PWAとして許容だが、CLAUDE.md に注意事項の記載なし |
-| 7 | Worker方針と CLAUDE.md の矛盾 | 🟡Medium | ⚠️要修正 | Worker削除済みだが CLAUDE.md は2箇所で Worker 使用を推奨したまま |
-| 8 | aria-label 網羅性 | 🟡Medium | ⚠️部分対応 | Header.tsx のボタンに aria-label 未追加（BottomNav は対応済み） |
-| 10 | home/search 同一URL | 🟡Medium | ❌未対応 | `activeTab` state での切替のまま |
+| 4 | APIキー localStorage保存 | 🟡Medium | ✅解消済み | CLAUDE.md に注意事項追記済み @710220b |
+| 7 | Worker方針と CLAUDE.md の矛盾 | 🟡Medium | ✅解消済み | Phase B-1 で Worker 記述を削除/格下げ @710220b |
+| 8 | aria-label 網羅性 | 🟡Medium | ✅解消済み | Phase C-2 で Header.tsx に aria-label 追加 @c6efa32 |
+| 10 | home/search 同一URL | 🟡Medium | ✅解消済み | Phase C-1 で Outlet + ネストルートに移行、URL 分離 @c751028 |
 | 11 | バンドルサイズ | 🟡Medium | ⚠️部分対応 | dynamic import 実施済み、チャンク分割効果は要検証 |
 | 17 | FavoritesPage 仮想スクロール | 🟢Low | ❌未対応 | 優先度低 |
-| 18 | initDb 重複呼出 | 🟢Low | ⚠️構造的問題 | **下記 2-3 新規発見①参照** — AppShell のみが initDb を呼ぶが、サブルートが AppShell 外にあるため直接アクセス時に initDb が走らないバグ |
+| 18 | initDb 重複呼出 | 🟢Low | ✅解消済み | Phase A-1 で App レベルに移動、全ルートで保証 @ca079b4 |
 
 ### 2-2. 残存する REVIEW.md 指摘
 
 | # | REVIEW指摘 | 状態 | 詳細 |
 |---|------------|------|------|
-| 3 | initDb 冗長呼出 | ⚠️構造的問題 | **2-3 新規発見①参照** |
+| 3 | initDb 冗長呼出 | ✅解消済み | Phase A-1 で App レベルに移動 @ca079b4 |
 | 4 | 塩分丸め処理の不一致 | ✅解消済み | LOGIC.md「小数第1位精度保持、表示時1g丸め」と実装が一致。CLAUDE.md line 41 も整合 |
-| 5 | react-router-dom の非効率利用 | ❌未対応 | activeTab + navigate 二重管理が残存 |
+| 5 | react-router-dom の非効率利用 | ✅解消済み | Phase C-1 で Outlet + ネストルートに移行 @c751028 |
 
 ---
 
 ### 2-3. CLAUDE.md の記述 vs 実装の矛盾（全件再検証）
 
-#### 🔴 新規発見① — initDb が AppShell 外のルートで実行されない
+#### ~~🔴 新規発見① — initDb が AppShell 外のルートで実行されない~~ → ✅ 解消済み @ca079b4
 
-**CLAUDE.md の記述** (line 415):
-> DB Initialization: `initDb()` is called exactly once at the app entry point (`AppShell`).
-
-**実装** (`App.tsx`):
-```
-App → BrowserRouter → Routes
-  /recipe/:id   → RecipeDetailPage   ← AppShell 外
-  /ai-parse     → AiParsePage        ← AppShell 外
-  /multi-schedule → MultiSchedulePage ← AppShell 外
-  /settings     → SettingsPageWrapper ← AppShell 外
-  /*            → AppShell（ここで initDb()）
-```
-
-**問題**: ユーザーが `/recipe/123` をブックマークまたはリロードした場合、`AppShell` がマウントされず `initDb()` が実行されない。空のDBでレシピ取得を試み、`null` が返る。
-
-**影響度**: 🔴 Critical — PWAではページリロードが頻繁に起こる。
+Phase A-1 で `App` コンポーネントレベルに `initDb()` を移動。`BrowserRouter` の外で `ready` 状態を管理し、全ルートで DB 初期化を保証。
 
 ---
 
-#### 🔴 新規発見② — テスト実行基盤が完全に欠落
+#### ~~🔴 新規発見② — テスト実行基盤が完全に欠落~~ → ✅ 解消済み @ca079b4
 
-**CLAUDE.md の記述** (暗黙の前提):
-> `npm test` (single run), `npm run test:watch` (watch mode)
-
-**実装** (`package.json`):
-- `scripts` に `test` / `test:watch` が**存在しない**
-- `devDependencies` に `vitest` が**存在しない**
-- `@testing-library/react` も**未インストール**
-
-**実態**: テストファイル3つ (`recipeUtils.test.ts`, `csvParser.test.ts`, `geminiParser.test.ts`) は存在するが**実行不可能**。
-
-**影響度**: 🔴 Critical — テストが CI でも手動でも走らない。
+Phase A-2 で `vitest` をインストール、`test` / `test:watch` スクリプトを追加。既存3テストが実行可能。
 
 ---
 
-#### 🟡 矛盾① — Web Worker の記述と実装の乖離（2箇所）
+#### ~~🟡 矛盾① — Web Worker の記述と実装の乖離~~ → ✅ 解消済み @710220b
 
-**CLAUDE.md**:
-- line 161-164: "🚀 Offload heavy computations to Web Workers" + `new Worker(...)` のコード例
-- line 487-491: "Performance Optimization for iPhone" セクションで再度 Worker を推奨
-
-**実装**: `src/workers/` ディレクトリは空。Worker は bbfc7be で削除済み。
+Phase B-1 で CLAUDE.md の Worker 推奨記述を「メインスレッド + useTransition で十分」に変更。
 
 ---
 
-#### 🟡 矛盾② — CLAUDE.md 内の重複セクション（3件）
+#### ~~🟡 矛盾② — CLAUDE.md 内の重複セクション~~ → ✅ 解消済み @710220b
 
-| 重複 | 1回目 | 2回目 | 差異 |
-|------|-------|-------|------|
-| Image Handling Strategy | lines 177-238 | lines 454-473 | 1回目: Data Model + BlurHash 詳細、2回目: Cache API + LRU 戦略。**内容が異なり統合が必要** |
-| Virtual Scrolling | line 138-142 | line 481-485 | ほぼ同一 |
-| CSS Containment | line 144-153 | line 498-507 | ほぼ同一（コード例含む） |
-| Web Workers | line 161-164 | line 487-491 | 内容同一 |
+Phase B-2/B-3 で Image Handling、Virtual Scrolling、CSS Containment、Web Workers の重複を統合・削除。
 
 ---
 
-#### 🟡 矛盾③ — CLAUDE.md のコンポーネント名が実装と不一致
+#### ~~🟡 矛盾③ — CLAUDE.md のコンポーネント名が実装と不一致~~ → ✅ 解消済み @710220b
 
-| CLAUDE.md の記述 | 実際のファイル | 状態 |
-|-----------------|---------------|------|
-| `src/components/SearchHeader.tsx` (line 293) | `src/components/SearchBar.tsx` | 名前不一致 |
-| `src/components/StockSelector.tsx` (line 275) | `src/components/StockManager.tsx` | 名前不一致 |
-| `src/pages/HomePage.tsx` (line 298) | 存在しない（AppShell 内にインライン） | 未実装 |
+Phase B-4 で `SearchHeader.tsx` → `SearchBar.tsx`、`StockSelector.tsx` → `StockManager.tsx` に修正。HomePage.tsx も反映。
 
 ---
 
-#### 🟡 矛盾④ — PAGE_SIZE の不一致
+#### ~~🟡 矛盾④ — PAGE_SIZE の不一致~~ → ✅ 解消済み @710220b + @c6efa32
 
-**CLAUDE.md** (line 68): `PAGE_SIZE = 50`
-**実装** (`RecipeList.tsx:27`): `PAGE_SIZE = 200`
-
-さらに、カテゴリフィルタ時に `limit` が適用されない：
-```typescript
-// category !== 'すべて' → 全件ロード（limit なし）
-db.recipes.where('category').equals(category).toArray()
-// category === 'すべて' → limit(200) のみ
-db.recipes.limit(PAGE_SIZE).toArray()
-```
+Phase B-5 で CLAUDE.md の記述を統一、Phase C-4 でカテゴリフィルタにも `.limit(PAGE_SIZE)` を適用。
 
 ---
 
-#### 🟡 矛盾⑤ — Header ボタンのタップ領域
+#### ~~🟡 矛盾⑤ — Header ボタンのタップ領域~~ → ✅ 解消済み @c6efa32
 
-**agents/UI.md** (line 15): "最小タップ領域: 44×44px 以上を確保（`p-3` 推奨）"
-**実装** (`Header.tsx` lines 23,31,39,47): 全ボタンが `p-2`
-
-（注: `RecipeDetail.tsx` のボタンは `p-3` で正しい）
+Phase C-3 で Header.tsx の全ボタンを `p-2` → `p-3` に変更。
 
 ---
 
-#### 🟡 矛盾⑥ — PWA 記述の陳腐化
+#### ~~🟡 矛盾⑥ — PWA 記述の陳腐化~~ → ✅ 解消済み @710220b
 
-**CLAUDE.md** (line 48): "PWA: Offline support, installable app (to be configured)"
-**実装**: `vite-plugin-pwa` 設定済み、manifest インライン化済み、workbox キャッシュ戦略実装済み。
-
----
-
-#### 🟡 矛盾⑦ — Image Handling Checklist の CSV 参照
-
-**CLAUDE.md** (line 222): "Update CSV import to handle image URLs"
-**実装**: CSV import (`ImportPage.tsx`) は af1fd8b で削除済み。
+Phase B-6 で CLAUDE.md の PWA 記述を現在の設定内容に更新。
 
 ---
 
-#### 🟡 矛盾⑧ — searchUtils.ts テスト未実装
+#### ~~🟡 矛盾⑦ — Image Handling Checklist の CSV 参照~~ → ✅ 解消済み @710220b
 
-**PLAN.md (v2) Phase B-3** および CLAUDE.md のテストカバレッジ表で `searchUtils.ts` テストを要求。
-**実装**: `src/utils/__tests__/searchUtils.test.ts` は存在しない。
-
----
-
-#### 🟢 矛盾⑨ — iOS バージョン
-
-**CLAUDE.md** (lines 373-377): iOS 26.2.1, iPhone 17 Pro 等
-**現実**: 2026年2月時点で iOS 19 / iPhone 16 が最新。架空仕様。
+Phase B-2 で CSV import 参照を削除。
 
 ---
 
-#### ~~🟢 矛盾⑩ — CSS Containment 未実装~~ → ✅ 解消済み (bbfc7be)
+#### ~~🟡 矛盾⑧ — searchUtils.ts テスト未実装~~ → ✅ 解消済み @a2de02c
 
-`src/index.css` に `.recipe-card { contain: layout style paint; content-visibility: auto; contain-intrinsic-size: auto 120px; }` が実装済み。2-0 テーブルに移動。
+Phase C-5 で `src/utils/__tests__/searchUtils.test.ts` を追加。
+
+---
+
+#### ~~🟢 矛盾⑨ — iOS バージョン~~ → ✅ 解消済み @710220b
+
+Phase B-7 で iOS 26.x → iOS 18.x、iPhone 17 → iPhone 16 に修正。
+
+---
+
+#### ~~🟢 矛盾⑩ — CSS Containment 未実装~~ → ✅ 解消済み @bbfc7be
+
+`src/index.css` に `.recipe-card { contain: layout style paint; content-visibility: auto; contain-intrinsic-size: auto 120px; }` が実装済み。
 
 ---
 
 #### 🟢 矛盾⑪ — react-blurhash 未インストール
 
 **CLAUDE.md** (line 216): "Library: `react-blurhash` (requires npm install)"
-**実装**: `package.json` に含まれず。BlurHash 機能は未実装。
+**実装**: `package.json` に含まれず。BlurHash 機能は未実装。優先度低のため保留。
 
 ---
 
-## 3. リファクタリング計画
+## 3. リファクタリング計画（Phase A〜D: ✅ 全件実装済み）
 
-### Phase A: 緊急修正（優先度: 最高 — ブロッカー）
+### Phase A: 緊急修正 — ✅ 完了 @ca079b4
 
-| # | タスク | 対象ファイル | 詳細 | 依存 |
-|---|--------|-------------|------|------|
-| A-1 | **initDb を App レベルに移動** | `src/App.tsx` | `App` コンポーネントで initDb を実行し、ready 状態を管理。全ルートで DB 初期化を保証。AppShell から initDb を除去 | なし |
-| A-2 | **テスト実行基盤の構築** | `package.json`, `vite.config.ts` | `vitest` をインストール、`test` / `test:watch` スクリプト追加。既存3テストが `npm test` で実行可能になることを確認 | なし |
+| # | タスク | 状態 | コミット |
+|---|--------|------|---------|
+| A-1 | **initDb を App レベルに移動** | ✅ 完了 | ca079b4 |
+| A-2 | **テスト実行基盤の構築** | ✅ 完了 | ca079b4 |
 
-### Phase B: ドキュメント整合性の修正（優先度: 高）
+### Phase B: ドキュメント整合性の修正 — ✅ 完了 @710220b
 
-| # | タスク | 対象ファイル | 詳細 | 依存 |
-|---|--------|-------------|------|------|
-| B-1 | Web Worker 記述の削除/格下げ | `CLAUDE.md` | 2箇所の Worker 推奨記述を削除し、「メインスレッド + useTransition で十分。大規模化時に再検討」に変更 | なし |
-| B-2 | Image Handling 重複統合 | `CLAUDE.md` | 2つのセクション (lines 177-238, 454-473) を1つに統合。Data Model + Cache API + LRU を一箇所にまとめる。CSV import 参照を削除 | なし |
-| B-3 | Performance セクション重複削除 | `CLAUDE.md` | "Performance Optimization for iPhone" セクション (lines 477-507) を削除し、"Advanced Performance Techniques" への参照に置換 | B-1 |
-| B-4 | コンポーネント名の修正 | `CLAUDE.md` | `SearchHeader.tsx` → `SearchBar.tsx`、`StockSelector.tsx` → `StockManager.tsx`、`HomePage.tsx` → 「AppShell 内インライン」に修正 | なし |
-| B-5 | PAGE_SIZE 記述の統一 | `CLAUDE.md` | 例示の `PAGE_SIZE = 50` を削除し、「limit を必ず適用すること」というルールに変更 | なし |
-| B-6 | PWA 記述の更新 | `CLAUDE.md` | "to be configured" → 現在の設定内容（vite-plugin-pwa, workbox, manifest）を反映 | なし |
-| B-7 | iOS バージョンの修正 | `CLAUDE.md` | iOS 26.x → iOS 18.x に修正。iPhone 17 → iPhone 16 に修正 | なし |
+| # | タスク | 状態 | コミット |
+|---|--------|------|---------|
+| B-1 | Web Worker 記述の削除/格下げ | ✅ 完了 | 710220b |
+| B-2 | Image Handling 重複統合 | ✅ 完了 | 710220b |
+| B-3 | Performance セクション重複削除 | ✅ 完了 | 710220b |
+| B-4 | コンポーネント名の修正 | ✅ 完了 | 710220b |
+| B-5 | PAGE_SIZE 記述の統一 | ✅ 完了 | 710220b |
+| B-6 | PWA 記述の更新 | ✅ 完了 | 710220b |
+| B-7 | iOS バージョンの修正 | ✅ 完了 | 710220b |
 
-### Phase C: コード品質改善（優先度: 高）
+### Phase C: コード品質改善 — ✅ 完了 @c751028, @c6efa32, @a2de02c
 
-| # | タスク | 対象ファイル | 詳細 | 依存 |
-|---|--------|-------------|------|------|
-| C-1 | ルーティング整理 | `src/App.tsx`, `BottomNav.tsx` | activeTab + navigate 二重管理を解消。Outlet + ネストルートへ移行。URL を `/search`, `/stock`, `/history`, `/favorites` に分離 | A-1 |
-| C-2 | Header aria-label 追加 | `src/components/Header.tsx` | 4つのボタンに `aria-label` を追加 | なし |
-| C-3 | Header タップ領域拡大 | `src/components/Header.tsx` | `p-2` → `p-3` に変更 (agents/UI.md の最小タップ領域要件) | なし |
-| C-4 | RecipeList カテゴリフィルタに limit 追加 | `src/components/RecipeList.tsx` | `category !== 'すべて'` 時にも `.limit(PAGE_SIZE)` を適用 | なし |
-| C-5 | `searchUtils.ts` テスト追加 | `src/utils/__tests__/searchUtils.test.ts` | Fuse.js 検索 + シノニム展開のテスト | A-2 |
+| # | タスク | 状態 | コミット |
+|---|--------|------|---------|
+| C-1 | ルーティング整理 (Outlet + ネストルート) | ✅ 完了 | c751028 |
+| C-2 | Header aria-label 追加 | ✅ 完了 | c6efa32 |
+| C-3 | Header タップ領域拡大 (`p-2` → `p-3`) | ✅ 完了 | c6efa32 |
+| C-4 | RecipeList カテゴリフィルタに limit 追加 | ✅ 完了 | c6efa32 |
+| C-5 | `searchUtils.ts` テスト追加 | ✅ 完了 | a2de02c |
 
-### Phase D: UX/アーキテクチャ改善（優先度: 中）
+### Phase D: UX/アーキテクチャ改善 — ✅ 完了 @badd8ec, @3c84de4
 
-| # | タスク | 対象ファイル | 詳細 | 依存 |
-|---|--------|-------------|------|------|
-| D-1 | 閲覧履歴機能の実装 | `RecipeDetail.tsx`, 新規 `HistoryPage.tsx` | `viewHistory` テーブル（スキーマ済み）への書込み + 履歴ページ実装 | C-1 |
-| D-2 | ホーム画面の動的化 | `AppShell` or 新規 `HomePage.tsx` | 旬の食材レシピ推薦 | C-1 |
-| D-3 | 在庫管理UI改善 | `StockManager.tsx` | 横スワイプ削除、直接数量編集 | なし |
-| D-4 | Gantt 競合再帰チェック | `recipeUtils.ts` | 3レシピ以上の同一デバイス競合シフト後の再検証 | なし |
+| # | タスク | 状態 | コミット |
+|---|--------|------|---------|
+| D-1 | 閲覧履歴機能の実装 | ✅ 完了 | badd8ec |
+| D-2 | ホーム画面の動的化 (旬のおすすめ) | ✅ 完了 | badd8ec |
+| D-3 | 在庫管理UI改善 (スワイプ削除、数量編集) | ✅ 完了 | 3c84de4 |
+| D-4 | Gantt 競合再帰チェック | ✅ 完了 | 3c84de4 |
 
 ---
 
-## 4. 依存関係グラフ
+## 4. 依存関係グラフ（Phase A〜D: 全完了）
 
 ```
-A-1 (initDb移動) ──→ C-1 (ルーティング整理) ──→ D-1 (閲覧履歴)
-                                                ──→ D-2 (ホーム動的化)
-A-2 (テスト基盤) ──→ C-5 (searchUtils テスト)
+✅ A-1 (initDb移動) ──→ ✅ C-1 (ルーティング整理) ──→ ✅ D-1 (閲覧履歴)
+                                                      ──→ ✅ D-2 (ホーム動的化)
+✅ A-2 (テスト基盤) ──→ ✅ C-5 (searchUtils テスト)
 
-B-1 (Worker記述) ──→ B-3 (Performance重複削除)
-
-その他: 独立して並行実施可能
+✅ B-1 (Worker記述) ──→ ✅ B-3 (Performance重複削除)
 ```
 
 ---
 
-## 5. Next Actions（優先順位順）
+## 5. Next Actions（現在の優先順位）
 
-1. **Phase A-1: initDb を App レベルに移動** — 直接 URL アクセス時の DB 未初期化バグを修正（🔴 Critical）
-2. **Phase A-2: テスト実行基盤の構築** — vitest インストール + scripts 追加（🔴 Critical）
-3. **Phase B (全件): CLAUDE.md ドキュメント整合性修正** — Worker/Image/Performance の重複削除、コンポーネント名修正、PWA/iOS 更新
-4. **Phase C-1: ルーティング整理** — Outlet + ネストルート移行
-5. **Phase C-2〜C-5: コード品質改善** — aria-label、タップ領域、limit、テスト（CSS containment は解消済み）
-6. **Phase D を計画的に実施** — 閲覧履歴、ホーム動的化、在庫UI改善をスプリント計画に組み込む
+Phase A〜D は全て実装済み。**v4 新規課題 (Phase E1〜E3) が残作業。**
+
+1. **Phase E1: BUG-1 在庫0%バグ** — Dexie v4 boolean 型不一致を修正（🔴 Critical）
+2. **Phase E1: UI-1 在庫管理画面UI** — 赤色透過 + トグル/削除重なり修正（🔴 Critical）
+3. **Phase E2: UI-2 検索画面レイアウト** — コンパクトリスト化（🟡 High）
+4. **Phase E3: FEAT-1 デフォルト30品目** — 在庫プリセット自動挿入（🟡 High）
+5. **Phase E3: FEAT-2 マルチスケジュールUI** — 検索＋チップ選択UI（🟡 High）
+6. **Phase E3: FEAT-3 ヘルシオデリ降格** — 検索/おすすめで末尾表示（🟢 Medium）
+7. **残課題: QA#11 バンドルサイズ検証** — チャンク分割効果の確認（⚠️ 部分対応）
+8. **残課題: QA#17 FavoritesPage 仮想スクロール** — 優先度低（❌ 未対応）
+9. **残課題: 矛盾⑪ react-blurhash** — 優先度低（❌ 未対応）
