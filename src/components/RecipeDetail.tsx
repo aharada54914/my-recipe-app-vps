@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, Clock, Hash } from 'lucide-react'
 import { db } from '../db/db'
@@ -39,6 +39,11 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
 
   // T-11: Keep screen on during recipe viewing
   useWakeLock()
+
+  // Record view history
+  useEffect(() => {
+    db.viewHistory.add({ recipeId, viewedAt: new Date() })
+  }, [recipeId])
 
   // T-13: Save note handler (must be before early return — Rules of Hooks)
   const handleSaveNote = useCallback(async () => {
