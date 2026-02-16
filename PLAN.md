@@ -1,8 +1,159 @@
-# PM分析レポート & リファクタリング計画 (v3.1 — 2026-02-16)
+# PM分析レポート & リファクタリング計画 (v4.0 — 2026-02-17)
 
+> v4 からの差分: ユーザー報告6件（バグ2件+UI改善2件+機能追加2件）の根本原因分析と修正計画を追加。
 > v3 からの差分: コードベース実検証により矛盾⑩(CSS Containment)の解消を確認、Phase C-6 を削除。
 > 前回 (v2) からの差分: bbfc7be (QA修正一括コミット), 3dc2224 (レビュー統合+削除) を反映。
-> ソースコードを直接検証し、PLAN.md v2 の陳腐化した記述を修正。
+
+---
+
+## 0. v4 新規課題（2026-02-17 ユーザー報告）
+
+### 0-1. 課題一覧と根本原因
+
+| # | 問題 | 根本原因 | 重要度 |
+|---|------|---------|--------|
+| BUG-1 | **在庫 0% バグ** | `db.stock.where('inStock').equals(1)` — Dexie v4 は boolean を boolean のまま IndexedDB に保存するため `1`(number) と `true`(boolean) が一致しない。RecipeList.tsx:37, HomePage.tsx:26 の2箇所 | 🔴 Critical |
+| UI-1 | **在庫管理画面: トグル/削除重なり＋赤色** | `bg-bg-card = rgba(255,255,255,0.05)` (半透明) → 背後の `bg-red-500` (スワイプ削除用)が常時透過して見える。コード規約(不透明カード背景)違反 | 🔴 Critical |
+| UI-2 | **検索画面: 画像のみ表示で不快** | RecipeCard が画像を上部全幅表示 (`rounded-t-2xl`)。料理名が画像の下に隠れ、一覧性が低い | 🟡 High |
+| FEAT-1 | **在庫画面にデフォルト30品目** | StockManager にプリセット機能がない。ユーザーが1つずつ手動追加する必要あり | 🟡 High |
+| FEAT-2 | **マルチスケジュール: 選択した料理のみ表示** | 全200件をボタン表示 → スクロール量が膨大で選択状態がわからない | 🟡 High |
+| FEAT-3 | **ヘルシオデリを最下位** | ソート時にヘルシオデリ判定なし。対象: タイトルに「ヘルシオデリ」含む1件 + rawSteps に含む23件 = 計24件 | 🟢 Medium |
+
+---
+
+### 0-2. BUG-1: 在庫 0% バグ修正
+
+**原因詳細:**
+
+```typescript
+// RecipeList.tsx:37, HomePage.tsx:26 — 現在のコード
+db.stock.where('inStock').equals(1).toArray()
+```
+
+Dexie v4 (`^4.3.0`) は IndexedDB に `boolean` 型をそのまま保存する。`equals(1)` は number `1` と比較するため、`true` (boolean) とマッチしない → stockItems が常に空 → matchRate が常に 0%。
+
+**修正:** `.equals(1)` → `.filter(item => item.inStock)` に変更（2箇所）
+
+**対象ファイル:** `src/components/RecipeList.tsx`, `src/pages/HomePage.tsx`
+
+---
+
+### 0-3. UI-1: 在庫管理画面 UI 修正
+
+**原因詳細:**
+
+1. **赤色透過**: StockRow の削除背景が `bg-red-500` (absolute) で常時存在。前面カードの `bg-bg-card` が `rgba(255,255,255,0.05)` (95%透明) → 赤色が透けて見える
+2. **重なり問題**: swipe-to-delete の赤背景と通常のカード要素が視覚的に干渉
+
+**修正方針:**
+
+1. `StockRow` の前面要素の背景を不透明色 (`bg-[#1a1a1c]`) に変更
+2. スワイプ中のみ赤色背景を表示 (`offsetX > 0` のときだけ visible)
+
+**対象ファイル:** `src/components/StockManager.tsx`
+
+---
+
+### 0-4. UI-2: 検索画面レイアウト改善
+
+**現状:** RecipeCard は画像を上部に全幅表示。スクロールで料理名がほとんど見えず不快。
+
+**修正方針 — コンパクトリストレイアウト:**
+```
+┌─────────────────────────────────────┐
+│ [デバイス] [No.XXX]        ┌─────┐ │
+│ 料理名（太字）             │48×48│ │
+│ ⏱ XX分  X人分  在庫 XX%   └─────┘ │
+└─────────────────────────────────────┘
+```
+
+- 画像を右側に `w-12 h-12` (`48×48`) の正方形サムネイルとして配置
+- 料理名がメインの視覚要素になる
+
+**対象ファイル:** `src/components/RecipeCard.tsx`, `src/components/RecipeImage.tsx`
+
+---
+
+### 0-5. FEAT-1: 在庫画面デフォルト30品目
+
+**方針:** レシピデータから集計した上位30食材を定数定義。stock テーブルが空のとき自動挿入。
+
+| # | 食材名 | 単位 | # | 食材名 | 単位 |
+|---|--------|------|---|--------|------|
+| 1 | 塩 | 適量 | 16 | オリーブオイル | 大さじ |
+| 2 | しょうゆ | 大さじ | 17 | 牛乳 | ml |
+| 3 | 砂糖 | 大さじ | 18 | にんにく | かけ |
+| 4 | 酒 | 大さじ | 19 | しょうが | g |
+| 5 | 水 | ml | 20 | 鶏もも肉 | 枚 |
+| 6 | こしょう | 適量 | 21 | マヨネーズ | 大さじ |
+| 7 | 玉ねぎ | 個 | 22 | ピーマン | 個 |
+| 8 | バター | g | 23 | しめじ | g |
+| 9 | にんじん | g | 24 | 青ねぎ | 本 |
+| 10 | 卵 | 個 | 25 | じゃがいも | 個 |
+| 11 | 片栗粉 | 大さじ | 26 | パプリカ | 個 |
+| 12 | サラダ油 | 大さじ | 27 | だし汁 | ml |
+| 13 | 薄力粉 | g | 28 | 酢 | 大さじ |
+| 14 | みりん | 大さじ | 29 | ピザ用チーズ | g |
+| 15 | ごま油 | 小さじ | 30 | 豚バラ肉 | g |
+
+**対象ファイル:** 新規 `src/data/defaultStock.ts`, `src/components/StockManager.tsx`
+
+---
+
+### 0-6. FEAT-2: マルチスケジュール UI 改善
+
+**現状:** 全200件がフラットなボタンで表示 → 目的のレシピが見つからず選択困難。
+
+**修正方針 — 2段構成UI:**
+
+1. **検索＋選択エリア** (上部): テキスト検索バー + 検索結果リスト (最大20件)
+2. **選択済みチップ** (中部): アクセントカラーのチップ横並び、×ボタンで解除可能
+3. **ガントチャート** (下部): 既存のまま
+
+**対象ファイル:** `src/components/MultiScheduleView.tsx`
+
+---
+
+### 0-7. FEAT-3: ヘルシオデリを最下位表示
+
+**対象レシピ判定:**
+```typescript
+function isHelsioDeli(recipe: Recipe): boolean {
+  if (recipe.title.includes('ヘルシオデリ')) return true
+  if (recipe.rawSteps?.some(s => s.includes('ヘルシオデリ'))) return true
+  return false
+}
+```
+対象: タイトル1件 + rawSteps 23件 = 計24件
+
+**ソートロジック:** ヘルシオデリフラグで分離し末尾に配置、通常レシピは matchRate ソート維持
+
+**対象ファイル:** `src/utils/recipeUtils.ts`, `src/components/RecipeList.tsx`, `src/pages/HomePage.tsx`
+
+---
+
+### 0-8. v4 実装順序と依存関係
+
+```
+Phase E1: バグ修正（即時・並行可能）
+  ├── BUG-1: 在庫0%バグ         → RecipeList.tsx, HomePage.tsx
+  └── UI-1:  在庫管理UI修正     → StockManager.tsx
+
+Phase E2: UI改善
+  └── UI-2:  RecipeCardレイアウト → RecipeCard.tsx, RecipeImage.tsx
+
+Phase E3: 機能追加（並行可能、FEAT-3 は BUG-1 完了後）
+  ├── FEAT-1: デフォルト30品目   → 新規 defaultStock.ts + StockManager.tsx
+  ├── FEAT-2: マルチスケジュールUI → MultiScheduleView.tsx
+  └── FEAT-3: ヘルシオデリ降格   → recipeUtils.ts, RecipeList.tsx, HomePage.tsx
+```
+
+**依存関係:**
+- BUG-1, UI-1 → 独立、最初に修正
+- UI-2 → 独立
+- FEAT-1, FEAT-2 → 独立
+- FEAT-3 → BUG-1 完了後（ソートが正しく機能するため）
+- 全タスクは v3.1 の Phase A〜D とは独立して実施可能
 
 ---
 
