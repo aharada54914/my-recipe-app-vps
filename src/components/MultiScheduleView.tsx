@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { format, addMinutes } from 'date-fns'
-import { ArrowLeft, CalendarClock } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Search, X } from 'lucide-react'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { calculateMultiRecipeSchedule } from '../utils/recipeUtils'
+import { useDebounce } from '../hooks/useDebounce'
 
 const LANE_COLORS = [
   { bg: 'rgba(249, 115, 22, 0.3)', border: '#F97316', text: '#F97316' },
@@ -31,6 +32,8 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
   )
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [targetTime, setTargetTime] = useState(() => roundToNext15(addMinutes(new Date(), 90)))
+  const [searchQuery, setSearchQuery] = useState('')
+  const debouncedQuery = useDebounce(searchQuery, 300)
 
   // T-20: Fetch full recipe data only for selected items (steps needed for schedule)
   const selectedRecipes = useLiveQuery(
@@ -43,6 +46,20 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
     [] as Recipe[]
   )
 
+  // Filter recipes by search query (lightweight client-side filter)
+  const filteredResults = useMemo(() => {
+    if (!recipeSummaries || !debouncedQuery.trim()) return []
+    const q = debouncedQuery.toLowerCase()
+    return recipeSummaries
+      .filter(r => !selectedIds.has(r.id) && r.title.toLowerCase().includes(q))
+      .slice(0, 20)
+  }, [recipeSummaries, debouncedQuery, selectedIds])
+
+  const selectedSummaries = useMemo(() => {
+    if (!recipeSummaries) return []
+    return recipeSummaries.filter(r => selectedIds.has(r.id))
+  }, [recipeSummaries, selectedIds])
+
   const toggleRecipe = (id: number) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -51,6 +68,14 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
       } else if (next.size < 5) {
         next.add(id)
       }
+      return next
+    })
+  }
+
+  const removeRecipe = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
       return next
     })
   }
@@ -90,32 +115,68 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
       </header>
 
       <main className="space-y-5 px-4 pb-8">
-        {/* Recipe selector */}
+        {/* Search bar */}
         <div>
           <h4 className="mb-2 text-xs font-bold text-text-secondary">
-            レシピを選択（最大5つ）
+            レシピを検索して選択（最大5つ）
           </h4>
-          <div className="flex flex-wrap gap-2">
-            {recipeSummaries.map((r) => {
-              const isSelected = selectedIds.has(r.id!)
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => toggleRecipe(r.id!)}
-                  className={`rounded-xl px-3 py-2 text-xs font-medium transition-colors ${isSelected
-                    ? 'border border-accent bg-accent/20 text-accent'
-                    : 'bg-bg-card text-text-secondary hover:bg-bg-card-hover'
-                    }`}
-                >
-                  {r.title}
-                  <span className="ml-1 opacity-50">
-                    {recipeSummaries.find(s => s.id === r.id)?.device === 'hotcook' ? '🍲' : recipeSummaries.find(s => s.id === r.id)?.device === 'healsio' ? '♨️' : ''}
-                  </span>
-                </button>
-              )
-            })}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="レシピ名で検索..."
+              className="w-full rounded-xl bg-bg-card py-2.5 pl-9 pr-4 text-sm text-text-primary placeholder:text-text-secondary outline-none"
+            />
           </div>
         </div>
+
+        {/* Selected chips */}
+        {selectedSummaries.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {selectedSummaries.map((r) => (
+              <span
+                key={r.id}
+                className="flex items-center gap-1.5 rounded-xl border border-accent bg-accent/20 px-3 py-1.5 text-xs font-medium text-accent"
+              >
+                {r.title}
+                <button
+                  onClick={() => removeRecipe(r.id)}
+                  className="rounded-full p-0.5 transition-colors hover:bg-accent/30"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Search results */}
+        {debouncedQuery.trim() && filteredResults.length > 0 && (
+          <div className="max-h-48 overflow-auto rounded-xl bg-bg-card">
+            {filteredResults.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => toggleRecipe(r.id)}
+                disabled={selectedIds.size >= 5}
+                className="flex w-full items-center gap-2 border-b border-white/5 px-4 py-2.5 text-left text-sm transition-colors last:border-0 hover:bg-bg-card-hover disabled:opacity-30"
+              >
+                <span className="flex-1 truncate">{r.title}</span>
+                <span className="text-[10px] text-text-secondary">
+                  {r.device === 'hotcook' ? '🍲' : r.device === 'healsio' ? '♨️' : ''}
+                  {r.totalTimeMinutes}分
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {debouncedQuery.trim() && filteredResults.length === 0 && (
+          <p className="py-2 text-center text-xs text-text-secondary">
+            該当するレシピがありません
+          </p>
+        )}
 
         {/* Target time picker */}
         <div className="flex items-center justify-center gap-3">
@@ -212,7 +273,7 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
         {/* Empty state */}
         {selectedIds.size === 0 && (
           <p className="py-8 text-center text-sm text-text-secondary">
-            レシピを選択してスケジュールを作成
+            レシピを検索して選択するとスケジュールを作成できます
           </p>
         )}
       </main>
