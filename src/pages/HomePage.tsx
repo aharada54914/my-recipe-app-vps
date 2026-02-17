@@ -4,13 +4,14 @@ import { Leaf } from 'lucide-react'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { RecipeCard } from '../components/RecipeCard'
-import { calculateMatchRate } from '../utils/recipeUtils'
+import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
 function findSeasonalRecipes(recipes: Recipe[]): Recipe[] {
   return recipes.filter((r) =>
+    !isHelsioDeli(r) &&
     r.ingredients.some((ing) =>
       seasonalIngredients.some((s) => ing.name.includes(s))
     )

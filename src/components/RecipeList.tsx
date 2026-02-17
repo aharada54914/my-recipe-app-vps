@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { db } from '../db/db'
 import type { RecipeCategory } from '../db/db'
-import { calculateMatchRate } from '../utils/recipeUtils'
+import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { searchRecipes } from '../utils/searchUtils'
 import { useDebounce } from '../hooks/useDebounce'
 import { SearchBar } from './SearchBar'
@@ -52,8 +52,13 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       .map((r) => ({
         recipe: r,
         matchRate: calculateMatchRate(r.ingredients, stockNames),
+        isDeli: isHelsioDeli(r),
       }))
-      .sort((a, b) => b.matchRate - a.matchRate)
+      .sort((a, b) => {
+        // Non-deli first, then deli; within each group sort by matchRate desc
+        if (a.isDeli !== b.isDeli) return a.isDeli ? 1 : -1
+        return b.matchRate - a.matchRate
+      })
   }, [data.recipes, deferredSearch, stockNames])
 
   // T-04: Virtual scrolling

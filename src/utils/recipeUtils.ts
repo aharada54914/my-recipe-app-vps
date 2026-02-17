@@ -244,6 +244,15 @@ export function calculateMultiRecipeSchedule(
 }
 
 /**
+ * Detect "ヘルシオデリ" recipes by title or rawSteps keywords.
+ * These are pre-made meal kits that should be sorted to the bottom.
+ */
+export function isHelsioDeli(recipe: { title: string; rawSteps?: string[] }): boolean {
+  const text = recipe.title + (recipe.rawSteps?.join('') ?? '')
+  return text.includes('ヘルシオデリ') || text.includes('デリソース')
+}
+
+/**
  * Calculate ingredient match rate based on stock.
  * Considers all ingredients (not just 'main' category).
  */
