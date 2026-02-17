@@ -27,7 +27,7 @@ export function HistoryPage() {
 
     const [recipes, stockItems] = await Promise.all([
       db.recipes.where('id').anyOf(recipeIds).toArray(),
-      db.stock.where('inStock').equals(1).toArray(),
+      db.stock.filter(item => item.inStock).toArray(),
     ])
 
     // Re-order recipes to match history order
