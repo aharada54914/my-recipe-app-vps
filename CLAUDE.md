@@ -27,13 +27,14 @@ A recipe management PWA with a dark-themed modern UI, targeting Japanese home co
 
 - Dark background: `bg-[#121214]`, accent orange: `#F97316`
 - Cards/buttons: `rounded-xl` / `rounded-2xl` with translucent dark backgrounds
+- StockManager rows use `bg-[#1a1a1c]` (slightly lighter than card bg) for distinction
 - Sans-serif fonts, bold numerics for emphasis
 
 ### Planned Architecture
 
 - **Type definitions** centralized in `src/db/db.ts`
 - **Calculation logic** (salt %, quantity conversion) as pure functions in `src/utils/`
-- **Key components**: RecipeCard, IngredientList, SearchUI, AI/Stock panels
+- **Key components**: RecipeCard, RecipeList, StockManager, MultiScheduleView, AiRecipeParser, SearchBar
 
 ### Cooking Logic Rules
 
@@ -134,24 +135,25 @@ const [hotcookRecipes, healsioRecipes] = useLiveQuery(() =>
 - **Goal**: Render only visible items in a long list (2000+ recipes)
 - **Library**: `@tanstack/react-virtual`
 - **Impact**: Reduces DOM nodes by >95%, making scrolling smooth
-- **Estimated card height**: 150px
+- **Estimated card height**: 88px
 
 ### 🚀 CSS Containment
 - **Goal**: Optimize layout calculations for faster scrolling
 - **Properties**: `contain`, `content-visibility`
 
 ```css
-/* src/components/RecipeCard.css */
+/* src/index.css — applied globally to .recipe-card */
 .recipe-card {
   contain: layout style paint;
   content-visibility: auto;
+  contain-intrinsic-size: auto 88px;
 }
 ```
 
 ### 🚀 Lazy Loading Images
 - **Goal**: Load images only when they are about to enter the viewport
-- **API**: Intersection Observer API
-- **Placeholder**: `/placeholder.png`
+- **API**: Native `loading="lazy"` attribute on `<img>` (via `RecipeImage.tsx`)
+- **Placeholder**: Fallback icon displayed on error
 
 ### 🚀 Heavy computation strategy
 - **Current approach**: `useTransition` + `useDeferredValue` で十分な応答性を確保
@@ -201,7 +203,10 @@ const [hotcookRecipes, healsioRecipes] = useLiveQuery(() =>
 
 ### 1. Stock Manager UI
 - **Goal**: Allow users to manage ingredients in their stock
-- **Component**: `src/components/StockManager.tsx` — toggle, inline quantity editing, swipe-to-delete
+- **Component**: `src/components/StockManager.tsx` — recipe-based ingredient index, search with synonym support, numeric quantity input
+- **Data source**: Ingredients are sourced from recipe DB via `src/utils/ingredientIndex.ts` (no custom items). Default unit is auto-selected as most common non-適量 unit.
+- **UI**: Search bar at top; in-stock items (quantity > 0) displayed in 50音順; search results shown below when searching
+- **Stock query policy**: `db.stock` uses `.filter()` (not `.where()`) since stock table is small (~30-100 items). Recipes table must always use `.where()` with indexes.
 
 ### 2. Match Rate Calculation
 - **Goal**: Calculate the percentage of recipe ingredients available in stock
@@ -223,7 +228,8 @@ const [hotcookRecipes, healsioRecipes] = useLiveQuery(() =>
 - **Features**: Search input with `Search` icon
 
 ### 2. Home Page Layout
-- **Component**: `src/pages/HomePage.tsx` (旬のおすすめ + ウェルカム表示)
+- **Component**: `src/pages/HomePage.tsx` (在庫でつくれるレシピ + 旬のおすすめ + ウェルカム表示)
+- **在庫でつくれるレシピ**: Stock-based recipe recommendations (via `geminiRecommender.ts`)
 - **旬の食材セクション**: Display seasonal ingredients with recipe suggestions based on current month
 
 ### 3. Bottom Navigation (5 Tabs)
@@ -324,7 +330,7 @@ const [hotcookRecipes, healsioRecipes] = useLiveQuery(() =>
 - Extract complex calculations to `src/utils/` as pure functions
 - Type everything strictly (no `any` types)
 - **DB Initialization**: `initDb()` is called exactly once at the App component level (BrowserRouter の外). Individual page components must NOT call `initDb()` independently.
-- **Routing**: Future migration to `Outlet` + nested routes pattern recommended (currently uses `activeTab` + `navigate()` dual management).
+- **Routing**: Uses `Outlet` + nested routes pattern in `App.tsx`. Main tabs (home, search, stock, favorites, history) are nested under `AppLayout`.
 - **Input Font Size**: All `<input>`, `<select>`, `<textarea>` elements must use `font-size: 16px` or larger to prevent iOS auto-zoom.
 - **Known Limitation**: Gemini API キーは localStorage に保存。個人利用前提のため許容するが、共有環境では注意が必要。
 
@@ -368,5 +374,13 @@ Recipe data is loaded via a **pre-build pipeline**, not runtime CSV import.
 - **Storage**: `imageUrl` (string) のみ IndexedDB に保存。画像 blob は保存しない。
 - **Source**: 外部 CDN (`cocoroplus.jp.sharp`) からロード。Service Worker の CacheFirst 戦略でオフラインキャッシュ。
 - **Component**: `src/components/RecipeImage.tsx` — エラー時はフォールバックアイコン表示。
-- **AI Parser**: URL からレシピ抽出時に OGP / schema.org から画像 URL も取得して `imageUrl` に保存。
+- **AI Parser**: URL からレシピ抽出時に JSON-LD / OGP から画像 URL も取得して `imageUrl` に保存。
+
+---
+
+## Phase E Features
+
+- **ヘルシオデリ検出**: `isHelsioDeli()` in `recipeUtils.ts` — detects pre-made meal kit recipes by title/steps keywords, sorted to bottom of search results
+- **JSON-LD/OGP parsing**: `geminiParser.ts` extracts structured data from recipe URLs before falling back to AI parsing
+- **重複チェック**: AI parser checks for duplicate recipes by title before saving
 
