@@ -24,36 +24,32 @@ export const RecipeCard = memo(function RecipeCard({
   return (
     <button
       onClick={onClick}
-      className="recipe-card w-full rounded-2xl bg-bg-card text-left transition-colors hover:bg-bg-card-hover overflow-hidden"
+      className="recipe-card flex w-full items-center gap-3 rounded-2xl bg-bg-card p-3 text-left transition-colors hover:bg-bg-card-hover"
     >
-      {recipe.imageUrl && (
-        <RecipeImage recipe={recipe} placeholderHeight="h-24" className="rounded-none rounded-t-2xl" />
-      )}
-      <div className="p-4">
-        <div className="mb-3 flex items-start justify-between">
-          <div>
-            <span className="mb-1 inline-block rounded-lg bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent">
-              {deviceLabels[recipe.device]}
-            </span>
-            <h3 className="mt-1 text-base font-bold">{recipe.title}</h3>
-          </div>
-          <span className="rounded-xl bg-accent px-2 py-1 text-xs font-bold text-white">
+      {/* Text content */}
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="inline-block rounded-md bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+            {deviceLabels[recipe.device]}
+          </span>
+          <span className="text-[10px] text-text-secondary">
             No.{recipe.recipeNumber}
           </span>
         </div>
-        <div className="flex items-center gap-4 text-sm text-text-secondary">
+        <h3 className="mb-1.5 truncate text-sm font-bold">{recipe.title}</h3>
+        <div className="flex items-center gap-3 text-xs text-text-secondary">
           <span className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
+            <Clock className="h-3 w-3" />
             {recipe.totalTimeMinutes}分
           </span>
           <span>{recipe.baseServings}人分</span>
           {matchRate !== undefined && (
             <span
-              className={`ml-auto rounded-lg px-2 py-0.5 text-xs font-bold ${matchRate >= 80
+              className={`ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-bold ${matchRate >= 80
                   ? 'bg-green-500/20 text-green-400'
                   : matchRate >= 50
                     ? 'bg-yellow-500/20 text-yellow-400'
-                    : 'bg-bg-card text-text-secondary'
+                    : 'bg-white/5 text-text-secondary'
                 }`}
             >
               在庫 {matchRate}%
@@ -61,6 +57,13 @@ export const RecipeCard = memo(function RecipeCard({
           )}
         </div>
       </div>
+
+      {/* Thumbnail */}
+      {recipe.imageUrl && (
+        <div className="h-12 w-12 shrink-0">
+          <RecipeImage recipe={recipe} thumbnail placeholderHeight="h-12" className="rounded-lg" />
+        </div>
+      )}
     </button>
   )
 })

@@ -60,7 +60,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   const virtualizer = useVirtualizer({
     count: withRates.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 120,
+    estimateSize: () => 88,
     overscan: 5,
   })
 
@@ -109,7 +109,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                 >
-                  <div className="pb-4">
+                  <div className="pb-2">
                     <RecipeCard
                       recipe={recipe}
                       matchRate={matchRate}

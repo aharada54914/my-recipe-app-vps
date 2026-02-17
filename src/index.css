@@ -43,7 +43,7 @@ body {
 .recipe-card {
   contain: layout style paint;
   content-visibility: auto;
-  contain-intrinsic-size: auto 120px;
+  contain-intrinsic-size: auto 88px;
 }
 
 /* iOS auto-zoom prevention: all inputs must be >= 16px */
