@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, Trash2 } from 'lucide-react'
 import { db } from '../db/db'
 import type { StockItem } from '../db/db'
+import { DEFAULT_STOCK_ITEMS } from '../data/defaultStock'
 
 const UNIT_OPTIONS = ['g', 'ml', '個', '本', '株', 'パック', '袋', '枚', '片', '缶']
 const SWIPE_THRESHOLD = 80
@@ -115,6 +116,18 @@ function StockRow({
 export function StockManager() {
   const items = useLiveQuery(() => db.stock.orderBy('name').toArray())
   const [newName, setNewName] = useState('')
+
+  // Auto-seed default stock items when DB is empty
+  useEffect(() => {
+    (async () => {
+      const count = await db.stock.count()
+      if (count === 0) {
+        await db.stock.bulkAdd(
+          DEFAULT_STOCK_ITEMS.map(name => ({ name, inStock: false }))
+        )
+      }
+    })()
+  }, [])
 
   const toggle = async (id: number, current: boolean) => {
     await db.stock.update(id, { inStock: !current })
