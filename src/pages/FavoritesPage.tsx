@@ -38,7 +38,7 @@ export function FavoritesPage() {
                     お気に入りに登録されたレシピはありません
                 </p>
             ) : (
-                <div className="grid gap-4">
+                <div className="grid gap-2">
                     {recipes.map((recipe) => (
                         <RecipeCard
                             key={recipe.id}

@@ -57,7 +57,7 @@ export function HistoryPage() {
           まだレシピを閲覧していません
         </p>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-2">
           {recipes.map((recipe) => (
             <RecipeCard
               key={recipe.id}
