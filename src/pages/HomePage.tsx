@@ -23,7 +23,7 @@ export function HomePage() {
   const data = useLiveQuery(async () => {
     const [recipes, stockItems] = await Promise.all([
       db.recipes.limit(200).toArray(),
-      db.stock.where('inStock').equals(1).toArray(),
+      db.stock.filter(item => item.inStock).toArray(),
     ])
     const stockNames = new Set(stockItems.map((s) => s.name))
     const seasonal = findSeasonalRecipes(recipes)

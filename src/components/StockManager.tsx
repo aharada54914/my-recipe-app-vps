@@ -51,15 +51,17 @@ function StockRow({
 
   return (
     <div className="relative rounded-xl overflow-hidden">
-      {/* Delete background */}
-      <div className="absolute inset-0 flex items-center justify-end bg-red-500 px-4">
-        <Trash2 className="h-5 w-5 text-white" />
-      </div>
+      {/* Delete background — only visible when swiping */}
+      {swipe.offsetX > 0 && (
+        <div className="absolute inset-0 flex items-center justify-end bg-red-500 px-4">
+          <Trash2 className="h-5 w-5 text-white" />
+        </div>
+      )}
 
       {/* Swipeable content */}
       <div
         ref={rowRef}
-        className="relative bg-bg-card transition-transform"
+        className="relative bg-[#1a1a1c] transition-transform"
         style={{ transform: `translateX(-${translateX}px)` }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}

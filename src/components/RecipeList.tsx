@@ -33,7 +33,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         category !== 'すべて'
           ? db.recipes.where('category').equals(category).limit(PAGE_SIZE).toArray()
           : db.recipes.limit(PAGE_SIZE).toArray(),
-        db.stock.where('inStock').equals(1).toArray(),
+        db.stock.filter(item => item.inStock).toArray(),
       ])
       return { recipes, stockItems }
     },

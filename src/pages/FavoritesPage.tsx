@@ -12,7 +12,7 @@ export function FavoritesPage() {
     const data = useLiveQuery(async () => {
         const [favoriteIds, stockItems] = await Promise.all([
             getFavoriteRecipeIds(),
-            db.stock.where('inStock').equals(1).toArray(),
+            db.stock.filter(item => item.inStock).toArray(),
         ])
         if (favoriteIds.length === 0) return { recipes: [], stockNames: new Set<string>() }
 
