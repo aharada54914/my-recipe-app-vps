@@ -1,11 +1,13 @@
+import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Leaf } from 'lucide-react'
+import { Leaf, Sparkles } from 'lucide-react'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { RecipeCard } from '../components/RecipeCard'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
+import { getLocalRecommendations } from '../utils/geminiRecommender'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
@@ -20,6 +22,7 @@ function findSeasonalRecipes(recipes: Recipe[]): Recipe[] {
 
 export function HomePage() {
   const navigate = useNavigate()
+  const [recommendations, setRecommendations] = useState<{ recipe: Recipe; matchRate: number }[]>([])
 
   const data = useLiveQuery(async () => {
     const [recipes, stockItems] = await Promise.all([
@@ -28,8 +31,18 @@ export function HomePage() {
     ])
     const stockNames = new Set(stockItems.map((s) => s.name))
     const seasonal = findSeasonalRecipes(recipes)
-    return { seasonal, stockNames }
+    const hasStock = stockItems.length > 0
+    return { seasonal, stockNames, hasStock }
   })
+
+  // Load recommendations when stock data is available
+  useEffect(() => {
+    if (!data?.hasStock) {
+      setRecommendations([])
+      return
+    }
+    getLocalRecommendations(6).then(setRecommendations)
+  }, [data?.hasStock])
 
   if (!data) return null
 
@@ -43,6 +56,27 @@ export function HomePage() {
           下のタブで検索・在庫管理・お気に入りをご利用ください
         </p>
       </div>
+
+      {/* Stock-based recommendations */}
+      {recommendations.length > 0 && (
+        <div className="mb-8">
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-accent" />
+            <h3 className="text-base font-bold">在庫でつくれるレシピ</h3>
+          </div>
+
+          <div className="grid gap-2">
+            {recommendations.map(({ recipe, matchRate }) => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                matchRate={matchRate}
+                onClick={() => navigate(`/recipe/${recipe.id}`)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {seasonal.length > 0 && (
         <div>
@@ -62,7 +96,7 @@ export function HomePage() {
             ))}
           </div>
 
-          <div className="grid gap-4">
+          <div className="grid gap-2">
             {seasonal.map((recipe) => (
               <RecipeCard
                 key={recipe.id}
