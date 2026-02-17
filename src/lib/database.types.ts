@@ -1,12 +1,8 @@
 /**
  * Supabase Database Type Definitions
  *
- * Mirrors the Dexie (IndexedDB) schema with additional cloud-sync fields:
- * - user_id: ties rows to authenticated users (RLS)
- * - created_at / updated_at: timestamps for sync conflict resolution
- *
- * Naming convention: PostgreSQL snake_case in DB, camelCase in app code.
- * Conversion utilities will be added in Phase 3 (data sync).
+ * Generated-style types compatible with @supabase/supabase-js v2.
+ * Mirrors the Dexie schema with cloud-sync fields (user_id, timestamps).
  */
 
 export interface Database {
@@ -84,6 +80,7 @@ export interface Database {
           raw_steps?: string[] | null
           updated_at?: string
         }
+        Relationships: []
       }
       stock: {
         Row: {
@@ -115,6 +112,7 @@ export interface Database {
           unit?: string | null
           updated_at?: string
         }
+        Relationships: []
       }
       favorites: {
         Row: {
@@ -137,6 +135,7 @@ export interface Database {
           recipe_id?: string
           added_at?: string
         }
+        Relationships: []
       }
       user_notes: {
         Row: {
@@ -162,6 +161,7 @@ export interface Database {
           content?: string
           updated_at?: string
         }
+        Relationships: []
       }
       view_history: {
         Row: {
@@ -184,8 +184,13 @@ export interface Database {
           recipe_id?: string
           viewed_at?: string
         }
+        Relationships: []
       }
     }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }
 

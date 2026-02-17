@@ -44,6 +44,9 @@ export interface Recipe {
   saltContent?: string
   cookingTime?: string
   rawSteps?: string[]
+  // Cloud sync fields
+  supabaseId?: string
+  updatedAt?: Date
 }
 
 export interface StockItem {
@@ -53,6 +56,9 @@ export interface StockItem {
   // T-27: Quantity fields
   quantity?: number
   unit?: string
+  // Cloud sync fields
+  supabaseId?: string
+  updatedAt?: Date
 }
 
 export interface SaltResult {
@@ -83,6 +89,7 @@ export interface Favorite {
   id?: number
   recipeId: number
   addedAt: Date
+  supabaseId?: string
 }
 
 export interface UserNote {
@@ -90,12 +97,14 @@ export interface UserNote {
   recipeId: number
   content: string
   updatedAt: Date
+  supabaseId?: string
 }
 
 export interface ViewHistory {
   id?: number
   recipeId: number
   viewedAt: Date
+  supabaseId?: string
 }
 
 export type ViewState =
@@ -146,6 +155,14 @@ class RecipeDB extends Dexie {
       favorites: '++id, &recipeId, addedAt',
       userNotes: '++id, &recipeId, updatedAt',
       viewHistory: '++id, recipeId, viewedAt',
+    })
+    // v6: Add supabaseId for cloud sync
+    this.version(6).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
+      stock: '++id, &name, inStock, supabaseId',
+      favorites: '++id, &recipeId, addedAt, supabaseId',
+      userNotes: '++id, &recipeId, updatedAt, supabaseId',
+      viewHistory: '++id, recipeId, viewedAt, supabaseId',
     })
   }
 }
