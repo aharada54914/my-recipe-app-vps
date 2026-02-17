@@ -1,196 +1,162 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Trash2 } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { db } from '../db/db'
-import type { StockItem } from '../db/db'
-import { DEFAULT_STOCK_ITEMS } from '../data/defaultStock'
-
-const UNIT_OPTIONS = ['g', 'ml', '個', '本', '株', 'パック', '袋', '枚', '片', '缶']
-const SWIPE_THRESHOLD = 80
-
-interface SwipeState {
-  startX: number
-  offsetX: number
-  swiping: boolean
-}
+import { useDebounce } from '../hooks/useDebounce'
+import { expandSynonyms } from '../data/synonyms'
+import { buildIngredientIndex, type IngredientInfo } from '../utils/ingredientIndex'
 
 function StockRow({
-  item,
-  onToggle,
-  onDelete,
+  name,
+  unit,
+  quantity,
   onUpdateQuantity,
-  onUpdateUnit,
 }: {
-  item: StockItem
-  onToggle: () => void
-  onDelete: () => void
+  name: string
+  unit: string
+  quantity: number
   onUpdateQuantity: (quantity: number) => void
-  onUpdateUnit: (unit: string) => void
 }) {
-  const [swipe, setSwipe] = useState<SwipeState>({ startX: 0, offsetX: 0, swiping: false })
-  const rowRef = useRef<HTMLDivElement>(null)
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    setSwipe({ startX: e.touches[0].clientX, offsetX: 0, swiping: true })
-  }, [])
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!swipe.swiping) return
-    const diff = swipe.startX - e.touches[0].clientX
-    // Only allow swiping left (positive diff)
-    setSwipe((prev) => ({ ...prev, offsetX: Math.max(0, diff) }))
-  }, [swipe.swiping, swipe.startX])
-
-  const handleTouchEnd = useCallback(() => {
-    if (swipe.offsetX > SWIPE_THRESHOLD) {
-      onDelete()
-    }
-    setSwipe({ startX: 0, offsetX: 0, swiping: false })
-  }, [swipe.offsetX, onDelete])
-
-  const translateX = Math.min(swipe.offsetX, 120)
-
   return (
-    <div className="relative rounded-xl overflow-hidden">
-      {/* Delete background — only visible when swiping */}
-      {swipe.offsetX > 0 && (
-        <div className="absolute inset-0 flex items-center justify-end bg-red-500 px-4">
-          <Trash2 className="h-5 w-5 text-white" />
-        </div>
-      )}
-
-      {/* Swipeable content */}
-      <div
-        ref={rowRef}
-        className="relative bg-[#1a1a1c] transition-transform"
-        style={{ transform: `translateX(-${translateX}px)` }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        <div className="flex items-center gap-2 px-4 py-3">
-          {/* Toggle */}
-          <button
-            onClick={onToggle}
-            className="flex shrink-0 items-center"
-          >
-            <div
-              className={`h-6 w-11 rounded-full p-0.5 transition-colors ${item.inStock ? 'bg-accent' : 'bg-white/10'}`}
-            >
-              <div
-                className={`h-5 w-5 rounded-full bg-white transition-transform ${item.inStock ? 'translate-x-5' : 'translate-x-0'}`}
-              />
-            </div>
-          </button>
-
-          {/* Name */}
-          <span className={`min-w-0 flex-1 truncate text-sm ${item.inStock ? 'text-text-primary' : 'text-text-secondary'}`}>
-            {item.name}
-          </span>
-
-          {/* Inline quantity + unit */}
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={item.quantity ?? ''}
-            onChange={(e) => onUpdateQuantity(parseFloat(e.target.value) || 0)}
-            placeholder="0"
-            className="w-16 rounded-lg bg-white/5 px-2 py-1.5 text-sm text-text-primary text-right outline-none"
-          />
-          <select
-            value={item.unit || 'g'}
-            onChange={(e) => onUpdateUnit(e.target.value)}
-            className="rounded-lg bg-white/5 px-1.5 py-1.5 text-sm text-text-primary outline-none"
-          >
-            {UNIT_OPTIONS.map((u) => (
-              <option key={u} value={u}>{u}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+    <div className="flex items-center gap-2 rounded-xl bg-[#1a1a1c] px-4 py-3">
+      <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+        {name}
+      </span>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step={1}
+        value={quantity || ''}
+        onChange={(e) => {
+          const val = parseFloat(e.target.value)
+          onUpdateQuantity(isNaN(val) ? 0 : val)
+        }}
+        placeholder="0"
+        className="w-16 rounded-lg bg-white/5 px-2 py-1.5 text-sm text-text-primary text-right outline-none"
+      />
+      <span className="w-10 text-sm text-text-secondary">{unit}</span>
     </div>
   )
 }
 
 export function StockManager() {
-  const items = useLiveQuery(() => db.stock.orderBy('name').toArray())
-  const [newName, setNewName] = useState('')
+  const [index, setIndex] = useState<IngredientInfo[] | null>(null)
+  const [query, setQuery] = useState('')
+  const debouncedQuery = useDebounce(query, 300)
 
-  // Auto-seed default stock items when DB is empty
+  const stockItems = useLiveQuery(() => db.stock.toArray())
+
+  // Build ingredient index from recipe DB on mount
   useEffect(() => {
-    (async () => {
-      const count = await db.stock.count()
-      if (count === 0) {
-        await db.stock.bulkAdd(
-          DEFAULT_STOCK_ITEMS.map(name => ({ name, inStock: false }))
-        )
-      }
-    })()
+    buildIngredientIndex().then(setIndex)
   }, [])
 
-  const toggle = async (id: number, current: boolean) => {
-    await db.stock.update(id, { inStock: !current })
-  }
-
-  const addItem = async () => {
-    const name = newName.trim()
-    if (!name) return
+  const handleUpdateQuantity = async (name: string, unit: string, quantity: number) => {
     const existing = await db.stock.where('name').equals(name).first()
-    if (existing) return
-    await db.stock.add({ name, inStock: false })
-    setNewName('')
+    if (existing) {
+      await db.stock.update(existing.id!, { quantity, unit, inStock: quantity > 0 })
+    } else {
+      await db.stock.add({ name, quantity, unit, inStock: quantity > 0 })
+    }
   }
 
-  const deleteItem = async (id: number) => {
-    await db.stock.delete(id)
-  }
+  if (!index || !stockItems) return null
 
-  const updateQuantity = async (id: number, quantity: number) => {
-    await db.stock.update(id, { quantity })
-  }
+  // Build a map of current stock quantities
+  const stockMap = new Map(stockItems.map(s => [s.name, s]))
 
-  const updateUnit = async (id: number, unit: string) => {
-    await db.stock.update(id, { unit })
-  }
+  // Items with quantity > 0, sorted in 50音順
+  const inStockItems = index
+    .filter(ing => {
+      const s = stockMap.get(ing.name)
+      return s && s.quantity && s.quantity > 0
+    })
+    .map(ing => ({
+      ...ing,
+      quantity: stockMap.get(ing.name)!.quantity!,
+    }))
 
-  if (!items) return null
+  // Search results: filter by debounced query, exclude already-stocked items
+  const inStockNames = new Set(inStockItems.map(i => i.name))
+  let searchResults: IngredientInfo[] = []
+
+  if (debouncedQuery.trim()) {
+    const synonyms = expandSynonyms(debouncedQuery.trim())
+    searchResults = index.filter(ing => {
+      if (inStockNames.has(ing.name)) return false
+      const nameLower = ing.name.toLowerCase()
+      return synonyms.some(syn =>
+        nameLower.includes(syn.toLowerCase()) || syn.toLowerCase().includes(nameLower)
+      )
+    })
+  }
 
   return (
     <div>
       <h2 className="mb-4 text-lg font-bold">在庫管理</h2>
 
-      {/* Add item */}
-      <div className="mb-6 flex gap-2">
+      {/* Search bar */}
+      <div className="mb-6 relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
         <input
           type="text"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && addItem()}
-          placeholder="食材を追加..."
-          className="flex-1 rounded-xl bg-bg-card px-4 py-2 text-sm text-text-primary placeholder:text-text-secondary outline-none"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="食材を検索..."
+          className="w-full rounded-xl bg-bg-card pl-10 pr-4 py-2 text-sm text-text-primary placeholder:text-text-secondary outline-none"
         />
-        <button
-          onClick={addItem}
-          className="rounded-xl bg-accent p-2 text-white transition-colors hover:bg-accent-hover"
-        >
-          <Plus className="h-5 w-5" />
-        </button>
       </div>
 
-      {/* Item list */}
-      <div className="space-y-2">
-        {items.map((item) => (
-          <StockRow
-            key={item.id}
-            item={item}
-            onToggle={() => toggle(item.id!, item.inStock)}
-            onDelete={() => deleteItem(item.id!)}
-            onUpdateQuantity={(q) => updateQuantity(item.id!, q)}
-            onUpdateUnit={(u) => updateUnit(item.id!, u)}
-          />
-        ))}
-      </div>
+      {/* In-stock section */}
+      {inStockItems.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-2 text-xs font-bold text-text-secondary">在庫あり ({inStockItems.length})</h3>
+          <div className="space-y-2">
+            {inStockItems.map(item => (
+              <StockRow
+                key={item.name}
+                name={item.name}
+                unit={item.defaultUnit}
+                quantity={item.quantity}
+                onUpdateQuantity={(q) => handleUpdateQuantity(item.name, item.defaultUnit, q)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Search results section */}
+      {searchResults.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-bold text-text-secondary">検索結果 ({searchResults.length})</h3>
+          <div className="space-y-2">
+            {searchResults.map(ing => (
+              <StockRow
+                key={ing.name}
+                name={ing.name}
+                unit={ing.defaultUnit}
+                quantity={0}
+                onUpdateQuantity={(q) => handleUpdateQuantity(ing.name, ing.defaultUnit, q)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {inStockItems.length === 0 && !debouncedQuery.trim() && (
+        <p className="py-12 text-center text-sm text-text-secondary">
+          食材を検索して在庫を登録しましょう
+        </p>
+      )}
+
+      {/* No search results */}
+      {debouncedQuery.trim() && searchResults.length === 0 && inStockItems.length === 0 && (
+        <p className="py-8 text-center text-sm text-text-secondary">
+          「{debouncedQuery}」に一致する食材が見つかりません
+        </p>
+      )}
     </div>
   )
 }
