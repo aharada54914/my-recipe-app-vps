@@ -158,21 +158,73 @@ export async function parseRecipeText(text: string): Promise<Omit<Recipe, 'id'>>
   return validateParsedRecipe(parsed)
 }
 
+/**
+ * Extract Schema.org JSON-LD recipe data from HTML document.
+ * Returns structured data string if found, empty string otherwise.
+ */
+export function extractJsonLd(doc: Document): string {
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]')
+  for (const script of scripts) {
+    try {
+      const data = JSON.parse(script.textContent ?? '')
+      // Handle both direct Recipe and @graph arrays
+      if (data['@type'] === 'Recipe') {
+        return JSON.stringify(data)
+      }
+      if (Array.isArray(data['@graph'])) {
+        const recipe = data['@graph'].find((item: Record<string, unknown>) => item['@type'] === 'Recipe')
+        if (recipe) return JSON.stringify(recipe)
+      }
+    } catch {
+      // Skip invalid JSON-LD blocks
+    }
+  }
+  return ''
+}
+
+/**
+ * Extract OGP image URL from HTML document.
+ */
+export function extractOgImage(doc: Document): string {
+  const meta = doc.querySelector('meta[property="og:image"]')
+  return meta?.getAttribute('content') ?? ''
+}
+
 export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'>> {
-  let text: string
+  let doc: Document
   try {
-    const res = await fetch(url)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10000)
+    const res = await fetch(url, { signal: controller.signal })
+    clearTimeout(timeout)
     const html = await res.text()
-    // Strip HTML tags to get plain text
-    const doc = new DOMParser().parseFromString(html, 'text/html')
-    text = doc.body.textContent ?? ''
-  } catch {
-    throw new Error('URLの取得に失敗しました。テキストを直接貼り付けてお試しください。')
+    doc = new DOMParser().parseFromString(html, 'text/html')
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error('URLの取得がタイムアウトしました（10秒）。テキストを直接貼り付けてお試しください。')
+    }
+    throw new Error('URLの取得に失敗しました。CORSの制限により外部サイトを直接読み込めない場合があります。テキストを直接貼り付けてお試しください。')
   }
 
+  const text = doc.body.textContent ?? ''
   if (!text.trim()) {
     throw new Error('URLからテキストを抽出できませんでした。テキストを直接貼り付けてお試しください。')
   }
 
-  return parseRecipeText(text)
+  // Extract structured data to enhance parsing
+  const jsonLd = extractJsonLd(doc)
+  const ogImage = extractOgImage(doc)
+
+  const enrichedText = jsonLd
+    ? `JSON-LD構造化データ:\n${jsonLd}\n\nページテキスト:\n${text}`
+    : text
+
+  const recipe = await parseRecipeText(enrichedText)
+
+  // Use OGP image if no image was set
+  if (ogImage && !recipe.imageUrl) {
+    recipe.imageUrl = ogImage
+  }
+
+  return recipe
 }

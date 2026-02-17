@@ -41,6 +41,16 @@ export function AiRecipeParser({ onBack }: AiRecipeParserProps) {
 
   const handleSave = async () => {
     if (!parsed) return
+
+    // Duplicate title check
+    const existing = await db.recipes.where('title').equals(parsed.title).first()
+    if (existing) {
+      const confirmed = window.confirm(
+        `「${parsed.title}」は既に登録されています。重複して保存しますか？`
+      )
+      if (!confirmed) return
+    }
+
     setStatus('saving')
     await db.recipes.add(parsed as Recipe)
     onBack()
