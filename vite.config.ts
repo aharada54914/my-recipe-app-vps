@@ -37,6 +37,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB — recipe JSON bundle is ~4.2 MB
         runtimeCaching: [
           {
