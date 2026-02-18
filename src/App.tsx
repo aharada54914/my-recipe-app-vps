@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Outlet, useNavigate, useParams } from 'react-router-dom'
 import { initDb } from './db/initDb'
+import { AuthProvider } from './contexts/AuthContext'
+import { SyncProvider } from './hooks/useSync'
+import { PreferencesProvider } from './contexts/PreferencesContext'
 import { Header } from './components/Header'
 import { BottomNav } from './components/BottomNav'
 import { RecipeList } from './components/RecipeList'
@@ -93,21 +96,27 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="search" element={<SearchPage />} />
-          <Route path="stock" element={<StockManager />} />
-          <Route path="history" element={<HistoryPage />} />
-          <Route path="favorites" element={<FavoritesPage />} />
-        </Route>
-        <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-        <Route path="/ai-parse" element={<AiParsePage />} />
-        <Route path="/multi-schedule" element={<MultiSchedulePage />} />
-        <Route path="/settings" element={<SettingsPageWrapper />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <SyncProvider>
+          <PreferencesProvider>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route index element={<HomePage />} />
+                <Route path="search" element={<SearchPage />} />
+                <Route path="stock" element={<StockManager />} />
+                <Route path="history" element={<HistoryPage />} />
+                <Route path="favorites" element={<FavoritesPage />} />
+              </Route>
+              <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+              <Route path="/ai-parse" element={<AiParsePage />} />
+              <Route path="/multi-schedule" element={<MultiSchedulePage />} />
+              <Route path="/settings" element={<SettingsPageWrapper />} />
+            </Routes>
+          </PreferencesProvider>
+        </SyncProvider>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
 

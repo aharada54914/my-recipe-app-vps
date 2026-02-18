@@ -1,7 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Settings, Eye, EyeOff, Lock, Unlock, Wifi, WifiOff, Download, Upload } from 'lucide-react'
+import { ArrowLeft, Settings, Eye, EyeOff, Lock, Unlock, Wifi, WifiOff, Download, Upload, LogIn, LogOut, User, Cloud, RefreshCw } from 'lucide-react'
 import { exportData } from '../utils/dataExport'
 import { importData, type ImportMode } from '../utils/dataImport'
+import { useAuth } from '../hooks/useAuth'
+import { useSync } from '../hooks/useSync'
+import { supabase } from '../lib/supabase'
+import { CalendarSettings } from '../components/CalendarSettings'
+import { MealPlanSettings } from '../components/MealPlanSettings'
+import { NotificationSettings } from '../components/NotificationSettings'
+
+function formatTimeAgo(date: Date): string {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+    if (seconds < 60) return 'たった今'
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}分前`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}時間前`
+    return `${Math.floor(hours / 24)}日前`
+}
 
 interface SettingsPageProps {
     onBack: () => void
@@ -20,6 +36,8 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
     const [importMessage, setImportMessage] = useState('')
     const [importMode, setImportMode] = useState<ImportMode>('overwrite')
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const { user, loading: authLoading, signInWithGoogle, signOut } = useAuth()
+    const { isSyncing, lastSyncedAt, syncNow, error: syncError } = useSync()
 
     useEffect(() => {
         const stored = localStorage.getItem(STORAGE_KEY) || ''
@@ -114,6 +132,78 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
             </header>
 
             <main className="space-y-4 px-4 pb-8">
+                {/* Account Section — only shown when Supabase is configured */}
+                {supabase && (
+                    <div className="rounded-2xl bg-bg-card p-4">
+                        <div className="mb-3 flex items-center gap-2">
+                            <User className="h-4 w-4 text-accent" />
+                            <h4 className="text-sm font-bold text-text-secondary">アカウント</h4>
+                        </div>
+
+                        {authLoading ? (
+                            <div className="flex items-center justify-center py-4">
+                                <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                            </div>
+                        ) : user ? (
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3">
+                                    <Cloud className="h-4 w-4 text-green-400" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="truncate text-sm text-text-primary">{user.email}</p>
+                                        <p className="text-xs text-text-secondary">
+                                            {isSyncing
+                                                ? '同期中...'
+                                                : lastSyncedAt
+                                                    ? `最終同期: ${formatTimeAgo(lastSyncedAt)}`
+                                                    : '未同期'}
+                                        </p>
+                                        {syncError && (
+                                            <p className="text-xs text-red-400 mt-0.5">{syncError}</p>
+                                        )}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={syncNow}
+                                    disabled={isSyncing}
+                                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
+                                >
+                                    <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                                    {isSyncing ? '同期中...' : '今すぐ同期'}
+                                </button>
+                                <button
+                                    onClick={signOut}
+                                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-red-400"
+                                >
+                                    <LogOut className="h-4 w-4" />
+                                    ログアウト
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <button
+                                    onClick={signInWithGoogle}
+                                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-bold text-white transition-colors hover:bg-accent-hover"
+                                >
+                                    <LogIn className="h-4 w-4" />
+                                    Google\u3067\u30ed\u30b0\u30a4\u30f3
+                                </button>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    ログインするとデータがクラウドに同期され、機種変更時も復元できます。
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Calendar Settings */}
+                <CalendarSettings />
+
+                {/* Meal Plan Settings */}
+                <MealPlanSettings />
+
+                {/* Notification Settings */}
+                <NotificationSettings />
+
                 {/* API Key Section */}
                 <div className="rounded-2xl bg-bg-card p-4">
                     <div className="mb-3 flex items-center justify-between">
