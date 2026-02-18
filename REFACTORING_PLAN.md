@@ -1,818 +1,297 @@
-# レシピアプリ リファクタリングプラン（既存UI準拠版）
+# Refactoring Plan — Implementation Status
 
-## 目標
+## Goal
 
-既存のUIデザインとUXを維持しながら、Supabaseクラウド同期、Googleカレンダー連携、週間献立自動選択機能、個人設定機能、週間献立タイムライン表示、ホーム画面の改善、調理開始時刻通知機能を実装する。
-
----
-
-## 現在の実装状況
-
-### 既に実装されている機能
-
-✅ **基本機能**:
-- レシピ検索・閲覧
-- お気に入り機能
-- 閲覧履歴
-- 在庫管理
-- 人数調整機能
-- 塩分計算機
-
-✅ **AI機能**:
-- Gemini APIによるレシピ解析（AiRecipeParser.tsx）
-- テキスト・URLからのレシピ作成
-
-✅ **スケジュール機能**:
-- 単一レシピの逆算スケジュール（ScheduleGantt.tsx）
-- 複数レシピのマルチスケジュール（MultiScheduleView.tsx）
-
-✅ **UI/UXコンポーネント**:
-- RecipeCard: レシピカード表示
-- BottomNav: 5タブナビゲーション（ホーム、検索、在庫、お気に入り、履歴）
-- Header: ヘッダー（AI解析、マルチスケジュール、設定）
-
-✅ **ホーム画面**:
-- 旬のおすすめ表示（HomePage.tsx）
-- 旬の食材タグ表示
-- RecipeCardによるリスト表示
+Add cloud sync, Google Calendar integration, AI-powered weekly meal planning, personal preferences,
+weekly timeline display, and home screen improvements — all while preserving the existing UI and UX.
 
 ---
 
-## 実装する機能
+## Status Overview
 
-### 1. Supabaseクラウド同期
-
-- Google OAuth認証
-- レシピ、お気に入り、メモ、在庫、閲覧履歴の自動同期
-- 機種変更時の自動復元
-- 5分ごとの自動同期
-
-### 2. Googleカレンダー連携（家族カレンダー）
-
-- **献立予定の手動登録**: レシピ詳細画面から個別に登録
-- **週間献立の自動選択・登録**: ユーザー設定の時間に次の日曜から7日分を自動選択
-- **買い物リストの登録**: ユーザー設定の時間に5分予定として登録
-- **家族の予定に基づく献立提案**: 家族カレンダーを読み込んで提案
-
-### 3. 週間献立自動選択機能 ⭐新機能
-
-- **在庫優先**: 在庫がある食材を優先的に使う（調味料も含むが優先度を下げる）
-- **旬の食材**: 季節に応じた旬の食材を使うレシピをたまに入れる
-- **ユーザープロンプト**: ユーザーの要望を考慮（例: 「魚料理を多めに」）
-- **自動実行**: ユーザー設定の時間に自動実行（デフォルト: 金曜18:00）
-- **プレビュー・編集**: 生成された献立を確認・変更可能
-- **買い物リスト自動生成**: 週間献立から必要な材料を抽出
-
-### 4. ホーム画面の改善 ⭐新機能 ✅ 実装済み
-
-**既存の「旬のおすすめ」セクションの下に追加**:
-
-- **在庫に基づいたおすすめメニュー**: 在庫がある食材を使ったレシピを表示
-  - 既存のRecipeCardコンポーネントを再利用
-  - 在庫マッチ率でソート
-  - 縦スクロールのカードリスト形式
-
-### 5. 個人設定・プリファレンス機能 ⭐新機能
-
-**既存のSettingsPage.tsxに追加**:
-
-- **通知時間設定**: 週間献立生成時間、買い物リスト登録時間をカスタマイズ
-  - デフォルト: 週間献立は金曜18:00、買い物リストは金曜19:00
-
-- **家族カレンダーID設定**: Googleカレンダーの家族カレンダーIDを登録
-
-- **献立登録時間設定**: カレンダーに登録する献立の時間帯を設定
-  - デフォルト: 18:00-19:00
-
-- **旬の食材優先度設定**: 週間献立で旬の食材をどれくらい優先するか設定
-  - デフォルト: 低（たまに入れる）
-
-- **ユーザープロンプト設定**: 週間献立生成時の要望を事前に設定
-  - 例: 「魚料理を多めに」「辛い料理は避けて」
-
-- **通知設定**: 週間献立生成完了、買い物リスト登録完了の通知ON/OFF
-
-- **調理開始通知時刻設定**: 調理開始時刻を通知する時刻をカスタマイズ
-  - デフォルト: 16:00
-
-- **食事開始希望時刻設定**: 何時に食べたいかを設定（調理開始時刻の計算に使用）
-  - デフォルト: 18:00
-
-- **調理開始通知ON/OFF**: 調理開始時刻通知を有効にするかどうか
-  - デフォルト: ON
-
-### 6. 週間献立タイムライン表示機能 ⭐新機能
-
-**既存のScheduleGantt.tsxのデザインを踏襲**:
-
-- **タイムライン形式**: 縦軸に日付（上から下へ時系列）
-- **日毎の自動更新**: 現在日を基準に献立スケジュールを表示
-- **前後の週を表示**: ボタンで前後の週を切り替え
-- **今日のハイライト**: 今日の献立を背景色で強調表示
-- **週間表示**: 7日分の献立を一覧表示
-- **タップで詳細**: 各日の献立をタップでレシピ詳細へ遷移
-- **RecipeCardを再利用**: 既存のRecipeCardコンポーネントを使用
-
-**表示イメージ**:
-```
-┌─────────────────────────────────────┐
-│ 週間献立                             │
-│ [< 前の週]  2/18-2/24  [次の週 >]   │
-├─────────────────────────────────────┤
-│ 2/18 ⚫━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│ (日) │ ┌─────────────────────────┐ │
-│ 今日 │ │ 🖼️ 鶏肉のトマト煮込み     │ │
-│      │ │ ⏱️ 30分  在庫 85%       │ │
-│      │ └─────────────────────────┘ │
-│      │                             │
-│ 2/19 ●━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│ (月) │ ┌─────────────────────────┐ │
-│      │ │ 🖼️ 豚肉の生姜焼き         │ │
-│      │ │ ⏱️ 20分  在庫 70%       │ │
-│      │ └─────────────────────────┘ │
-└─────────────────────────────────────┘
-```
-
-### 7. 調理開始時刻通知機能 ⭐新機能
-
-**目的**: ユーザーが設定した時刻に、今日の献立の調理開始時刻を通知する
-
-**通知内容**:
-```
-今日は鶏肉のトマト煮込みを作る予定です。
-17:30に調理開始すると18:00に食べられます
-```
-
-**実装方法**: Googleカレンダーリマインダーを使用
-- 週間献立をカレンダーに登録する際に、調理開始時刻のリマインダーも一緒に登録
-- ブラウザが閉じていても通知が届く
-- iOSでも確実に動作する
-
-**調理開始時刻の計算**:
-```
-食事開始時刻 = ユーザー設定の時刻（デフォルト: 18:00）
-調理開始時刻 = 食事開始時刻 - レシピの調理時間
-通知時刻 = ユーザー設定の時刻（デフォルト: 16:00）
-```
-
-**例**:
-- レシピ: 鶏肉のトマト煮込み（30分）
-- 食事開始希望時刻: 18:00
-- 調理開始時刻: 18:00 - 30分 = 17:30
-- 通知時刻: 16:00
-- 通知内容: 「今日は鶏肉のトマト煮込みを作る予定です。17:30に調理開始すると18:00に食べられます」
-
-**他機能との連携**:
-- Phase 5（個人設定機能）: 通知時刻、食事開始希望時刻、通知ON/OFFを設定
-- Phase 6（週間献立自動選択機能）: 献立をカレンダーに登録する際にリマインダーも登録
-
-### 8. PWA自動更新機能 ⭐新機能 ⚠️ 一部実装済み
-
-- ✅ **強制自動更新**: 新しいバージョンが見つかったら自動的にリロード
-- **開発中は無効化**: 開発環境ではService Workerを無効化
-- ✅ **古いキャッシュの自動削除**: 更新時に古いキャッシュを自動的にクリア
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 1 | Supabase infrastructure | ✅ Complete |
+| 2 | Google OAuth authentication | ✅ Complete |
+| 3 | Data sync (auto every 5 min) | ✅ Complete |
+| 4 | Google Calendar integration | ✅ Complete |
+| 5 | User preferences / settings | ✅ Complete |
+| 6 | Weekly menu auto-generation | ✅ Complete (auto-scheduler not yet automated) |
+| 7 | Home screen improvements | ✅ Complete |
+| 8 | Weekly menu timeline | ✅ Complete |
+| 9 | PWA auto-update | ✅ Complete |
+| 10 | Home/Search integration & category grid | ⚠️ Partial |
+| 11 | Ingredients / Steps tab switching | ✅ Complete |
+| 12 | Reverse schedule prep-time calculation | ✅ Complete |
 
 ---
 
-## 実装ロードマップ
+## Phase 1 — Supabase Infrastructure ✅ Complete
 
-```
-Phase 1: Supabase基盤構築 (2-3時間)
-    ├─ Supabaseプロジェクト作成
-    ├─ データベーススキーマ設計
-    ├─ Row Level Security (RLS) 設定
-    └─ Supabaseクライアント作成
-    ↓
-Phase 2: Google OAuth認証 (2-3時間)
-    ├─ Google Cloud Console設定
-    ├─ Supabase Auth設定
-    └─ ログインページ作成
-    ↓
-Phase 3: データ同期機能 (5-8時間)
-    ├─ 同期ユーティリティ作成
-    ├─ 自動同期フック作成
-    └─ オフライン対応
-    ↓
-Phase 4: Googleカレンダー基本連携 (2-3時間)
-    ├─ 献立予定の手動登録
-    ├─ 買い物リストの登録
-    └─ 家族の予定に基づく献立提案
-    ↓
-Phase 5: 個人設定・プリファレンス機能 (2-3時間) ⭐新機能
-    ├─ 設定データベーステーブル作成
-    ├─ SettingsPage.tsxに設定UI追加
-    ├─ 通知時間設定機能
-    ├─ 家族カレンダーID設定
-    ├─ 献立登録時間設定
-    ├─ 旬の食材優先度設定
-    ├─ ユーザープロンプト設定
-    └─ 通知設定
-    ↓
-Phase 6: 週間献立自動選択機能 (4-7時間) ⭐新機能
-    ├─ 旬の食材データ作成（既存のseasonalIngredients.tsを拡張）
-    ├─ 在庫優先アルゴリズム実装
-    ├─ Gemini API連携（週間献立提案）
-    ├─ 設定値を反映（通知時間、プロンプト等）
-    ├─ 週間献立の一括カレンダー登録
-    ├─ プレビュー・編集画面
-    └─ 自動実行スケジューラー
-    ↓
-Phase 7: ホーム画面の改善 (1-2時間) ⭐新機能 ✅ 実装済み
-    ├─ ✅ HomePage.tsxに「在庫に基づいたおすすめ」セクション追加
-    ├─ ✅ 在庫マッチ率計算（既存のcalculateMatchRateを使用）
-    └─ ✅ RecipeCardで表示（既存コンポーネント再利用）
-    ↓
-Phase 8: 週間献立タイムライン表示機能 (2-3時間) ⭐新機能
-    ├─ WeeklyMenuTimeline.tsxコンポーネント作成
-    ├─ ScheduleGantt.tsxのデザインを踏襲
-    ├─ 日毎の自動更新ロジック
-    ├─ 前後の週切り替えボタン
-    ├─ 今日のハイライト表示
-    ├─ RecipeCardを再利用
-    └─ BottomNavまたはHeaderに「献立」タブ追加
-    （注: 調理開始時刻通知機能はPhase 6に統合済み）
-    ↓
-Phase 9: PWA自動更新機能 (30分-1時間) ⭐新機能 ⚠️ 一部実装済み
-    ├─ vite.config.ts修正（開発中は無効化）
-    ├─ ✅ 強制自動更新フック実装
-    └─ ✅ 古いキャッシュ自動削除設定
-```
-
-**総実装時間**: 約21-36時間（3-5週間）
+**What was built:**
+- `src/lib/supabase.ts` — Supabase client. Returns `null` if env vars are missing (graceful degradation).
+- `supabase/migrations/001_initial_schema.sql` — Creates all 8 tables: `recipes`, `stock`, `favorites`, `user_notes`, `view_history`, `calendar_events`, `user_preferences`, `weekly_menus`.
+- `supabase/migrations/002_rls_policies.sql` — Row Level Security so each user can only access their own data (`auth.uid() = user_id`).
 
 ---
 
-## Phase 5: 個人設定・プリファレンス機能
+## Phase 2 — Google OAuth Authentication ✅ Complete
 
-### 目的
-
-ユーザーが通知時間、家族カレンダーID、献立登録時間などをカスタマイズできるようにする。
-
-### タスク
-
-- [ ] 設定データベーステーブル作成（user_preferences）
-- [ ] SettingsPage.tsxに設定UI追加
-- [ ] 通知時間設定機能
-- [ ] 家族カレンダーID設定
-- [ ] 献立登録時間設定
-- [ ] 旬の食材優先度設定
-- [ ] ユーザープロンプト設定
-- [ ] 通知設定
-- [ ] 調理開始通知時刻設定（デフォルト: 16:00）
-- [ ] 食事開始希望時刻設定（デフォルト: 18:00）
-- [ ] 調理開始通知ON/OFF設定
-
-### 既存コンポーネントとの統合
-
-**SettingsPage.tsx**:
-- 既存の設定画面に新しい設定項目を追加
-- 既存のUIスタイルを踏襲（`bg-bg-card`、`rounded-2xl`等）
+**What was built:**
+- `src/contexts/AuthContext.tsx` — Provides `user`, `providerToken`, `signInWithGoogle()`, `signOut()`.
+- `src/contexts/authContextDef.ts` — Type definition for the context.
+- `src/hooks/useAuth.ts` — Hook to consume `AuthContext`.
+- Sign-in uses `supabase.auth.signInWithOAuth({ provider: 'google' })` with scopes `calendar.events` and `calendar.readonly`.
+- The `provider_token` returned from Supabase is passed to Google Calendar API calls.
+- Sign-out clears the session and disables calendar features.
 
 ---
 
-## Phase 7: ホーム画面の改善 ✅ 実装済み
+## Phase 3 — Data Sync ✅ Complete
 
-### 目的
+**What was built:**
+- `src/utils/syncManager.ts` — Full bidirectional sync between Dexie.js (IndexedDB) and Supabase.
+- `src/utils/syncConverters.ts` — Type converters for every table (local ↔ cloud).
+- `src/hooks/useSync.ts` — `useSync()` hook exposing `syncNow()`, `isSyncing`, `lastSyncedAt`, `error`.
+- **Auto-sync runs every 5 minutes** (`SYNC_INTERVAL_MS = 5 * 60 * 1000`) via `setInterval` in the hook.
+- Manual sync button ("今すぐ同期") available in Settings.
 
-既存の「旬のおすすめ」セクションの下に「在庫に基づいたおすすめ」セクションを追加する。
+**Sync order (respects FK dependencies):**
+1. recipes → 2. stock → 3. favorites → 4. userNotes → 5. viewHistory → 6. calendarEvents → 7. userPreferences → 8. weeklyMenus
 
-### タスク
-
-- [x] HomePage.tsxに「在庫に基づいたおすすめ」セクション追加
-- [x] 在庫マッチ率計算（既存のcalculateMatchRateを使用）
-- [x] RecipeCardで表示（既存コンポーネント再利用）
-
-### 既存コンポーネントとの統合
-
-**HomePage.tsx**:
-```tsx
-// 既存の「旬のおすすめ」セクション
-{seasonal.length > 0 && (
-  <div>
-    <h3>旬のおすすめ</h3>
-    {/* 旬のレシピカード */}
-  </div>
-)}
-
-// 新規追加: 「在庫に基づいたおすすめ」セクション
-{stockBasedRecipes.length > 0 && (
-  <div className="mt-8">
-    <h3>在庫に基づいたおすすめ</h3>
-    {/* 在庫マッチ率の高いレシピカード */}
-  </div>
-)}
-```
-
-**RecipeCard.tsx**:
-- 既存のコンポーネントをそのまま使用
-- `matchRate`プロパティで在庫マッチ率を表示
+**Conflict resolution:** Last-write-wins based on `updated_at`.
 
 ---
 
-## Phase 8: 週間献立タイムライン表示機能
+## Phase 4 — Google Calendar Integration ✅ Complete
 
-### 目的
+**What was built:**
+- `src/lib/googleCalendar.ts` — Wrappers for Google Calendar API v3:
+  - `listCalendars(token)` — Get user's available calendars
+  - `createCalendarEvent(token, calendarId, event)` — Create an event
+  - `deleteCalendarEvent(token, calendarId, eventId)` — Delete an event
+  - `listEvents(token, calendarId, timeMin, timeMax)` — List events in range
+  - `buildMealEventInput(...)` — Format a meal event payload
+  - `buildShoppingListEventInput(...)` — Format a shopping list event payload
+- `src/components/CalendarRegistrationModal.tsx` — Modal to select calendar, set time, and add reminders. Used from recipe detail.
+- `src/utils/weeklyMenuCalendar.ts` — Bulk-register a 7-day meal plan: one meal event per day + one shopping list event the day before.
+- `src/utils/familyCalendarUtils.ts` — Utilities for family calendar (reserved for future expansion).
+- All created events are stored in `db.calendarEvents` and synced to Supabase.
 
-既存のScheduleGantt.tsxのデザインを踏襲して、週間献立をタイムライン形式で表示する。
-
-### タスク
-
-- [ ] WeeklyMenuTimeline.tsxコンポーネント作成
-- [ ] ScheduleGantt.tsxのデザインを踏襲
-- [ ] 日毎の自動更新ロジック
-- [ ] 前後の週切り替えボタン
-- [ ] 今日のハイライト表示
-- [ ] RecipeCardを再利用
-- [ ] BottomNavまたはHeaderに「献立」タブ追加
-
-### 既存コンポーネントとの統合
-
-**WeeklyMenuTimeline.tsx**:
-```tsx
-// ScheduleGantt.tsxのデザインを踏襲
-<div className="rounded-2xl bg-bg-card p-4">
-  <h4 className="mb-3 text-sm font-bold text-text-secondary">週間献立</h4>
-  
-  {/* 週切り替えボタン */}
-  <div className="mb-5 flex items-center justify-center gap-3">
-    <button onClick={() => adjustWeek(-1)}>前の週</button>
-    <div className="text-center">
-      <div className="text-xl font-bold text-accent">
-        {format(startDate, 'M/d')} - {format(endDate, 'M/d')}
-      </div>
-    </div>
-    <button onClick={() => adjustWeek(1)}>次の週</button>
-  </div>
-
-  {/* タイムライン */}
-  <div className="relative ml-14 border-l-2 border-white/10 pl-6">
-    {weeklyMenu.map((entry, i) => (
-      <div key={i} className={`relative pb-5 ${entry.isToday ? 'bg-accent/20' : ''}`}>
-        {/* 日付ドット */}
-        <div className="absolute -left-[29px] top-1 h-2.5 w-2.5 rounded-full bg-accent" />
-        
-        {/* 日付ラベル */}
-        <div className="absolute -left-[85px] top-0 w-12 text-right text-xs text-text-secondary">
-          {format(entry.date, 'M/d')}
-          <br />
-          ({format(entry.date, 'E', { locale: ja })})
-        </div>
-        
-        {/* レシピカード */}
-        <RecipeCard recipe={entry.recipe} onClick={() => navigate(`/recipe/${entry.recipe.id}`)} />
-      </div>
-    ))}
-  </div>
-</div>
+**Meal event format:**
 ```
-
-**BottomNav.tsx**:
-- 「献立」タブを追加するか、既存の「ホーム」タブに統合するか検討
-- オプション1: 「ホーム」タブに統合（HomePage.tsxに週間献立セクションを追加）
-- オプション2: 新しい「献立」タブを追加（6タブになる）
-
-**推奨**: オプション1（「ホーム」タブに統合）
-- 理由: 既存の5タブ構成を維持し、ホーム画面を充実させる
+Summary:     夕食: <recipe title>
+Description: 材料:\n・ingredient 1\n・ingredient 2\n\nレシピ: <source URL>
+Start/End:   Based on user's preferred meal time (from preferences)
+Reminder:    Optional popup N minutes before
+```
 
 ---
 
-## 依存関係
+## Phase 5 — User Preferences ✅ Complete
 
-### Phase 5（個人設定機能）の依存関係
+**What was built:**
+- `db.userPreferences` table (version 8) in `src/db/db.ts` — single record per user.
+- `src/contexts/PreferencesContext.tsx` + `src/hooks/usePreferences.ts` — reactive preference state.
+- `src/components/CalendarSettings.tsx` — Calendar picker dropdown (fetched live from Google), meal start/end time, family calendar ID field.
+- `src/components/MealPlanSettings.tsx` — Weekly generation schedule (day + time), seasonal priority (low/medium/high), free-text user prompt, desired meal time.
+- `src/components/NotificationSettings.tsx` — Toggles and time inputs for: weekly menu done notification, shopping list done notification, cooking start reminder.
+- All settings are saved to `db.userPreferences` and synced via Supabase.
 
-- **Phase 1-3**: Supabase基盤とデータ同期が必要
-- **Phase 4**: Googleカレンダー基本連携が必要（家族カレンダーID設定のため）
+**Available preference fields:**
 
-### Phase 6（週間献立自動選択機能）の依存関係
-
-- **Phase 5**: 個人設定機能が必要（通知時間、プロンプト等の設定値を使用）
-- **Phase 4**: Googleカレンダー基本連携が必要
-
-### Phase 7（ホーム画面の改善）の依存関係
-
-- **Phase 1-3**: Supabase基盤とデータ同期が必要（在庫データを取得）
-- **既存機能**: calculateMatchRate、RecipeCardを使用
-
-### Phase 8（週間献立タイムライン表示機能）の依存関係
-
-- **Phase 6**: 週間献立自動選択機能が必要（献立データを表示）
-- **Phase 1-3**: Supabase基盤とデータ同期が必要
-- **既存機能**: RecipeCardを使用
-
----
-
-## 実装チェックリスト
-
-### Phase 5: 個人設定・プリファレンス機能
-
-- [ ] 設定データベーステーブル作成
-- [ ] SettingsPage.tsxに設定UI追加
-- [ ] 通知時間設定機能
-- [ ] 家族カレンダーID設定
-- [ ] 献立登録時間設定
-- [ ] 旬の食材優先度設定
-- [ ] ユーザープロンプト設定
-- [ ] 通知設定
-
-### Phase 6: 週間献立自動選択機能
-
-- [ ] 旬の食材データ拡張（seasonalIngredients.tsを10種類に）
-- [ ] 週間献立選択ロジック作成
-- [ ] 在庫優先アルゴリズム実装
-- [ ] Gemini API連携
-- [ ] 設定値を反映（通知時間、プロンプト等）
-- [ ] 週間献立の一括カレンダー登録
-- [ ] 調理開始時刻リマインダー登録（献立登録時に一緒に登録）
-- [ ] 週間献立プレビュー画面
-- [ ] 自動実行スケジューラー
-- [ ] 買い物リスト生成
-- [ ] 通知機能
-
-### Phase 7: ホーム画面の改善 ✅ 実装済み
-
-- [x] HomePage.tsxに「在庫に基づいたおすすめ」セクション追加
-- [x] 在庫マッチ率計算（calculateMatchRateを使用）
-- [x] RecipeCardで表示
-
-### Phase 8: 週間献立タイムライン表示機能
-
-- [ ] WeeklyMenuTimeline.tsxコンポーネント作成
-- [ ] ScheduleGantt.tsxのデザインを踏襲
-- [ ] 日毎の自動更新ロジック実装
-- [ ] 前後の週切り替えボタン実装
-- [ ] 今日のハイライト表示
-- [ ] RecipeCardを再利用
-- [ ] HomePage.tsxに週間献立セクション追加
+| Field | Default | Description |
+|-------|---------|-------------|
+| `defaultCalendarId` | — | Primary Google Calendar for events |
+| `familyCalendarId` | — | Family shared calendar ID |
+| `mealStartHour/Minute` | 19:00 | Meal event start time |
+| `mealEndHour/Minute` | 20:00 | Meal event end time |
+| `desiredMealHour/Minute` | 19:00 | Target meal time for Gantt chart |
+| `weeklyMenuGenerationDay/Hour/Minute` | Fri 18:00 | Schedule for auto-generation (UI only, not yet automated) |
+| `seasonalPriority` | `medium` | Seasonal ingredient boost weight |
+| `userPrompt` | `''` | Custom hint for Gemini (e.g., "avoid salty dishes") |
+| `notifyWeeklyMenuDone` | false | Notification when menu is generated |
+| `notifyShoppingListDone` | false | Notification when shopping list is ready |
+| `cookingNotifyEnabled` | false | Cooking start reminder |
+| `cookingNotifyHour/Minute` | 18:30 | When to send cooking start reminder |
 
 ---
 
-## 実装スケジュール
+## Phase 6 — Weekly Menu Auto-Generation ✅ Complete
 
-### Week 1: 基盤構築（7日間）
+> Note: The generation schedule UI is implemented but the actual scheduler (running automatically at the configured time) is not yet automated — generation is triggered manually.
 
-- **Day 1-2**: Phase 1（Supabase基盤）
-- **Day 3-4**: Phase 2（Google OAuth認証）
-- **Day 5-7**: Phase 3（データ同期機能）
+**What was built:**
+- `src/utils/weeklyMenuSelector.ts` — Local scoring algorithm for 7-day meal plan:
+  - Stock match rate (weight ×3.0)
+  - Seasonal ingredient bonus (weight ×0.5–3.0 based on `seasonalPriority`)
+  - Recency penalty: −20 if used in the last 2 weeks
+  - View history penalty: −5 if recently viewed
+  - Category diversity: −10 per duplicate over 2
+  - Device diversity: −5 per duplicate over 3
+  - Device alternation bonus: +3 for switching device from previous day
+- `src/utils/geminiWeeklyMenu.ts` — Optional Gemini pass to refine the locally-scored plan for nutrition and variety, using the user's custom prompt.
+- `src/pages/WeeklyMenuPage.tsx` — Full UI:
+  - "献立を自動生成" — generate a new plan
+  - "再生成" — regenerate unlocked days only
+  - Lock icon per day — prevent that day from being replaced
+  - Swap icon (↻) per day — replace only that day
+  - "買い物リスト" — aggregated weekly shopping list
+  - "カレンダー登録" — register all 7 days to Google Calendar
+- `src/utils/weeklyShoppingUtils.ts` — Aggregate ingredients across all 7 recipes; merge by name+unit, deduplicate 適量 items, sort by stock status.
+- `db.weeklyMenus` table — stores the plan with status: `draft` | `confirmed` | `registered`.
 
-### Week 2: Google連携と個人設定（7日間）
-
-- **Day 8-10**: Phase 4（Googleカレンダー基本連携）
-- **Day 11-13**: Phase 5（個人設定・プリファレンス機能）
-
-### Week 3: 週間献立機能（7日間）
-
-- **Day 14-20**: Phase 6（週間献立自動選択機能）
-
-### Week 4: UI改善とタイムライン（7日間）
-
-- **Day 21-22**: Phase 7（ホーム画面の改善）
-- **Day 23-25**: Phase 8（週間献立タイムライン表示機能）
-- **Day 26**: Phase 9（PWA自動更新機能）
-- **Day 27-28**: 統合テスト、バグ修正
-
-**総実装時間**: 約21-36時間（3-5週間）
-
----
-
-## まとめ
-
-このリファクタリングプランは、**既存のUIデザインとUXを維持しながら**、以下を実現します：
-
-1. **データの永続化**: 機種変更時も安心
-2. **家族との情報共有**: カレンダーで献立と買い物リストを共有
-3. **効率的な献立計画**: 週間献立の自動選択で時間短縮
-4. **直感的なレシピ発見**: ホーム画面で旬のメニューと在庫に基づいたおすすめを表示
-5. **在庫の有効活用**: 在庫食材を優先的に使うレシピ提案
-6. **カスタマイズ可能**: 通知時間や献立登録時間などを自由に設定
-7. **視覚的な献立管理**: タイムライン形式で週間献立を一目で確認
-8. **自動更新**: アプリ更新時に自動的に新しいバージョンが反映される
-
-**既存コンポーネントの再利用**:
-- RecipeCard: ホーム画面と週間献立タイムラインで使用
-- ScheduleGantt: 週間献立タイムラインのデザインを踏襲
-- SettingsPage: 個人設定機能を追加
-- HomePage: 在庫に基づいたおすすめセクションを追加
-
-**次のステップ**: Phase 1から順次実装を開始してください。
-
+**Not yet automated:**
+- The `weeklyMenuGenerationDay/Hour/Minute` settings are saved but no background scheduler runs them. The user must tap "献立を自動生成" manually.
 
 ---
 
-## Phase 10: トップページの統合と改善
+## Phase 7 — Home Screen Improvements ✅ Complete
 
-**実装時間**: 3-5時間
-
-### 機能概要
-
-検索とホーム画面を統合し、カテゴリ8種類を追加、レシピセクションを「時短レシピ」「旬のレシピ」に変更します。
-
-### 変更内容
-
-#### 1. 検索とホーム画面の統合
-
-- 現在の「ホーム」タブと「検索」タブを1つに統合
-- BottomNav.tsxを4タブ構成に変更（ホーム、献立、在庫、設定）
-- App.tsxのルーティングから`/search`を削除
-
-#### 2. カテゴリ8種類の追加
-
-| カテゴリ | イラスト | 説明 |
-|---------|---------|------|
-| 和食 | 🍙 | 和食レシピ |
-| 洋食 | 🍛 | 洋食レシピ |
-| 中華 | 🥟 | 中華レシピ |
-| 韓国 | 🌶️ | 韓国料理レシピ |
-| サラダ | 🥗 | サラダレシピ |
-| スイーツ | 🍰 | デザートレシピ |
-| スープ | 🍜 | スープレシピ |
-| 時短 | ⚡ | 時短レシピ（30分以下） |
-
-#### 3. レシピセクションの変更
-
-- **削除**: 「人気のレシピ」セクション
-- **追加**: 「時短レシピ」セクション（調理時間30分以下）
-- **追加**: 「旬のレシピ」セクション（現在の月の旬の食材を使用）
-- **維持**: 「在庫に基づいたおすすめ」セクション（既存）
-
-#### 4. レイアウト
-
-```
-┌─────────────────────────────────────┐
-│ recipy                          ♡   │
-│ 今日は何つくる？                     │
-│                                     │
-│ 🔍 食材・料理名で検索                │
-│                                     │
-│ カテゴリ                             │
-│ ┌────┐ ┌────┐ ┌────┐ ┌────┐      │
-│ │ 🍙 │ │ 🍛 │ │ 🥟 │ │ 🌶️ │      │
-│ │和食│ │洋食│ │中華│ │韓国│      │
-│ └────┘ └────┘ └────┘ └────┘      │
-│ ┌────┐ ┌────┐ ┌────┐ ┌────┐      │
-│ │ 🥗 │ │ 🍰 │ │ 🍜 │ │ ⚡ │      │
-│ │サラダ│ │スイーツ│ │スープ│ │時短│      │
-│ └────┘ └────┘ └────┘ └────┘      │
-│                                     │
-│ 時短レシピ                           │
-│ ← [レシピカード] [レシピカード] →   │
-│                                     │
-│ 旬のレシピ                           │
-│ ← [レシピカード] [レシピカード] →   │
-│                                     │
-│ 在庫に基づいたおすすめ                │
-│ ← [レシピカード] [レシピカード] →   │
-└─────────────────────────────────────┘
-```
-
-### タスクリスト
-
-- [ ] HomePage.tsxを大幅に改修
-  - [ ] 検索バーを追加
-  - [ ] カテゴリ8種類を追加（イラスト付き）
-  - [ ] 「時短レシピ」セクションを追加
-  - [ ] 「旬のレシピ」セクションを追加
-  - [ ] 「人気のレシピ」セクションを削除
-- [ ] BottomNav.tsxを変更
-  - [ ] 「検索」タブを削除
-  - [ ] 4タブ構成に変更（ホーム、献立、在庫、設定）
-- [ ] App.tsxのルーティングを変更
-  - [ ] `/search`ルートを削除
-- [ ] カテゴリフィルター機能を実装
-  - [ ] カテゴリをタップするとそのカテゴリのレシピ一覧を表示
-
-### 新規作成ファイル
-
-- `src/components/CategoryGrid.tsx` - カテゴリ8種類の表示コンポーネント
-- `src/components/QuickRecipes.tsx` - 時短レシピセクション
-- `src/components/SeasonalRecipes.tsx` - 旬のレシピセクション（既存の旬のおすすめを改修）
-
-### 依存関係
-
-- なし（独立して実装可能）
-
-### 注意事項
-
-レシピデータベースに`category`フィールドが必要です。
-- ある場合: そのまま使用
-- ない場合: `category`フィールドを追加し、既存レシピにカテゴリを設定
+**What was built (added to `src/pages/HomePage.tsx`):**
+- **Category grid** (`CategoryGrid` component) — 8 quick-filter buttons at the top.
+- **Compact weekly menu preview** (`WeeklyMenuTimeline` component in compact mode) — shows the current week's plan.
+- **Stock-based recommendations** — recipes scored by match rate, displayed in a horizontal scroll row.
+- **Seasonal picks (旬のおすすめ)** — recipes containing ingredients in-season for the current month, using data from `src/data/seasonalIngredients.ts`.
 
 ---
 
-## Phase 11: 材料・手順のタブ切り替え
+## Phase 8 — Weekly Menu Timeline ✅ Complete
 
-**実装時間**: 1-2時間
-
-### 機能概要
-
-材料と手順を同じ画面位置でタブ切り替えできるようにします。
-
-### 変更内容
-
-#### 1. タブ切り替え機能
-
-- 「材料」タブと「手順」タブを追加
-- タブの状態管理（useState）
-- タブに応じて表示内容を切り替え
-
-#### 2. レイアウト
-
-**材料タブ**:
-```
-┌─────────────────────────────────────┐
-│ [材料] [手順]                        │ ← タブ
-├─────────────────────────────────────┤
-│ トマト                        1個   │
-│ 卵                            1個   │
-│ 鶏ガラスープの素              小さじ2 │
-│ 水                          400ml   │
-│ ごま油                      小さじ1 │
-│ 塩こしょう                    少々   │
-└─────────────────────────────────────┘
-```
-
-**手順タブ**:
-```
-┌─────────────────────────────────────┐
-│ [材料] [手順]                        │ ← タブ
-├─────────────────────────────────────┤
-│ ① トマトをくし切りにする。            │
-│ ② 鍋に水と鶏ガラスープの素を入れて沸騰させる。│
-│ ③ トマトを加えて2分煮る。             │
-│ ④ 溶き卵を回し入れてふんわり固まったら火を止める。│
-│ ⑤ ごま油と塩こしょうで味を調えて完成。  │
-└─────────────────────────────────────┘
-```
-
-### タスクリスト
-
-- [ ] RecipeDetail.tsxにタブ切り替え機能を追加
-  - [ ] 「材料」タブと「手順」タブを追加
-  - [ ] タブの状態管理（useState）
-  - [ ] タブに応じて表示内容を切り替え
-- [ ] 既存の材料・手順表示を維持（表示方法のみ変更）
-
-### 依存関係
-
-- なし（独立して実装可能）
+**What was built:**
+- `src/components/WeeklyMenuTimeline.tsx` — Timeline-style display of the 7-day meal plan:
+  - Vertical timeline with a dot per day
+  - Today highlighted with accent background
+  - Previous / next week navigation buttons
+  - Tapping a recipe card navigates to the recipe detail page
+  - Reuses `RecipeCard` component
+- **BottomNav updated:** The 検索 tab was replaced with a **献立** tab (`/weekly-menu`). Current tabs: ホーム, 献立, 在庫, お気に入り, 履歴.
 
 ---
 
-## Phase 12: 逆算スケジュールの調理時間計算ロジック変更
+## Phase 9 — PWA Auto-Update ✅ Complete
 
-**実装時間**: 2-3時間
+**What was built (`vite.config.ts`):**
 
-### 機能概要
+| Setting | Value | Effect |
+|---------|-------|--------|
+| `registerType` | `'autoUpdate'` | New SW version activates without user prompt |
+| `skipWaiting` | `true` | New SW takes control immediately |
+| `clientsClaim` | `true` | New SW controls all open tabs instantly |
+| `cleanupOutdatedCaches` | (Workbox default) | Old caches are removed on update |
 
-逆算スケジュールの調理時間計算ロジックを変更し、下ごしらえ時間を品目数に応じて自動計算します。
-
-### 変更内容
-
-#### 1. 下ごしらえ時間の計算式
-
-```
-下ごしらえ時間 = 基本時間 + (品目数 - 1) × 追加時間
-
-基本時間 = 5分
-追加時間 = 2分（品目数が増えるごとに2分追加）
-
-例:
-- 品目数3個: 5 + (3-1) × 2 = 9分
-- 品目数5個: 5 + (5-1) × 2 = 13分
-- 品目数8個: 5 + (8-1) × 2 = 19分
-```
-
-#### 2. 調理時間の取得
-
-- レシピデータベースの`cookingTime`フィールドから取得
-- なければデフォルト値（30分）
-
-#### 3. 盛り付け時間
-
-- 固定3分
-
-#### 4. 合計時間
-
-```
-合計時間 = 下ごしらえ時間 + 調理時間 + 盛り付け時間
-```
-
-#### 5. 逆算スケジュールの表示
-
-```
-いただきます: 18:00
-    ↑
-盛り付け: 17:57 → 18:00 (3分)
-    ↑
-ホットクック調理: 17:52 → 17:57 (5分)
-    ↑
-下ごしらえ: 17:37 → 17:52 (15分)
-    ↑
-調理開始: 17:37
-```
-
-### タスクリスト
-
-- [ ] recipeUtils.tsに下ごしらえ時間計算関数を追加
-  - [ ] `calculatePrepTime(ingredientCount: number): number`
-  - [ ] 品目数に応じて時間を計算
-- [ ] ScheduleGantt.tsxを変更
-  - [ ] 下ごしらえ時間を計算
-  - [ ] 調理時間をレシピデータから取得
-  - [ ] 盛り付け時間を固定3分
-  - [ ] 逆算スケジュールを再計算
-- [ ] レシピデータに`cookingTime`フィールドを追加（未実装の場合）
-
-### 依存関係
-
-- なし（独立して実装可能）
-
-### 注意事項
-
-レシピデータベースに`cookingTime`フィールドが必要です。
-- ある場合: そのまま使用
-- ない場合: `cookingTime`フィールドを追加し、既存レシピに調理時間を設定
+Image caching strategy: `CacheFirst` for `cocoroplus.jp.sharp` CDN images (offline access).
 
 ---
 
-## 実装スケジュール（更新版）
+## Phase 10 — Home/Search Integration & Category Grid ⚠️ Partial
 
-### Week 1: 基盤構築（7日間）
+**What was completed:**
+- ✅ `src/components/CategoryGrid.tsx` created — 8-button grid with emoji icons, navigates to `/search?filter=<value>`.
+- ✅ `CategoryGrid` added to `HomePage.tsx`.
+- ✅ `/search` route still works for full search.
+- ✅ 検索 tab removed from BottomNav (replaced with 献立).
 
-- **Day 1-2**: Phase 1（Supabase基盤）
-- **Day 3-4**: Phase 2（Google OAuth認証）
-- **Day 5-7**: Phase 3（データ同期機能）
+**What was NOT implemented (from the original plan):**
+- ❌ Search bar embedded in the home page
+- ❌ `QuickRecipes.tsx` component (30-min-or-less recipes section)
+- ❌ `SeasonalRecipes.tsx` as a standalone component (seasonal recipes are shown inline in `HomePage`)
+- ❌ 4-tab navigation (stayed at 5 tabs: ホーム, 献立, 在庫, お気に入り, 履歴)
+- ❌ Dedicated "時短レシピ" section on the home page
 
-### Week 2: Google連携と個人設定（7日間）
+**Current CategoryGrid categories (differs from original plan):**
 
-- **Day 8-10**: Phase 4（Googleカレンダー基本連携）
-- **Day 11-13**: Phase 5（個人設定・プリファレンス機能）
-
-### Week 3: 週間献立機能（7日間）
-
-- **Day 14-20**: Phase 6（週間献立自動選択機能）
-
-### Week 4: UI改善とタイムライン（7日間）
-
-- **Day 21-22**: Phase 7（ホーム画面の改善）
-- **Day 23-25**: Phase 8（週間献立タイムライン表示機能）
-- **Day 26**: Phase 9（PWA自動更新機能）
-- **Day 27-28**: 統合テスト、バグ修正
-
-### Week 5: UI改善（追加）（7日間）
-
-- **Day 29-30**: Phase 11（材料・手順のタブ切り替え）
-- **Day 31-33**: Phase 12（逆算スケジュールの調理時間計算ロジック変更）
-- **Day 34-38**: Phase 10（トップページの統合と改善）
-- **Day 39-40**: 統合テスト、バグ修正
-
-**総実装時間**: 約27-46時間（4-6週間）
+| Category | Filter |
+|----------|--------|
+| 主菜 🍖 | `主菜` |
+| 副菜 🥗 | `副菜` |
+| スープ 🍜 | `スープ` |
+| ご飯もの 🍙 | `ご飯もの` |
+| デザート 🍰 | `デザート` |
+| ホットクック 🍲 | `device:hotcook` |
+| ヘルシオ 🔥 | `device:healsio` |
+| 時短 ⚡ | `quick` |
 
 ---
 
-## チェックリスト（更新版）
+## Phase 11 — Ingredients / Steps Tab Switching ✅ Complete
 
-### Phase 10: トップページの統合と改善
-- [ ] HomePage.tsx改修
-- [ ] BottomNav.tsx変更（4タブ構成）
-- [ ] App.tsxルーティング変更
-- [ ] カテゴリフィルター機能実装
-- [ ] CategoryGrid.tsx作成
-- [ ] QuickRecipes.tsx作成
-- [ ] SeasonalRecipes.tsx改修
-
-### Phase 11: 材料・手順のタブ切り替え
-- [ ] RecipeDetail.tsxにタブ切り替え機能追加
-- [ ] タブの状態管理実装
-- [ ] 材料・手順の表示切り替え実装
-
-### Phase 12: 逆算スケジュールの調理時間計算ロジック変更
-- [ ] recipeUtils.tsに下ごしらえ時間計算関数追加
-- [ ] ScheduleGantt.tsx変更
-- [ ] 調理時間計算ロジック実装
-- [ ] レシピデータにcookingTimeフィールド追加（必要に応じて）
+**What was built (in `src/components/RecipeDetail.tsx`):**
+- `useState<'ingredients' | 'steps'>('ingredients')` manages the active tab.
+- When `recipe.rawSteps` exists and is non-empty, two tabs are shown: **材料** and **手順**.
+- When `rawSteps` is absent (legacy CSV recipes with no step text), only ingredients are shown (no tab UI).
+- The ingredients tab shows main ingredients + seasonings in a table, with the missing-ingredient shopping list below.
+- The steps tab shows numbered steps with circle indicators.
 
 ---
 
-## まとめ（更新版）
+## Phase 12 — Reverse Schedule Prep-Time Calculation ✅ Complete
 
-このリファクタリングプランは、**既存のUIデザインとUXを維持しながら**、以下を実現します：
+**What was built:**
+- `calculatePrepTime(ingredientCount: number): number` added to `src/utils/recipeUtils.ts`:
+  ```
+  prepTime = 5 + (ingredientCount - 1) × 2  (minutes)
 
-1. **データの永続化**: 機種変更時も安心
-2. **家族との情報共有**: カレンダーで献立と買い物リストを共有
-3. **効率的な献立計画**: 週間献立の自動選択で時間短縮
-4. **直感的なレシピ発見**: ホーム画面で旬のメニューと在庫に基づいたおすすめを表示
-5. **在庫の有効活用**: 在庫食材を優先的に使うレシピ提案
-6. **カスタマイズ可能**: 通知時間や献立登録時間などを自由に設定
-7. **視覚的な献立管理**: タイムライン形式で週間献立を一目で確認
-8. **自動更新**: アプリ更新時に自動的に新しいバージョンが反映される
-9. **カテゴリ検索**: 8種類のカテゴリで簡単にレシピを探せる
-10. **タブ切り替え**: 材料と手順を同じ画面位置で切り替え
-11. **正確な調理時間**: 下ごしらえ時間を品目数に応じて自動計算
+  Examples:
+    3 ingredients → 9 min
+    5 ingredients → 13 min
+    8 ingredients → 19 min
+  ```
+- `ScheduleGantt.tsx` updated to use this function.
+- Cooking steps structure used by the Gantt chart:
+  1. **下ごしらえ** — `calculatePrepTime(ingredients.length)` min
+  2. **Device cooking step** — `totalTimeMinutes - prepTime - 3` min (color-coded by device)
+  3. **盛り付け** — fixed 3 min
+- All step start times are calculated **backward** from `desiredMealHour:desiredMealMinute` (stored in `userPreferences`).
 
-**既存コンポーネントの再利用**:
-- RecipeCard: ホーム画面と週間献立タイムラインで使用
-- ScheduleGantt: 週間献立タイムラインのデザインを踏襲、調理時間計算ロジックを改善
-- SettingsPage: 個人設定機能を追加
-- HomePage: カテゴリ、時短レシピ、旬のレシピ、在庫に基づいたおすすめセクションを追加
+---
 
-**次のステップ**: Phase 1から順次実装を開始してください。Phase 10-12は独立して実装可能なため、優先度に応じて実装順序を変更できます。
+## Remaining Work
+
+### Phase 6 — Auto-scheduler
+The weekly menu generation schedule (day + time) is configurable in Settings but the actual background trigger is not implemented.
+Options:
+- Browser push notifications + service worker scheduled task
+- Server-side cron job via Supabase Edge Functions
+
+### Phase 10 — Home page completion
+If needed:
+- Add a search bar to `HomePage.tsx` (navigate to `/search?q=<input>`)
+- Add a "時短レシピ" section (filter: `totalTimeMinutes <= 30`)
+- Optionally reduce BottomNav to 4 tabs
+
+---
+
+## Architecture Summary
+
+```
+src/
+├── components/
+│   ├── CalendarRegistrationModal.tsx  ← Phase 4
+│   ├── CalendarSettings.tsx           ← Phase 5
+│   ├── CategoryGrid.tsx               ← Phase 10
+│   ├── MealPlanSettings.tsx           ← Phase 5
+│   ├── NotificationSettings.tsx       ← Phase 5
+│   └── WeeklyMenuTimeline.tsx         ← Phase 8
+├── contexts/
+│   ├── AuthContext.tsx                ← Phase 2
+│   └── PreferencesContext.tsx         ← Phase 5
+├── hooks/
+│   ├── useAuth.ts                     ← Phase 2
+│   ├── usePreferences.ts              ← Phase 5
+│   └── useSync.ts                     ← Phase 3
+├── lib/
+│   ├── supabase.ts                    ← Phase 1
+│   ├── googleCalendar.ts              ← Phase 4
+│   └── database.types.ts             ← Phase 1
+├── pages/
+│   └── WeeklyMenuPage.tsx             ← Phase 6
+└── utils/
+    ├── syncManager.ts                 ← Phase 3
+    ├── syncConverters.ts              ← Phase 3
+    ├── weeklyMenuSelector.ts          ← Phase 6
+    ├── weeklyMenuCalendar.ts          ← Phase 4 + 6
+    ├── weeklyShoppingUtils.ts         ← Phase 6
+    ├── geminiWeeklyMenu.ts            ← Phase 6
+    └── familyCalendarUtils.ts         ← Phase 4 (partial)
+```
