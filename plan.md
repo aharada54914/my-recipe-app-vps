@@ -1,757 +1,395 @@
-# Phase 6-12 リファクタリング実装計画
+# PM分析レポート & リファクタリング計画 (v4.0 — 2026-02-17)
 
-## 対象フェーズ
-
-| Phase | 機能 | 状態 | 依存 |
-|-------|------|------|------|
-| 6 | 週間献立自動選択 | 未実装 | Phase 5 ✅ |
-| 7 | ホーム画面改善 | **実装済み** ✅ | - |
-| 8 | 週間献立タイムライン表示 | 未実装 | Phase 6 |
-| 9 | PWA自動更新 | **スキップ** (指示により) | - |
-| 10 | トップページ統合 + カテゴリ8種 | 未実装 | 独立 |
-| 11 | 材料/手順タブ切り替え | 未実装 | 独立 |
-| 12 | 逆算スケジュール計算ロジック変更 | 未実装 | 独立 |
+> v4 からの差分: ユーザー報告6件（バグ2件+UI改善2件+機能追加2件）の根本原因分析と修正計画を追加。
+> v3 からの差分: コードベース実検証により矛盾⑩(CSS Containment)の解消を確認、Phase C-6 を削除。
+> 前回 (v2) からの差分: bbfc7be (QA修正一括コミット), 3dc2224 (レビュー統合+削除) を反映。
 
 ---
 
-## 依存関係グラフ
+## 0. v4 新規課題（2026-02-17 ユーザー報告）
 
-```
-Phase 5 (実装済み: userPreferences, PreferencesContext)
-    ↓
-Phase 6: 週間献立自動選択 ─────┐
-    ├─ weeklyMenus テーブル    │
-    ├─ 選択アルゴリズム        │
-    ├─ Geminiリファイン (任意) │
-    ├─ プレビュー/編集ページ   │
-    ├─ カレンダー一括登録      │
-    └─ 買い物リスト集約        │
-         ↓                    │
-Phase 8: 週間献立タイムライン   ←┘
-    ├─ WeeklyMenuTimeline.tsx
-    ├─ HomePage統合 (today+2日コンパクト)
-    └─ 専用ページ (/weekly-menu)
+### 0-1. 課題一覧と根本原因
 
-Phase 10: トップページ統合 (独立)
-    ├─ 検索 + ホーム統合
-    ├─ 4タブ構成
-    └─ カテゴリ8種グリッド
-
-Phase 11: 材料/手順タブ切り替え (独立)
-
-Phase 12: 調理時間計算ロジック変更 (独立)
-```
-
-**実装順序**: Phase 6 → Phase 8 → Phase 11 → Phase 12 → Phase 10
-
-理由:
-- Phase 6 は Phase 8 の前提（献立データが必要）
-- Phase 10 は最も影響範囲が大きい（ルーティング・BottomNav変更）ため最後に実施
-- Phase 11, 12 は独立のため Phase 8 の後に並行可能
+| # | 問題 | 根本原因 | 重要度 |
+|---|------|---------|--------|
+| BUG-1 | **在庫 0% バグ** | `db.stock.where('inStock').equals(1)` — Dexie v4 は boolean を boolean のまま IndexedDB に保存するため `1`(number) と `true`(boolean) が一致しない。RecipeList.tsx:37, HomePage.tsx:26 の2箇所 | 🔴 Critical |
+| UI-1 | **在庫管理画面: トグル/削除重なり＋赤色** | `bg-bg-card = rgba(255,255,255,0.05)` (半透明) → 背後の `bg-red-500` (スワイプ削除用)が常時透過して見える。コード規約(不透明カード背景)違反 | 🔴 Critical |
+| UI-2 | **検索画面: 画像のみ表示で不快** | RecipeCard が画像を上部全幅表示 (`rounded-t-2xl`)。料理名が画像の下に隠れ、一覧性が低い | 🟡 High |
+| FEAT-1 | **在庫画面にデフォルト30品目** | StockManager にプリセット機能がない。ユーザーが1つずつ手動追加する必要あり | 🟡 High |
+| FEAT-2 | **マルチスケジュール: 選択した料理のみ表示** | 全200件をボタン表示 → スクロール量が膨大で選択状態がわからない | 🟡 High |
+| FEAT-3 | **ヘルシオデリを最下位** | ソート時にヘルシオデリ判定なし。対象: タイトルに「ヘルシオデリ」含む1件 + rawSteps に含む23件 = 計24件 | 🟢 Medium |
 
 ---
 
-## Phase 6: 週間献立自動選択機能
+### 0-2. BUG-1: 在庫 0% バグ修正
 
-### 6-A. DB スキーマ拡張 (Dexie v8)
-
-**変更ファイル**: `src/db/db.ts`
+**原因詳細:**
 
 ```typescript
-// 新しい型
-export interface WeeklyMenuItem {
-  recipeId: number
-  date: string            // 'YYYY-MM-DD' 形式
-  mealType: 'dinner'      // 将来拡張用 (breakfast, lunch, dinner)
-  locked: boolean          // ユーザーが固定済みか
-}
-
-export interface WeeklyMenu {
-  id?: number
-  weekStartDate: string    // 週の開始日 'YYYY-MM-DD' (日曜始まり)
-  items: WeeklyMenuItem[]  // 7日分の献立
-  shoppingList?: string    // 買い物リスト文字列（生成済み）
-  status: 'draft' | 'confirmed' | 'registered'  // draft→プレビュー中, confirmed→確定, registered→カレンダー登録済
-  createdAt: Date
-  updatedAt: Date
-  supabaseId?: string
-}
-
-// RecipeDB class
-weeklyMenus!: Table<WeeklyMenu, number>
-
-// v8
-this.version(8).stores({
-  recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
-  stock: '++id, &name, inStock, supabaseId',
-  favorites: '++id, &recipeId, addedAt, supabaseId',
-  userNotes: '++id, &recipeId, updatedAt, supabaseId',
-  viewHistory: '++id, recipeId, viewedAt, supabaseId',
-  calendarEvents: '++id, recipeId, googleEventId, supabaseId',
-  userPreferences: '++id, supabaseId',
-  weeklyMenus: '++id, weekStartDate, supabaseId',
-})
+// RecipeList.tsx:37, HomePage.tsx:26 — 現在のコード
+db.stock.where('inStock').equals(1).toArray()
 ```
 
-**TabId 更新**: `'home' | 'search' | 'favorites' | 'stock' | 'history' | 'menu'`
-（Phase 10 でタブ構成が変わるため、この時点では BottomNav はまだ変更しない → Phase 8 でルート追加のみ）
+Dexie v4 (`^4.3.0`) は IndexedDB に `boolean` 型をそのまま保存する。`equals(1)` は number `1` と比較するため、`true` (boolean) とマッチしない → stockItems が常に空 → matchRate が常に 0%。
+
+**修正:** `.equals(1)` → `.filter(item => item.inStock)` に変更（2箇所）
+
+**対象ファイル:** `src/components/RecipeList.tsx`, `src/pages/HomePage.tsx`
 
 ---
 
-### 6-B. 週間献立選択アルゴリズム
+### 0-3. UI-1: 在庫管理画面 UI 修正
 
-**新規ファイル**: `src/utils/weeklyMenuSelector.ts`
+**原因詳細:**
 
-完全ローカル動作（Gemini API 不要）。スコアリングベースで7日分を選択。
+1. **赤色透過**: StockRow の削除背景が `bg-red-500` (absolute) で常時存在。前面カードの `bg-bg-card` が `rgba(255,255,255,0.05)` (95%透明) → 赤色が透けて見える
+2. **重なり問題**: swipe-to-delete の赤背景と通常のカード要素が視覚的に干渉
 
-```typescript
-export interface MenuSelectionConfig {
-  seasonalPriority: SeasonalPriority  // 'low' | 'medium' | 'high'
-  userPrompt: string                   // Phase 5で設定済み
-  desiredMealHour: number
-  desiredMealMinute: number
-}
+**修正方針:**
 
-export async function selectWeeklyMenu(
-  weekStartDate: Date,
-  config: MenuSelectionConfig
-): Promise<WeeklyMenuItem[]>
-```
+1. `StockRow` の前面要素の背景を不透明色 (`bg-[#1a1a1c]`) に変更
+2. スワイプ中のみ赤色背景を表示 (`offsetX > 0` のときだけ visible)
 
-**スコアリングロジック**:
-
-```
-スコア = (在庫マッチ率 × 3.0)
-       + (旬ボーナス × seasonalWeight)
-       + (カテゴリ多様性ボーナス × 1.0)
-       + (デバイス多様性ボーナス × 0.5)
-       - (最近の閲覧履歴ペナルティ × 1.0)
-       - (過去の週間献立で使用済みペナルティ × 2.0)
-```
-
-- `seasonalWeight`: low=0.5, medium=1.5, high=3.0
-- カテゴリ多様性: 7日間で同じカテゴリが3回以上 → -1.0/回
-- デバイス多様性: hotcook/healsio を交互に
-- ヘルシオデリは除外
-
-**アルゴリズム手順**:
-1. recipes (limit 200) + stock + 直近2週のweeklyMenus + 直近viewHistory(30件) を取得
-2. 各レシピにスコアを計算
-3. 7日分を貪欲法で選択（1日ずつ最高スコアのレシピを選び、選択済みは除外）
-4. `WeeklyMenuItem[]` を返す
+**対象ファイル:** `src/components/StockManager.tsx`
 
 ---
 
-### 6-C. Gemini API リファインメント（オプション）
+### 0-4. UI-2: 検索画面レイアウト改善
 
-**新規ファイル**: `src/utils/geminiWeeklyMenu.ts`
+**現状:** RecipeCard は画像を上部に全幅表示。スクロールで料理名がほとんど見えず不快。
 
-既存の `getApiKey()` パターンを使用。API キーがない場合は6-Bのローカル結果をそのまま使用。
-
-```typescript
-export async function refineWeeklyMenu(
-  selectedRecipes: { recipeId: number; title: string; date: string }[],
-  config: { userPrompt: string; seasonalIngredients: string[] }
-): Promise<{ recipeId: number; date: string }[] | null>
-```
-
-- Gemini に「この7日分の献立を改善してください」とプロンプト
-- レスポンスは JSON でレシピIDの入れ替え提案
-- null を返した場合はローカル結果をそのまま使用
-- **非必須**: API キーがなくてもローカル選択で十分に動作
-
----
-
-### 6-D. 週間献立プレビュー/編集ページ
-
-**新規ファイル**: `src/pages/WeeklyMenuPage.tsx`
-
-**ルート**: `/weekly-menu`
-
-**レイアウト**:
+**修正方針 — コンパクトリストレイアウト:**
 ```
 ┌─────────────────────────────────────┐
-│ [← 戻る]  週間献立                    │
-│                                     │
-│ 2/16 (日) 〜 2/22 (土)              │
-│                                     │
-│ ┌─────────────────────────────────┐ │
-│ │ 2/16 (日)                  [🔒] │ │  ← ロック/アンロック
-│ │ RecipeCard                      │ │
-│ │ [変更]                          │ │  ← タップで差し替え
-│ │───────────────────────────────│ │
-│ │ 2/17 (月)                  [🔓] │ │
-│ │ RecipeCard                      │ │
-│ │ [変更]                          │ │
-│ │ ...                             │ │
-│ └─────────────────────────────────┘ │
-│                                     │
-│ [🔄 再生成]  [📅 カレンダー登録]     │
-│ [🛒 買い物リスト]                    │
+│ [デバイス] [No.XXX]        ┌─────┐ │
+│ 料理名（太字）             │48×48│ │
+│ ⏱ XX分  X人分  在庫 XX%   └─────┘ │
 └─────────────────────────────────────┘
 ```
 
-**機能**:
-- 日付ごとに RecipeCard を表示
-- 🔒 ロックボタン: ロックされたレシピは再生成時に固定
-- [変更] ボタン: 代替レシピ候補をモーダルで表示（上位10件から選択）
-- [🔄 再生成]: ロックされていないレシピのみ再選択
-- [📅 カレンダー登録]: Phase 4 の `createCalendarEvent()` を7回呼び出し
-- [🛒 買い物リスト]: 7日分の材料をまとめて不足分を計算
+- 画像を右側に `w-12 h-12` (`48×48`) の正方形サムネイルとして配置
+- 料理名がメインの視覚要素になる
+
+**対象ファイル:** `src/components/RecipeCard.tsx`, `src/components/RecipeImage.tsx`
 
 ---
 
-### 6-E. 買い物リスト集約
+### 0-5. FEAT-1: 在庫画面デフォルト30品目
 
-**新規ファイル**: `src/utils/weeklyShoppingUtils.ts`
+**方針:** レシピデータから集計した上位30食材を定数定義。stock テーブルが空のとき自動挿入。
 
-```typescript
-export interface AggregatedIngredient {
-  name: string
-  totalQuantity: number
-  unit: string
-  inStock: boolean
-}
+| # | 食材名 | 単位 | # | 食材名 | 単位 |
+|---|--------|------|---|--------|------|
+| 1 | 塩 | 適量 | 16 | オリーブオイル | 大さじ |
+| 2 | しょうゆ | 大さじ | 17 | 牛乳 | ml |
+| 3 | 砂糖 | 大さじ | 18 | にんにく | かけ |
+| 4 | 酒 | 大さじ | 19 | しょうが | g |
+| 5 | 水 | ml | 20 | 鶏もも肉 | 枚 |
+| 6 | こしょう | 適量 | 21 | マヨネーズ | 大さじ |
+| 7 | 玉ねぎ | 個 | 22 | ピーマン | 個 |
+| 8 | バター | g | 23 | しめじ | g |
+| 9 | にんじん | g | 24 | 青ねぎ | 本 |
+| 10 | 卵 | 個 | 25 | じゃがいも | 個 |
+| 11 | 片栗粉 | 大さじ | 26 | パプリカ | 個 |
+| 12 | サラダ油 | 大さじ | 27 | だし汁 | ml |
+| 13 | 薄力粉 | g | 28 | 酢 | 大さじ |
+| 14 | みりん | 大さじ | 29 | ピザ用チーズ | g |
+| 15 | ごま油 | 小さじ | 30 | 豚バラ肉 | g |
 
-// 7レシピの材料を集約 (同名同単位はマージ)
-export function aggregateIngredients(
-  recipes: Recipe[],
-  stockItems: StockItem[]
-): AggregatedIngredient[]
-
-// LINE形式でテキスト生成
-export function formatWeeklyShoppingList(
-  weekStart: string,
-  ingredients: AggregatedIngredient[]
-): string
-```
-
-**ロジック**:
-- 同じ材料名+同じ単位 → 数量を合算
-- 在庫にある材料は `inStock: true` でマーク（表示時に取り消し線）
-- 適量 は数量集計せず、1件のみ表示
-- 調味料（category: 'sub'）は優先度を下げて後方表示
+**対象ファイル:** 新規 `src/data/defaultStock.ts`, `src/components/StockManager.tsx`
 
 ---
 
-### 6-F. カレンダー一括登録 + 調理リマインダー
+### 0-6. FEAT-2: マルチスケジュール UI 改善
 
-**新規ファイル**: `src/utils/weeklyMenuCalendar.ts`
+**現状:** 全200件がフラットなボタンで表示 → 目的のレシピが見つからず選択困難。
 
-```typescript
-export async function registerWeeklyMenuToCalendar(
-  token: string,
-  menu: WeeklyMenu,
-  recipes: Recipe[],
-  preferences: UserPreferences
-): Promise<{ registered: number; errors: string[] }>
-```
+**修正方針 — 2段構成UI:**
 
-**処理内容**:
-1. 7日分の献立を `createCalendarEvent()` でカレンダー登録
-   - イベントタイトル: `"夕食: {レシピ名}"`
-   - 時間帯: preferences の `mealStartHour:Minute` 〜 `mealEndHour:Minute`
-2. 調理開始リマインダー（`cookingNotifyEnabled` がONの場合）
-   - 計算: `desiredMealHour:Minute - レシピの totalTimeMinutes = 調理開始時刻`
-   - Google Calendar の `reminders.overrides` で通知設定
-3. 各登録結果を `calendarEvents` テーブルに保存
-4. `weeklyMenu.status` を `'registered'` に更新
+1. **検索＋選択エリア** (上部): テキスト検索バー + 検索結果リスト (最大20件)
+2. **選択済みチップ** (中部): アクセントカラーのチップ横並び、×ボタンで解除可能
+3. **ガントチャート** (下部): 既存のまま
+
+**対象ファイル:** `src/components/MultiScheduleView.tsx`
 
 ---
 
-### 6-G. syncManager 拡張 (weeklyMenus)
+### 0-7. FEAT-3: ヘルシオデリを最下位表示
 
-**変更ファイル**: `src/utils/syncManager.ts`, `src/utils/syncConverters.ts`, `src/lib/database.types.ts`
-
+**対象レシピ判定:**
 ```typescript
-// syncConverters.ts に追加
-export function weeklyMenuToCloud(menu: WeeklyMenu, userId: string): ...
-export function weeklyMenuFromCloud(row: WeeklyMenuRow): Omit<WeeklyMenu, 'id'>
-
-// syncManager.ts — syncAll() に追加 (8番目)
-const menuResult = await syncWeeklyMenus(userId)
-```
-
-**database.types.ts に追加**:
-```typescript
-weekly_menus: {
-  Row: {
-    id: string
-    user_id: string
-    week_start_date: string
-    items: string  // JSON serialized WeeklyMenuItem[]
-    shopping_list: string | null
-    status: string
-    created_at: string
-    updated_at: string
-  }
+function isHelsioDeli(recipe: Recipe): boolean {
+  if (recipe.title.includes('ヘルシオデリ')) return true
+  if (recipe.rawSteps?.some(s => s.includes('ヘルシオデリ'))) return true
+  return false
 }
 ```
+対象: タイトル1件 + rawSteps 23件 = 計24件
+
+**ソートロジック:** ヘルシオデリフラグで分離し末尾に配置、通常レシピは matchRate ソート維持
+
+**対象ファイル:** `src/utils/recipeUtils.ts`, `src/components/RecipeList.tsx`, `src/pages/HomePage.tsx`
 
 ---
 
-### Phase 6 変更ファイル一覧
+### 0-8. v4 実装順序と依存関係
 
-| ファイル | 操作 | 内容 |
-|---------|------|------|
-| `src/db/db.ts` | 変更 | v8 weeklyMenus テーブル + 型定義 |
-| `src/lib/database.types.ts` | 変更 | weekly_menus テーブル型 |
-| `src/utils/weeklyMenuSelector.ts` | **新規** | ローカル選択アルゴリズム |
-| `src/utils/geminiWeeklyMenu.ts` | **新規** | Gemini API リファイン |
-| `src/pages/WeeklyMenuPage.tsx` | **新規** | プレビュー/編集ページ |
-| `src/utils/weeklyShoppingUtils.ts` | **新規** | 買い物リスト集約 |
-| `src/utils/weeklyMenuCalendar.ts` | **新規** | カレンダー一括登録 |
-| `src/utils/syncConverters.ts` | 変更 | weeklyMenu 変換関数 |
-| `src/utils/syncManager.ts` | 変更 | weeklyMenus 同期追加 |
-| `src/App.tsx` | 変更 | `/weekly-menu` ルート追加 |
+```
+Phase E1: バグ修正（即時・並行可能）
+  ├── BUG-1: 在庫0%バグ         → RecipeList.tsx, HomePage.tsx
+  └── UI-1:  在庫管理UI修正     → StockManager.tsx
+
+Phase E2: UI改善
+  └── UI-2:  RecipeCardレイアウト → RecipeCard.tsx, RecipeImage.tsx
+
+Phase E3: 機能追加（並行可能、FEAT-3 は BUG-1 完了後）
+  ├── FEAT-1: デフォルト30品目   → 新規 defaultStock.ts + StockManager.tsx
+  ├── FEAT-2: マルチスケジュールUI → MultiScheduleView.tsx
+  └── FEAT-3: ヘルシオデリ降格   → recipeUtils.ts, RecipeList.tsx, HomePage.tsx
+```
+
+**依存関係:**
+- BUG-1, UI-1 → 独立、最初に修正
+- UI-2 → 独立
+- FEAT-1, FEAT-2 → 独立
+- FEAT-3 → BUG-1 完了後（ソートが正しく機能するため）
+- 全タスクは v3.1 の Phase A〜D とは独立して実施可能
 
 ---
 
-## Phase 8: 週間献立タイムライン表示
+## 1. 現状分析
 
-### 8-A. WeeklyMenuTimeline コンポーネント
+### 1-1. プッシュ履歴サマリ（直近コミット）
 
-**新規ファイル**: `src/components/WeeklyMenuTimeline.tsx`
+| コミット | 内容 |
+|----------|------|
+| `ce108aa` (HEAD) | docs: PLAN.md v4.0 — 6件のバグ/UI/機能課題の根本原因分析と修正計画 |
+| `3c84de4` | Phase D-3 + D-4: 在庫UI改善 + Gantt 再帰競合チェック |
+| `badd8ec` | Phase D-1 + D-2: 閲覧履歴機能 + ホーム画面旬のおすすめ |
+| `a2de02c` | Phase C-5: searchUtils テスト追加 |
+| `c6efa32` | Phase C-2/3/4: Header aria-label + タップ領域拡大 + カテゴリ limit |
+| `c751028` | Phase C-1: Outlet ベースのルーティングに再構成 |
+| `710220b` | Phase B: CLAUDE.md ドキュメント整合性修正 (B-1〜B-7 + 追加) |
+| `ca079b4` | Phase A-1 + A-2: initDb を App レベルに移動 + テスト基盤構築 |
+| `bbfc7be` | fix: QA修正一括 — safe-area, aria-label, stockNames memo, Wake Lock修正, Worker削除, テスト追加, geminiParser検証 |
+| `3dc2224` | docs: PLAN.md統合 + PM_REVIEW.md/REVIEW.md 削除 |
+| `af1fd8b` | v2 Refactoring — プリビルドパイプライン, ブランディング(Kitchen App), PNGアイコン, エージェント定義更新, ImportPage削除 |
 
-ScheduleGantt.tsx のデザインを踏襲した縦タイムライン。
+### 1-2. ワーキングツリー
 
-```typescript
-interface WeeklyMenuTimelineProps {
-  compact?: boolean     // true: today+2日のコンパクト表示 (HomePage用)
-  // fullは専用ページ用: 7日表示 + 前後の週切り替え
-}
-```
+v4 新規課題（Phase E1〜E3）は未実装。Phase A〜D は全て実装済み。
 
-**フルモードレイアウト** (専用ページ):
-```
-┌─────────────────────────────────────┐
-│ 週間献立                             │
-│ [< 前の週]  2/16-2/22  [次の週 >]   │
-├─────────────────────────────────────┤
-│ 2/16 ⚫━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│ (日) │ ┌─────────────────────────┐ │
-│ 今日 │ │ RecipeCard              │ │
-│      │ └─────────────────────────┘ │
-│      │                             │
-│ 2/17 ●━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│ (月) │ ┌─────────────────────────┐ │
-│      │ │ RecipeCard              │ │
-│      │ └─────────────────────────┘ │
-│      ...                           │
-│ 2/22 ●━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│ (土) │ ┌─────────────────────────┐ │
-│      │ │ RecipeCard              │ │
-│      │ └─────────────────────────┘ │
-└─────────────────────────────────────┘
-```
+### 1-3. レビュー文書（統合済み — 元ファイルは削除）
 
-**コンパクトモードレイアウト** (HomePage用):
-```
-┌─────────────────────────────────────┐
-│ 📋 今週の献立                        │
-│ 2/18 (火) 鶏肉のトマト煮込み ⏱30分   │
-│ 2/19 (水) 豚肉の生姜焼き    ⏱20分   │
-│ 2/20 (木) サバの味噌煮      ⏱40分   │
-│                      [すべて見る →]  │
-└─────────────────────────────────────┘
-```
-
-**デザイン要素** (ScheduleGantt準拠):
-- 左側にドット (`bg-accent` for today, `bg-white/30` for others)
-- タイムラインライン (`border-l-2 border-white/10`)
-- 今日のハイライト: ドットが大きく、背景に `bg-accent/10`
-- タップで `/recipe/:id` に遷移
-
-**データ取得**:
-- `useLiveQuery` で `weeklyMenus` テーブルから該当週を取得
-- `items[].recipeId` からレシピ情報を `db.recipes.bulkGet()` で取得
-- 在庫マッチ率もRecipeCardに渡す
+以下のレビュー文書の知見はすべて本 PLAN.md に統合済み：
+1. **REVIEW.md**（削除済み @3dc2224）— Gap分析 2-2 に包含
+2. **PM_REVIEW.md**（削除済み @3dc2224）— 固有知見を Phase B/C に統合
+3. **QA_REPORT.md**（`claude/qa-review-evaluation-5R0XQ` ブランチ、別管理）— Gap分析 2-1 に包含
 
 ---
 
-### 8-B. HomePage統合
+## 2. 整合性チェック（Gap分析）
 
-**変更ファイル**: `src/pages/HomePage.tsx`
-
-```
-ようこそ
-┌─────────────────────────────────────┐
-│ 📋 今週の献立 (compact timeline)      │  ← 新規追加
-│ 2/18 (火) 鶏肉のトマト煮込み ...     │
-│ 2/19 (水) 豚肉の生姜焼き ...        │
-│                      [すべて見る →]  │
-└─────────────────────────────────────┘
-
-✨ 在庫でつくれるレシピ (既存)
-
-🍃 旬のおすすめ (既存)
-```
-
-- `WeeklyMenuTimeline compact` を「在庫でつくれるレシピ」の上に挿入
-- `[すべて見る →]` は `/weekly-menu` に遷移
+### 凡例
+- ✅ **解消済み** = コミット済みで対応完了
+- ⚠️ **部分対応** = 修正が不十分、または新たな矛盾が発生
+- ❌ **未対応** = まだ対応されていない
+- 🆕 **新規発見** = 本レビューで初めて特定
 
 ---
 
-### 8-C. ルーティング追加
+### 2-0. v2 リファクタリング (af1fd8b) + QA修正 (bbfc7be) で解消済みの項目
 
-**変更ファイル**: `src/App.tsx`
-
-```typescript
-// AppLayout 内に追加
-<Route path="weekly-menu" element={<WeeklyMenuPage />} />
-
-// またはフルスクリーンページとして
-<Route path="/weekly-menu" element={<WeeklyMenuPageWrapper />} />
-```
-
-→ フルスクリーンモーダルスタイル（RecipeDetail と同じパターン）を推奨。
-  BottomNav は Phase 10 でタブ変更時にまとめて修正。
-
----
-
-### Phase 8 変更ファイル一覧
-
-| ファイル | 操作 | 内容 |
-|---------|------|------|
-| `src/components/WeeklyMenuTimeline.tsx` | **新規** | タイムラインコンポーネント |
-| `src/pages/HomePage.tsx` | 変更 | compact timeline 追加 |
-| `src/App.tsx` | 変更 | `/weekly-menu` ルート追加 (6-Dでも変更あり) |
+| 課題 | 対応内容 | コミット |
+|------|---------|---------|
+| データ戦略の変更（CSV→プリビルド） | `prebuild-recipes.mjs` + JSON バンドル + `ImportPage.tsx` 削除 + initDb で自動投入 | af1fd8b |
+| ブランディング統一 | アプリ名「Kitchen App」、`ForkKnifeIcon.tsx`、192/512 PNGアイコン | af1fd8b |
+| エージェント定義の更新 | `agents/*.md` の `react-virtuoso` → `@tanstack/react-virtual` 修正、マッチ率全材料対象化 | af1fd8b |
+| Service Worker | `vite-plugin-pwa` + workbox 設定 | af1fd8b |
+| PNGアイコンセット | `app-icon-192.png`, `app-icon-512.png` | af1fd8b |
+| テスト追加 | `recipeUtils.test.ts`, `csvParser.test.ts`, `geminiParser.test.ts` | bbfc7be |
+| stockNames メモ化 | `useMemo` でラップ | bbfc7be |
+| MultiScheduleView 全件ロード | `.orderBy('title').limit(200)` に制限 | bbfc7be |
+| JSON.parse 無検証 | `validateParsedRecipe` 実装 | bbfc7be |
+| CSV toArray() | `orderBy('title').uniqueKeys()` に変更 | bbfc7be |
+| BottomNav safe-area + aria-label | `env(safe-area-inset-bottom)` + `aria-label` 追加 | bbfc7be |
+| Wake Lock リーク | `wakeLockRef` による適切なクリーンアップ | bbfc7be |
+| initDb エラーハンドリング | `.catch()` 追加 | bbfc7be |
+| 到達不能コード | `formatQuantityVibe` の dead branch 削除 | bbfc7be |
+| Gemini API dynamic import | `@google/generative-ai` の遅延ロード | bbfc7be |
+| Worker削除 | `search.worker.ts` 削除、メインスレッド実行に統一 | bbfc7be |
+| 在庫マッチ率 | `calculateMatchRate` を全材料対象に修正（`main` 限定撤廃）| af1fd8b + bbfc7be |
+| CSS Containment | `src/index.css` に `.recipe-card { contain: layout style paint; content-visibility: auto; }` 実装済み | bbfc7be |
 
 ---
 
-## Phase 11: 材料/手順タブ切り替え
+### 2-1. 残存する QA_REPORT 指摘
 
-### 11-A. RecipeDetail タブUI追加
+| # | QA指摘 | 重要度 | 状態 | 詳細 |
+|---|--------|--------|------|------|
+| 4 | APIキー localStorage保存 | 🟡Medium | ✅解消済み | CLAUDE.md に注意事項追記済み @710220b |
+| 7 | Worker方針と CLAUDE.md の矛盾 | 🟡Medium | ✅解消済み | Phase B-1 で Worker 記述を削除/格下げ @710220b |
+| 8 | aria-label 網羅性 | 🟡Medium | ✅解消済み | Phase C-2 で Header.tsx に aria-label 追加 @c6efa32 |
+| 10 | home/search 同一URL | 🟡Medium | ✅解消済み | Phase C-1 で Outlet + ネストルートに移行、URL 分離 @c751028 |
+| 11 | バンドルサイズ | 🟡Medium | ⚠️部分対応 | dynamic import 実施済み、チャンク分割効果は要検証 |
+| 17 | FavoritesPage 仮想スクロール | 🟢Low | ❌未対応 | 優先度低 |
+| 18 | initDb 重複呼出 | 🟢Low | ✅解消済み | Phase A-1 で App レベルに移動、全ルートで保証 @ca079b4 |
 
-**変更ファイル**: `src/components/RecipeDetail.tsx`
+### 2-2. 残存する REVIEW.md 指摘
 
-現在の構成:
-```
-材料セクション (常に表示)
-塩分計算
-逆算スケジュール
-調理手順 (常に表示)
-メモ
-```
-
-変更後:
-```
-[材料] [手順]  ← タブ切り替え
-├── 材料タブ: 材料テーブル + 買い物リスト
-└── 手順タブ: 調理手順 (rawSteps)
-
-塩分計算 (タブ外、常に表示)
-逆算スケジュール (タブ外、常に表示)
-メモ (タブ外、常に表示)
-```
-
-**実装**:
-```typescript
-const [activeTab, setActiveTab] = useState<'ingredients' | 'steps'>('ingredients')
-```
-
-**タブUIデザイン** (既存 CategoryTags スタイル準拠):
-```
-┌───────────────────────────────┐
-│ [材料]  [手順]                 │  ← 選択中はbg-accent, 非選択はbg-bg-card
-└───────────────────────────────┘
-```
-
-**注意**:
-- `rawSteps` がない場合（steps のみのレシピ）はタブを表示しない（従来通りの一体表示）
-- 塩分計算・逆算スケジュール・メモは材料/手順タブの外に残す
-- タブ切り替え時はアニメーションなし（シンプルに切り替え）
+| # | REVIEW指摘 | 状態 | 詳細 |
+|---|------------|------|------|
+| 3 | initDb 冗長呼出 | ✅解消済み | Phase A-1 で App レベルに移動 @ca079b4 |
+| 4 | 塩分丸め処理の不一致 | ✅解消済み | LOGIC.md「小数第1位精度保持、表示時1g丸め」と実装が一致。CLAUDE.md line 41 も整合 |
+| 5 | react-router-dom の非効率利用 | ✅解消済み | Phase C-1 で Outlet + ネストルートに移行 @c751028 |
 
 ---
 
-### Phase 11 変更ファイル一覧
+### 2-3. CLAUDE.md の記述 vs 実装の矛盾（全件再検証）
 
-| ファイル | 操作 | 内容 |
-|---------|------|------|
-| `src/components/RecipeDetail.tsx` | 変更 | タブ切り替えUI + 表示分岐 |
+#### ~~🔴 新規発見① — initDb が AppShell 外のルートで実行されない~~ → ✅ 解消済み @ca079b4
 
----
-
-## Phase 12: 逆算スケジュール計算ロジック変更
-
-### 12-A. 下ごしらえ時間計算関数
-
-**変更ファイル**: `src/utils/recipeUtils.ts`
-
-```typescript
-/**
- * 品目数に応じた下ごしらえ時間を計算
- * 基本時間: 5分 + (品目数 - 1) × 2分
- */
-export function calculatePrepTime(ingredientCount: number): number {
-  if (ingredientCount <= 0) return 5
-  return 5 + Math.max(0, ingredientCount - 1) * 2
-}
-```
+Phase A-1 で `App` コンポーネントレベルに `initDb()` を移動。`BrowserRouter` の外で `ready` 状態を管理し、全ルートで DB 初期化を保証。
 
 ---
 
-### 12-B. 新しいスケジュール計算関数
+#### ~~🔴 新規発見② — テスト実行基盤が完全に欠落~~ → ✅ 解消済み @ca079b4
 
-**変更ファイル**: `src/utils/recipeUtils.ts`
-
-```typescript
-/**
- * レシピから自動で3ステップ（下ごしらえ→調理→盛り付け）のスケジュールを生成
- */
-export function calculateAutoSchedule(
-  targetTime: Date,
-  recipe: Recipe
-): ScheduleEntry[] {
-  const prepTime = calculatePrepTime(recipe.ingredients.length)
-  const cookingTime = parseCookingTime(recipe.cookingTime, recipe.totalTimeMinutes)
-  const plateTime = 3  // 盛り付け固定3分
-
-  const steps: CookingStep[] = [
-    { name: '下ごしらえ', durationMinutes: prepTime, isDeviceStep: false },
-    { name: `${deviceLabels[recipe.device]}調理`, durationMinutes: cookingTime, isDeviceStep: true },
-    { name: '盛り付け', durationMinutes: plateTime, isDeviceStep: false },
-  ]
-
-  return calculateSchedule(targetTime, steps)
-}
-
-/**
- * cookingTime文字列からデバイス調理時間(分)を抽出
- * 例: "約30分" → 30, "1時間10分" → 70
- */
-function parseCookingTime(cookingTime: string | undefined, fallback: number): number {
-  if (!cookingTime) return Math.max(fallback - 8, 10)  // fallbackから下ごしらえ+盛り付け分を引く
-
-  const hourMatch = cookingTime.match(/(\d+)時間/)
-  const minMatch = cookingTime.match(/(\d+)分/)
-  const hours = hourMatch ? parseInt(hourMatch[1]) : 0
-  const mins = minMatch ? parseInt(minMatch[1]) : 0
-
-  return hours * 60 + mins || 30  // パース失敗時は30分
-}
-```
+Phase A-2 で `vitest` をインストール、`test` / `test:watch` スクリプトを追加。既存3テストが実行可能。
 
 ---
 
-### 12-C. ScheduleGantt 変更
+#### ~~🟡 矛盾① — Web Worker の記述と実装の乖離~~ → ✅ 解消済み @710220b
 
-**変更ファイル**: `src/components/ScheduleGantt.tsx`
+Phase B-1 で CLAUDE.md の Worker 推奨記述を「メインスレッド + useTransition で十分」に変更。
 
-**変更点**:
-- props に `recipe: Recipe` を追加（オプション）
-- `recipe` が渡された場合: `calculateAutoSchedule()` を使用（新ロジック）
-- `recipe` が渡されない場合（既存の steps のみ）: 従来通り `calculateSchedule()` を使用
-- 後方互換性を維持
+---
 
-```typescript
-interface ScheduleGanttProps {
-  steps: CookingStep[]
-  recipe?: Recipe          // ← 追加（オプション）
-}
+#### ~~🟡 矛盾② — CLAUDE.md 内の重複セクション~~ → ✅ 解消済み @710220b
+
+Phase B-2/B-3 で Image Handling、Virtual Scrolling、CSS Containment、Web Workers の重複を統合・削除。
+
+---
+
+#### ~~🟡 矛盾③ — CLAUDE.md のコンポーネント名が実装と不一致~~ → ✅ 解消済み @710220b
+
+Phase B-4 で `SearchHeader.tsx` → `SearchBar.tsx`、`StockSelector.tsx` → `StockManager.tsx` に修正。HomePage.tsx も反映。
+
+---
+
+#### ~~🟡 矛盾④ — PAGE_SIZE の不一致~~ → ✅ 解消済み @710220b + @c6efa32
+
+Phase B-5 で CLAUDE.md の記述を統一、Phase C-4 でカテゴリフィルタにも `.limit(PAGE_SIZE)` を適用。
+
+---
+
+#### ~~🟡 矛盾⑤ — Header ボタンのタップ領域~~ → ✅ 解消済み @c6efa32
+
+Phase C-3 で Header.tsx の全ボタンを `p-2` → `p-3` に変更。
+
+---
+
+#### ~~🟡 矛盾⑥ — PWA 記述の陳腐化~~ → ✅ 解消済み @710220b
+
+Phase B-6 で CLAUDE.md の PWA 記述を現在の設定内容に更新。
+
+---
+
+#### ~~🟡 矛盾⑦ — Image Handling Checklist の CSV 参照~~ → ✅ 解消済み @710220b
+
+Phase B-2 で CSV import 参照を削除。
+
+---
+
+#### ~~🟡 矛盾⑧ — searchUtils.ts テスト未実装~~ → ✅ 解消済み @a2de02c
+
+Phase C-5 で `src/utils/__tests__/searchUtils.test.ts` を追加。
+
+---
+
+#### ~~🟢 矛盾⑨ — iOS バージョン~~ → ✅ 解消済み @710220b
+
+Phase B-7 で iOS 26.x → iOS 18.x、iPhone 17 → iPhone 16 に修正。
+
+---
+
+#### ~~🟢 矛盾⑩ — CSS Containment 未実装~~ → ✅ 解消済み @bbfc7be
+
+`src/index.css` に `.recipe-card { contain: layout style paint; content-visibility: auto; contain-intrinsic-size: auto 120px; }` が実装済み。
+
+---
+
+#### 🟢 矛盾⑪ — react-blurhash 未インストール
+
+**CLAUDE.md** (line 216): "Library: `react-blurhash` (requires npm install)"
+**実装**: `package.json` に含まれず。BlurHash 機能は未実装。優先度低のため保留。
+
+---
+
+## 3. リファクタリング計画（Phase A〜D: ✅ 全件実装済み）
+
+### Phase A: 緊急修正 — ✅ 完了 @ca079b4
+
+| # | タスク | 状態 | コミット |
+|---|--------|------|---------|
+| A-1 | **initDb を App レベルに移動** | ✅ 完了 | ca079b4 |
+| A-2 | **テスト実行基盤の構築** | ✅ 完了 | ca079b4 |
+
+### Phase B: ドキュメント整合性の修正 — ✅ 完了 @710220b
+
+| # | タスク | 状態 | コミット |
+|---|--------|------|---------|
+| B-1 | Web Worker 記述の削除/格下げ | ✅ 完了 | 710220b |
+| B-2 | Image Handling 重複統合 | ✅ 完了 | 710220b |
+| B-3 | Performance セクション重複削除 | ✅ 完了 | 710220b |
+| B-4 | コンポーネント名の修正 | ✅ 完了 | 710220b |
+| B-5 | PAGE_SIZE 記述の統一 | ✅ 完了 | 710220b |
+| B-6 | PWA 記述の更新 | ✅ 完了 | 710220b |
+| B-7 | iOS バージョンの修正 | ✅ 完了 | 710220b |
+
+### Phase C: コード品質改善 — ✅ 完了 @c751028, @c6efa32, @a2de02c
+
+| # | タスク | 状態 | コミット |
+|---|--------|------|---------|
+| C-1 | ルーティング整理 (Outlet + ネストルート) | ✅ 完了 | c751028 |
+| C-2 | Header aria-label 追加 | ✅ 完了 | c6efa32 |
+| C-3 | Header タップ領域拡大 (`p-2` → `p-3`) | ✅ 完了 | c6efa32 |
+| C-4 | RecipeList カテゴリフィルタに limit 追加 | ✅ 完了 | c6efa32 |
+| C-5 | `searchUtils.ts` テスト追加 | ✅ 完了 | a2de02c |
+
+### Phase D: UX/アーキテクチャ改善 — ✅ 完了 @badd8ec, @3c84de4
+
+| # | タスク | 状態 | コミット |
+|---|--------|------|---------|
+| D-1 | 閲覧履歴機能の実装 | ✅ 完了 | badd8ec |
+| D-2 | ホーム画面の動的化 (旬のおすすめ) | ✅ 完了 | badd8ec |
+| D-3 | 在庫管理UI改善 (スワイプ削除、数量編集) | ✅ 完了 | 3c84de4 |
+| D-4 | Gantt 競合再帰チェック | ✅ 完了 | 3c84de4 |
+
+---
+
+## 4. 依存関係グラフ（Phase A〜D: 全完了）
+
 ```
+✅ A-1 (initDb移動) ──→ ✅ C-1 (ルーティング整理) ──→ ✅ D-1 (閲覧履歴)
+                                                      ──→ ✅ D-2 (ホーム動的化)
+✅ A-2 (テスト基盤) ──→ ✅ C-5 (searchUtils テスト)
 
-RecipeDetail.tsx 側で `recipe` を渡すよう変更:
-```typescript
-<ScheduleGantt steps={recipe.steps} recipe={recipe} />
+✅ B-1 (Worker記述) ──→ ✅ B-3 (Performance重複削除)
 ```
 
 ---
 
-### Phase 12 変更ファイル一覧
+## 5. Next Actions（現在の優先順位）
 
-| ファイル | 操作 | 内容 |
-|---------|------|------|
-| `src/utils/recipeUtils.ts` | 変更 | `calculatePrepTime`, `calculateAutoSchedule`, `parseCookingTime` 追加 |
-| `src/components/ScheduleGantt.tsx` | 変更 | `recipe` prop 追加、自動スケジュール計算 |
-| `src/components/RecipeDetail.tsx` | 変更 | ScheduleGantt に `recipe` を渡す |
+Phase A〜D は全て実装済み。**v4 新規課題 (Phase E1〜E3) が残作業。**
 
----
-
-## Phase 10: トップページ統合と改善
-
-### 10-A. BottomNav 4タブ構成
-
-**変更ファイル**: `src/components/BottomNav.tsx`, `src/db/db.ts`
-
-```typescript
-// db.ts — TabId 更新
-export type TabId = 'home' | 'menu' | 'stock' | 'settings'
-
-// BottomNav.tsx
-const tabs = [
-  { id: 'home', path: '/', icon: Home, label: 'ホーム' },
-  { id: 'menu', path: '/weekly-menu', icon: CalendarDays, label: '献立' },
-  { id: 'stock', path: '/stock', icon: Package, label: '在庫' },
-  { id: 'settings', path: '/settings', icon: Settings, label: '設定' },
-]
-```
-
-**削除タブ**: 検索(→ホームに統合), お気に入り(→ホーム内セクション), 履歴(→設定ページ内リンク)
-
----
-
-### 10-B. HomePage 大幅改修
-
-**変更ファイル**: `src/pages/HomePage.tsx`
-
-**新規ファイル**: `src/components/CategoryGrid.tsx`
-
-**レイアウト**:
-```
-┌─────────────────────────────────────┐
-│ recipy                          ♡   │
-│ 今日は何つくる？                     │
-│                                     │
-│ 🔍 食材・料理名で検索                │  ← SearchBar 統合
-│                                     │
-│ カテゴリ                             │
-│ ┌────┐ ┌────┐ ┌────┐ ┌────┐      │
-│ │ 🍙 │ │ 🍛 │ │ 🥟 │ │ 🌶️ │      │
-│ │和食│ │洋食│ │中華│ │韓国│      │
-│ └────┘ └────┘ └────┘ └────┘      │
-│ ┌────┐ ┌────┐ ┌────┐ ┌────┐      │
-│ │ 🥗 │ │ 🍰 │ │ 🍜 │ │ ⚡ │      │
-│ │サラダ│ │スイーツ│ │スープ│ │時短│      │
-│ └────┘ └────┘ └────┘ └────┘      │
-│                                     │
-│ 📋 今週の献立 (compact timeline)     │  ← Phase 8 で追加済み
-│                                     │
-│ ⚡ 時短レシピ (30分以下)              │  ← 新規
-│ ← [RecipeCard] [RecipeCard] →      │  ← 横スクロール
-│                                     │
-│ 🍃 旬のレシピ                        │  ← 既存を改修
-│ ← [RecipeCard] [RecipeCard] →      │  ← 横スクロール
-│                                     │
-│ ✨ 在庫に基づいたおすすめ             │  ← 既存
-│ ← [RecipeCard] [RecipeCard] →      │  ← 横スクロール
-└─────────────────────────────────────┘
-```
-
-**CategoryGrid コンポーネント**:
-```typescript
-const categories = [
-  { label: '和食', emoji: '🍙', filter: '和食' },
-  { label: '洋食', emoji: '🍛', filter: '洋食' },
-  { label: '中華', emoji: '🥟', filter: '中華' },
-  { label: '韓国', emoji: '🌶️', filter: '韓国' },
-  { label: 'サラダ', emoji: '🥗', filter: 'サラダ' },
-  { label: 'スイーツ', emoji: '🍰', filter: 'デザート' },
-  { label: 'スープ', emoji: '🍜', filter: 'スープ' },
-  { label: '時短', emoji: '⚡', filter: 'quick' },   // 特殊フィルタ: totalTimeMinutes <= 30
-]
-```
-
-- カテゴリタップ → `/search?category=和食` にナビゲート（RecipeList をフィルタ付きで表示）
-- ただし `/search` ルートは AppLayout 内に維持（BottomNav には表示しない、直リンクのみ）
-
-**レシピセクション横スクロール**:
-- `overflow-x-auto flex gap-3` で横スクロール（カード幅: `w-64 shrink-0`）
-- RecipeCard を横長バリエーションで表示（コンパクト版）
-
----
-
-### 10-C. お気に入り・履歴のアクセス手段
-
-**変更ファイル**: `src/pages/HomePage.tsx`, `src/pages/SettingsPage.tsx`
-
-- ホーム画面のヘッダー右に ♡ アイコン → `/favorites` に遷移
-- 設定ページ内に「閲覧履歴」リンクを追加
-
----
-
-### 10-D. App.tsx ルーティング変更
-
-**変更ファイル**: `src/App.tsx`
-
-```typescript
-<Route element={<AppLayout />}>
-  <Route index element={<HomePage />} />
-  <Route path="search" element={<SearchPage />} />     // 維持（カテゴリ直リンク用）
-  <Route path="stock" element={<StockManager />} />
-  <Route path="history" element={<HistoryPage />} />    // 維持（設定からのリンク用）
-  <Route path="favorites" element={<FavoritesPage />} /> // 維持（ヘッダーからのリンク用）
-  <Route path="weekly-menu" element={<WeeklyMenuPage />} /> // AppLayout内に移動
-</Route>
-
-// 設定はフルスクリーンから AppLayout内に移動
-<Route path="settings" element={<SettingsPage />} /> // AppLayout内に移動
-```
-
----
-
-### Phase 10 変更ファイル一覧
-
-| ファイル | 操作 | 内容 |
-|---------|------|------|
-| `src/db/db.ts` | 変更 | TabId 更新 |
-| `src/components/BottomNav.tsx` | 変更 | 4タブ構成 |
-| `src/pages/HomePage.tsx` | 変更 | 検索バー + カテゴリグリッド + 横スクロールセクション |
-| `src/components/CategoryGrid.tsx` | **新規** | 8カテゴリグリッド |
-| `src/App.tsx` | 変更 | ルーティング再構成 |
-| `src/pages/SettingsPage.tsx` | 変更 | 閲覧履歴リンク追加 |
-| `src/components/Header.tsx` | 変更 | お気に入りアイコン追加 |
-
----
-
-## 全体の実装ステップ
-
-```
-Step 1:  [Phase 6-A]  DB v8 + WeeklyMenu型 + database.types.ts
-Step 2:  [Phase 6-B]  weeklyMenuSelector.ts (ローカル選択アルゴリズム)
-Step 3:  [Phase 6-C]  geminiWeeklyMenu.ts (オプション・Geminiリファイン)
-Step 4:  [Phase 6-E]  weeklyShoppingUtils.ts (買い物リスト集約)
-Step 5:  [Phase 6-F]  weeklyMenuCalendar.ts (カレンダー一括登録)
-Step 6:  [Phase 6-D]  WeeklyMenuPage.tsx (プレビュー/編集)
-Step 7:  [Phase 6-G]  syncManager + syncConverters拡張
-Step 8:  [Phase 6]    App.tsx ルート追加 + ビルド確認
-         ↓
-Step 9:  [Phase 8-A]  WeeklyMenuTimeline.tsx
-Step 10: [Phase 8-B]  HomePage.tsx に compact timeline 追加
-Step 11: [Phase 8]    ビルド確認
-         ↓
-Step 12: [Phase 11]   RecipeDetail.tsx タブ切り替え
-Step 13: [Phase 11]   ビルド確認
-         ↓
-Step 14: [Phase 12-A] recipeUtils.ts に新関数追加
-Step 15: [Phase 12-B] ScheduleGantt.tsx + RecipeDetail.tsx 変更
-Step 16: [Phase 12]   ビルド確認
-         ↓
-Step 17: [Phase 10-A] BottomNav 4タブ + TabId変更
-Step 18: [Phase 10-B] CategoryGrid.tsx + HomePage大幅改修
-Step 19: [Phase 10-C] App.tsx ルーティング再構成
-Step 20: [Phase 10]   ビルド確認 + lint修正
-         ↓
-Step 21: 最終ビルド + コミット + プッシュ
-```
-
----
-
-## 新規ファイル一覧（Phase 6-12 合計）
-
-| ファイル | Phase | 概要 |
-|---------|-------|------|
-| `src/utils/weeklyMenuSelector.ts` | 6 | ローカル献立選択アルゴリズム |
-| `src/utils/geminiWeeklyMenu.ts` | 6 | Gemini APIリファインメント |
-| `src/pages/WeeklyMenuPage.tsx` | 6 | 週間献立プレビュー/編集ページ |
-| `src/utils/weeklyShoppingUtils.ts` | 6 | 買い物リスト集約ユーティリティ |
-| `src/utils/weeklyMenuCalendar.ts` | 6 | カレンダー一括登録ユーティリティ |
-| `src/components/WeeklyMenuTimeline.tsx` | 8 | 週間献立タイムラインコンポーネント |
-| `src/components/CategoryGrid.tsx` | 10 | 8カテゴリグリッドコンポーネント |
-
-## 変更ファイル一覧（Phase 6-12 合計）
-
-| ファイル | 変更内容 |
-|---------|---------|
-| `src/db/db.ts` | v8 weeklyMenus, TabId更新 |
-| `src/lib/database.types.ts` | weekly_menus テーブル型 |
-| `src/utils/syncConverters.ts` | weeklyMenu変換関数 |
-| `src/utils/syncManager.ts` | weeklyMenus同期 |
-| `src/utils/recipeUtils.ts` | calculatePrepTime, calculateAutoSchedule, parseCookingTime |
-| `src/components/ScheduleGantt.tsx` | recipe prop追加, 自動スケジュール |
-| `src/components/RecipeDetail.tsx` | タブ切り替え + ScheduleGanttにrecipe渡し |
-| `src/pages/HomePage.tsx` | compact timeline + 検索バー + カテゴリ + 横スクロール |
-| `src/components/BottomNav.tsx` | 4タブ構成 |
-| `src/App.tsx` | ルーティング再構成 |
-| `src/pages/SettingsPage.tsx` | 閲覧履歴リンク |
-| `src/components/Header.tsx` | お気に入りアイコン |
+1. **Phase E1: BUG-1 在庫0%バグ** — Dexie v4 boolean 型不一致を修正（🔴 Critical）
+2. **Phase E1: UI-1 在庫管理画面UI** — 赤色透過 + トグル/削除重なり修正（🔴 Critical）
+3. **Phase E2: UI-2 検索画面レイアウト** — コンパクトリスト化（🟡 High）
+4. **Phase E3: FEAT-1 デフォルト30品目** — 在庫プリセット自動挿入（🟡 High）
+5. **Phase E3: FEAT-2 マルチスケジュールUI** — 検索＋チップ選択UI（🟡 High）
+6. **Phase E3: FEAT-3 ヘルシオデリ降格** — 検索/おすすめで末尾表示（🟢 Medium）
+7. **残課題: QA#11 バンドルサイズ検証** — チャンク分割効果の確認（⚠️ 部分対応）
+8. **残課題: QA#17 FavoritesPage 仮想スクロール** — 優先度低（❌ 未対応）
+9. **残課題: 矛盾⑪ react-blurhash** — 優先度低（❌ 未対応）
