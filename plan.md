@@ -1,369 +1,87 @@
-# Phase 4-5 リファクタリング実装計画
+# Phase 6-12 リファクタリング実装計画
 
-## 依存関係の整理
+## 対象フェーズ
 
-```
-Phase 1-3 (実装済み)
-  ├─ Supabase基盤 + Google OAuth認証 + データ同期
-  ├─ AuthContext, useAuth, SyncProvider, syncManager
-  └─ Dexie v6 (supabaseId付き)
-      ↓
-Phase 4: Googleカレンダー基本連携
-  ├─ Google Calendar API アクセス基盤
-  ├─ 献立予定の手動登録 (RecipeDetail → カレンダー)
-  ├─ 買い物リストのカレンダー登録
-  └─ 家族カレンダーの予定読み取り
-      ↓
-Phase 5: 個人設定・プリファレンス機能
-  ├─ userPreferences テーブル (Dexie v7 + Supabase)
-  ├─ SettingsPage UI拡張
-  ├─ 通知時間 / 家族カレンダーID / 献立時間帯 設定
-  ├─ 旬の食材優先度 / ユーザープロンプト 設定
-  └─ 調理開始通知 設定
-```
-
-**Phase 5 は Phase 4 に依存**: 家族カレンダーID設定には Google Calendar API が先に必要。
+| Phase | 機能 | 状態 | 依存 |
+|-------|------|------|------|
+| 6 | 週間献立自動選択 | 未実装 | Phase 5 ✅ |
+| 7 | ホーム画面改善 | **実装済み** ✅ | - |
+| 8 | 週間献立タイムライン表示 | 未実装 | Phase 6 |
+| 9 | PWA自動更新 | **スキップ** (指示により) | - |
+| 10 | トップページ統合 + カテゴリ8種 | 未実装 | 独立 |
+| 11 | 材料/手順タブ切り替え | 未実装 | 独立 |
+| 12 | 逆算スケジュール計算ロジック変更 | 未実装 | 独立 |
 
 ---
 
-## Phase 4: Googleカレンダー基本連携
+## 依存関係グラフ
 
-### 4-A. Google Calendar OAuth スコープ追加
+```
+Phase 5 (実装済み: userPreferences, PreferencesContext)
+    ↓
+Phase 6: 週間献立自動選択 ─────┐
+    ├─ weeklyMenus テーブル    │
+    ├─ 選択アルゴリズム        │
+    ├─ Geminiリファイン (任意) │
+    ├─ プレビュー/編集ページ   │
+    ├─ カレンダー一括登録      │
+    └─ 買い物リスト集約        │
+         ↓                    │
+Phase 8: 週間献立タイムライン   ←┘
+    ├─ WeeklyMenuTimeline.tsx
+    ├─ HomePage統合 (today+2日コンパクト)
+    └─ 専用ページ (/weekly-menu)
 
-**変更ファイル**: `src/contexts/AuthContext.tsx`
+Phase 10: トップページ統合 (独立)
+    ├─ 検索 + ホーム統合
+    ├─ 4タブ構成
+    └─ カテゴリ8種グリッド
 
-**方針**:
-- Supabase Google OAuth に Calendar スコープを追加
-- `session.provider_token` で Google API アクセストークンを取得
-- アクセストークンを AuthContext に追加で公開
+Phase 11: 材料/手順タブ切り替え (独立)
 
-```typescript
-// AuthContext.tsx — 変更点
-export interface AuthContextValue {
-  user: User | null
-  loading: boolean
-  providerToken: string | null         // ← 追加
-  signInWithGoogle: () => Promise<void>
-  signOut: () => Promise<void>
-}
-
-// signInWithOAuth に scopes を追加
-await supabase.auth.signInWithOAuth({
-  provider: 'google',
-  options: {
-    redirectTo: window.location.origin + '/settings',
-    scopes: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
-  },
-})
-
-// onAuthStateChange で provider_token を保持
-supabase.auth.onAuthStateChange((_event, session) => {
-  setUser(session?.user ?? null)
-  setProviderToken(session?.provider_token ?? null)
-})
+Phase 12: 調理時間計算ロジック変更 (独立)
 ```
 
-**注意**: Supabase Dashboard 側でも Google provider の scopes 設定が必要（手動作業）。
+**実装順序**: Phase 6 → Phase 8 → Phase 11 → Phase 12 → Phase 10
+
+理由:
+- Phase 6 は Phase 8 の前提（献立データが必要）
+- Phase 10 は最も影響範囲が大きい（ルーティング・BottomNav変更）ため最後に実施
+- Phase 11, 12 は独立のため Phase 8 の後に並行可能
 
 ---
 
-### 4-B. Google Calendar API クライアント作成
+## Phase 6: 週間献立自動選択機能
 
-**新規ファイル**: `src/lib/googleCalendar.ts`
-
-外部ライブラリ不要。Google Calendar REST API v3 を `fetch()` で直接呼び出す。
-
-```typescript
-const CALENDAR_API = 'https://www.googleapis.com/calendar/v3'
-
-// カレンダー一覧を取得
-export async function listCalendars(token: string): Promise<CalendarListEntry[]>
-
-// イベント作成（献立予定 or 買い物リスト）
-export async function createCalendarEvent(
-  token: string,
-  calendarId: string,
-  event: CalendarEventInput
-): Promise<CalendarEvent>
-
-// イベント削除
-export async function deleteCalendarEvent(
-  token: string,
-  calendarId: string,
-  eventId: string
-): Promise<void>
-
-// 家族カレンダーの予定を取得（指定期間）
-export async function listEvents(
-  token: string,
-  calendarId: string,
-  timeMin: Date,
-  timeMax: Date
-): Promise<CalendarEvent[]>
-```
-
-**型定義**:
-```typescript
-export interface CalendarListEntry {
-  id: string
-  summary: string        // カレンダー名
-  primary?: boolean
-  backgroundColor?: string
-}
-
-export interface CalendarEventInput {
-  summary: string        // 例: "夕食: 鶏肉のトマト煮込み"
-  description?: string   // 材料リスト等
-  start: { dateTime: string; timeZone: string }
-  end: { dateTime: string; timeZone: string }
-  reminders?: {
-    useDefault: boolean
-    overrides?: { method: string; minutes: number }[]
-  }
-}
-
-export interface CalendarEvent {
-  id: string
-  summary: string
-  start: { dateTime?: string; date?: string }
-  end: { dateTime?: string; date?: string }
-}
-```
-
----
-
-### 4-C. DB スキーマ拡張: calendarEvents テーブル
+### 6-A. DB スキーマ拡張 (Dexie v8)
 
 **変更ファイル**: `src/db/db.ts`
 
 ```typescript
 // 新しい型
-export interface CalendarEventRecord {
-  id?: number
+export interface WeeklyMenuItem {
   recipeId: number
-  googleEventId: string         // Google Calendar のイベントID
-  calendarId: string            // どのカレンダーに登録したか
-  eventType: 'meal' | 'shopping'  // 献立 or 買い物リスト
-  startTime: Date
-  endTime: Date
-  createdAt: Date
-  supabaseId?: string
+  date: string            // 'YYYY-MM-DD' 形式
+  mealType: 'dinner'      // 将来拡張用 (breakfast, lunch, dinner)
+  locked: boolean          // ユーザーが固定済みか
 }
 
-// RecipeDB class — Dexie v7 追加
-calendarEvents!: Table<CalendarEventRecord, number>
-
-this.version(7).stores({
-  recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
-  stock: '++id, &name, inStock, supabaseId',
-  favorites: '++id, &recipeId, addedAt, supabaseId',
-  userNotes: '++id, &recipeId, updatedAt, supabaseId',
-  viewHistory: '++id, recipeId, viewedAt, supabaseId',
-  calendarEvents: '++id, recipeId, googleEventId, supabaseId',
-})
-```
-
-**Supabase テーブル** (`src/lib/database.types.ts` に追加):
-```typescript
-calendar_events: {
-  Row: {
-    id: string
-    user_id: string
-    recipe_id: string
-    google_event_id: string
-    calendar_id: string
-    event_type: string
-    start_time: string
-    end_time: string
-    created_at: string
-    updated_at: string
-  }
-  // Insert, Update, Relationships...
-}
-```
-
----
-
-### 4-D. 献立予定の手動登録（RecipeDetail）
-
-**変更ファイル**: `src/components/RecipeDetail.tsx`
-
-**新規ファイル**: `src/components/CalendarRegistrationModal.tsx`
-
-RecipeDetail のヘッダーアクションボタン列に「カレンダー登録」ボタンを追加。
-
-```
-┌─────────────────────────────────────┐
-│ [← 戻る]   [⭐] [📅] [🔗]         │  ← 📅 追加
-│                                     │
-│  鶏肉のトマト煮込み                  │
-│  ...                                │
-└─────────────────────────────────────┘
-```
-
-**CalendarRegistrationModal** の機能:
-- 日付選択（`<input type="date">`）
-- 時間帯選択（開始・終了時間、デフォルト: 18:00-19:00）
-- カレンダー選択（Google Calendar API から一覧取得）
-- リマインダー設定（調理開始時刻に通知するオプション）
-- 登録ボタン → `createCalendarEvent()` 呼び出し → `calendarEvents` テーブルに保存
-
-**イベント内容**:
-```
-タイトル: "夕食: 鶏肉のトマト煮込み"
-説明:
-  材料:
-  ・トマト 1個
-  ・鶏もも肉 300g
-  ...
-
-  調理時間: 30分
-  レシピURL: [sourceUrl]
-```
-
----
-
-### 4-E. 買い物リストのカレンダー登録
-
-**変更ファイル**: `src/components/RecipeDetail.tsx`
-
-既存のショッピングリスト（`handleCopyShoppingList`）の横に「カレンダーに登録」ボタンを追加。
-
-**イベント内容**:
-```
-タイトル: "🛒 買い物リスト: 鶏肉のトマト煮込み"
-時間: 5分の予定（ユーザー選択の日時）
-説明:
-  📋 鶏肉のトマト煮込み の買い物リスト
-  ・トマト 1個
-  ・鶏もも肉 300g
-  ...
-```
-
----
-
-### 4-F. 家族カレンダーの予定読み取り
-
-**新規ファイル**: `src/utils/familyCalendarUtils.ts`
-
-```typescript
-// 家族カレンダーから指定期間の予定を取得
-export async function getFamilySchedule(
-  token: string,
-  calendarId: string,
-  startDate: Date,
-  endDate: Date
-): Promise<FamilyEvent[]>
-
-export interface FamilyEvent {
-  summary: string
-  date: Date
-  isAllDay: boolean
-  startTime?: string
-  endTime?: string
-}
-
-// 家族の予定から献立提案のヒントを生成
-export function analyzeFamilySchedule(events: FamilyEvent[]): MealSuggestionHint[]
-
-export interface MealSuggestionHint {
-  date: Date
-  suggestion: string  // 例: "帰りが遅い日 → 時短レシピ推奨"
-  reason: string
-}
-```
-
-**ヒントのロジック例**:
-- 夕方以降に予定あり → 「忙しい日なので時短レシピを推奨」
-- 終日予定 → 「外出日なので作り置き or 翌日用レシピを推奨」
-- 予定なし → 「時間があるのでじっくり料理もOK」
-
----
-
-### 4-G. syncManager 拡張
-
-**変更ファイル**: `src/utils/syncManager.ts`, `src/utils/syncConverters.ts`
-
-`syncAll()` に `calendarEvents` テーブルの同期を追加（6番目）:
-
-```typescript
-// syncManager.ts
-const calResult = await syncCalendarEvents(userId, recipeIdMap)
-result.pushed += calResult.pushed
-result.pulled += calResult.pulled
-```
-
-```typescript
-// syncConverters.ts に追加
-export function calendarEventToCloud(item: CalendarEventRecord, userId: string, recipeSupabaseId: string): ...
-export function calendarEventFromCloud(row: CalendarEventRow): Omit<CalendarEventRecord, 'id'>
-```
-
----
-
-### Phase 4 変更ファイル一覧
-
-| ファイル | 操作 | 内容 |
-|---------|------|------|
-| `src/contexts/AuthContext.tsx` | 変更 | providerToken追加, Calendar scopes追加 |
-| `src/lib/googleCalendar.ts` | **新規** | Google Calendar REST API クライアント |
-| `src/db/db.ts` | 変更 | v7 calendarEvents テーブル + CalendarEventRecord型 |
-| `src/lib/database.types.ts` | 変更 | calendar_events テーブル型追加 |
-| `src/components/CalendarRegistrationModal.tsx` | **新規** | カレンダー登録モーダル |
-| `src/components/RecipeDetail.tsx` | 変更 | カレンダー登録ボタン追加 |
-| `src/utils/familyCalendarUtils.ts` | **新規** | 家族カレンダー読み取り・分析 |
-| `src/utils/syncManager.ts` | 変更 | calendarEvents 同期追加 |
-| `src/utils/syncConverters.ts` | 変更 | calendarEvent 変換関数追加 |
-
----
-
-## Phase 5: 個人設定・プリファレンス機能
-
-### 5-A. userPreferences テーブル作成
-
-**変更ファイル**: `src/db/db.ts`
-
-```typescript
-// 新しい型
-export interface UserPreferences {
+export interface WeeklyMenu {
   id?: number
-  // カレンダー設定
-  familyCalendarId?: string      // 家族カレンダーID
-  mealStartHour: number          // 献立登録時間帯（開始）デフォルト: 18
-  mealStartMinute: number        // デフォルト: 0
-  mealEndHour: number            // 献立登録時間帯（終了）デフォルト: 19
-  mealEndMinute: number          // デフォルト: 0
-  defaultCalendarId?: string     // デフォルト登録先カレンダー
-  // 週間献立設定
-  weeklyMenuGenerationDay: number     // 曜日 (0=日, 5=金) デフォルト: 5
-  weeklyMenuGenerationHour: number    // デフォルト: 18
-  weeklyMenuGenerationMinute: number  // デフォルト: 0
-  shoppingListHour: number       // 買い物リスト登録時間 デフォルト: 19
-  shoppingListMinute: number     // デフォルト: 0
-  // 旬の食材優先度
-  seasonalPriority: 'low' | 'medium' | 'high'  // デフォルト: 'low'
-  // ユーザープロンプト
-  userPrompt: string             // 例: "魚料理を多めに" デフォルト: ''
-  // 通知設定
-  notifyWeeklyMenuDone: boolean  // 週間献立完了通知 デフォルト: true
-  notifyShoppingListDone: boolean // 買い物リスト登録完了通知 デフォルト: true
-  // 調理開始通知
-  cookingNotifyEnabled: boolean  // デフォルト: true
-  cookingNotifyHour: number      // 通知時刻 デフォルト: 16
-  cookingNotifyMinute: number    // デフォルト: 0
-  // 食事開始希望時刻
-  desiredMealHour: number        // デフォルト: 18
-  desiredMealMinute: number      // デフォルト: 0
-  // メタ
+  weekStartDate: string    // 週の開始日 'YYYY-MM-DD' (日曜始まり)
+  items: WeeklyMenuItem[]  // 7日分の献立
+  shoppingList?: string    // 買い物リスト文字列（生成済み）
+  status: 'draft' | 'confirmed' | 'registered'  // draft→プレビュー中, confirmed→確定, registered→カレンダー登録済
+  createdAt: Date
   updatedAt: Date
   supabaseId?: string
 }
-```
 
-**Dexie v7 に統合** (Phase 4 の calendarEvents と同じバージョン):
+// RecipeDB class
+weeklyMenus!: Table<WeeklyMenu, number>
 
-```typescript
-this.version(7).stores({
+// v8
+this.version(8).stores({
   recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
   stock: '++id, &name, inStock, supabaseId',
   favorites: '++id, &recipeId, addedAt, supabaseId',
@@ -371,330 +89,669 @@ this.version(7).stores({
   viewHistory: '++id, recipeId, viewedAt, supabaseId',
   calendarEvents: '++id, recipeId, googleEventId, supabaseId',
   userPreferences: '++id, supabaseId',
+  weeklyMenus: '++id, weekStartDate, supabaseId',
 })
 ```
 
-**Supabase テーブル** (`database.types.ts` に追加):
-```typescript
-user_preferences: {
-  Row: {
-    id: string
-    user_id: string
-    family_calendar_id: string | null
-    meal_start_hour: number
-    meal_start_minute: number
-    meal_end_hour: number
-    meal_end_minute: number
-    default_calendar_id: string | null
-    weekly_menu_generation_day: number
-    weekly_menu_generation_hour: number
-    weekly_menu_generation_minute: number
-    shopping_list_hour: number
-    shopping_list_minute: number
-    seasonal_priority: string
-    user_prompt: string
-    notify_weekly_menu_done: boolean
-    notify_shopping_list_done: boolean
-    cooking_notify_enabled: boolean
-    cooking_notify_hour: number
-    cooking_notify_minute: number
-    desired_meal_hour: number
-    desired_meal_minute: number
-    created_at: string
-    updated_at: string
-  }
-  // Insert, Update...
-}
-```
+**TabId 更新**: `'home' | 'search' | 'favorites' | 'stock' | 'history' | 'menu'`
+（Phase 10 でタブ構成が変わるため、この時点では BottomNav はまだ変更しない → Phase 8 でルート追加のみ）
 
 ---
 
-### 5-B. PreferencesContext + usePreferences フック
+### 6-B. 週間献立選択アルゴリズム
 
-**新規ファイル**: `src/contexts/PreferencesContext.tsx`
-**新規ファイル**: `src/hooks/usePreferences.ts`
+**新規ファイル**: `src/utils/weeklyMenuSelector.ts`
+
+完全ローカル動作（Gemini API 不要）。スコアリングベースで7日分を選択。
 
 ```typescript
-// デフォルト値
-export const DEFAULT_PREFERENCES: Omit<UserPreferences, 'id' | 'supabaseId'> = {
-  familyCalendarId: undefined,
-  mealStartHour: 18,
-  mealStartMinute: 0,
-  mealEndHour: 19,
-  mealEndMinute: 0,
-  defaultCalendarId: undefined,
-  weeklyMenuGenerationDay: 5,
-  weeklyMenuGenerationHour: 18,
-  weeklyMenuGenerationMinute: 0,
-  shoppingListHour: 19,
-  shoppingListMinute: 0,
-  seasonalPriority: 'low',
-  userPrompt: '',
-  notifyWeeklyMenuDone: true,
-  notifyShoppingListDone: true,
-  cookingNotifyEnabled: true,
-  cookingNotifyHour: 16,
-  cookingNotifyMinute: 0,
-  desiredMealHour: 18,
-  desiredMealMinute: 0,
-  updatedAt: new Date(),
+export interface MenuSelectionConfig {
+  seasonalPriority: SeasonalPriority  // 'low' | 'medium' | 'high'
+  userPrompt: string                   // Phase 5で設定済み
+  desiredMealHour: number
+  desiredMealMinute: number
 }
 
-// PreferencesContext
-interface PreferencesContextValue {
-  preferences: UserPreferences
-  updatePreference: <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => Promise<void>
-  updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>
-  resetToDefaults: () => Promise<void>
+export async function selectWeeklyMenu(
+  weekStartDate: Date,
+  config: MenuSelectionConfig
+): Promise<WeeklyMenuItem[]>
+```
+
+**スコアリングロジック**:
+
+```
+スコア = (在庫マッチ率 × 3.0)
+       + (旬ボーナス × seasonalWeight)
+       + (カテゴリ多様性ボーナス × 1.0)
+       + (デバイス多様性ボーナス × 0.5)
+       - (最近の閲覧履歴ペナルティ × 1.0)
+       - (過去の週間献立で使用済みペナルティ × 2.0)
+```
+
+- `seasonalWeight`: low=0.5, medium=1.5, high=3.0
+- カテゴリ多様性: 7日間で同じカテゴリが3回以上 → -1.0/回
+- デバイス多様性: hotcook/healsio を交互に
+- ヘルシオデリは除外
+
+**アルゴリズム手順**:
+1. recipes (limit 200) + stock + 直近2週のweeklyMenus + 直近viewHistory(30件) を取得
+2. 各レシピにスコアを計算
+3. 7日分を貪欲法で選択（1日ずつ最高スコアのレシピを選び、選択済みは除外）
+4. `WeeklyMenuItem[]` を返す
+
+---
+
+### 6-C. Gemini API リファインメント（オプション）
+
+**新規ファイル**: `src/utils/geminiWeeklyMenu.ts`
+
+既存の `getApiKey()` パターンを使用。API キーがない場合は6-Bのローカル結果をそのまま使用。
+
+```typescript
+export async function refineWeeklyMenu(
+  selectedRecipes: { recipeId: number; title: string; date: string }[],
+  config: { userPrompt: string; seasonalIngredients: string[] }
+): Promise<{ recipeId: number; date: string }[] | null>
+```
+
+- Gemini に「この7日分の献立を改善してください」とプロンプト
+- レスポンスは JSON でレシピIDの入れ替え提案
+- null を返した場合はローカル結果をそのまま使用
+- **非必須**: API キーがなくてもローカル選択で十分に動作
+
+---
+
+### 6-D. 週間献立プレビュー/編集ページ
+
+**新規ファイル**: `src/pages/WeeklyMenuPage.tsx`
+
+**ルート**: `/weekly-menu`
+
+**レイアウト**:
+```
+┌─────────────────────────────────────┐
+│ [← 戻る]  週間献立                    │
+│                                     │
+│ 2/16 (日) 〜 2/22 (土)              │
+│                                     │
+│ ┌─────────────────────────────────┐ │
+│ │ 2/16 (日)                  [🔒] │ │  ← ロック/アンロック
+│ │ RecipeCard                      │ │
+│ │ [変更]                          │ │  ← タップで差し替え
+│ │───────────────────────────────│ │
+│ │ 2/17 (月)                  [🔓] │ │
+│ │ RecipeCard                      │ │
+│ │ [変更]                          │ │
+│ │ ...                             │ │
+│ └─────────────────────────────────┘ │
+│                                     │
+│ [🔄 再生成]  [📅 カレンダー登録]     │
+│ [🛒 買い物リスト]                    │
+└─────────────────────────────────────┘
+```
+
+**機能**:
+- 日付ごとに RecipeCard を表示
+- 🔒 ロックボタン: ロックされたレシピは再生成時に固定
+- [変更] ボタン: 代替レシピ候補をモーダルで表示（上位10件から選択）
+- [🔄 再生成]: ロックされていないレシピのみ再選択
+- [📅 カレンダー登録]: Phase 4 の `createCalendarEvent()` を7回呼び出し
+- [🛒 買い物リスト]: 7日分の材料をまとめて不足分を計算
+
+---
+
+### 6-E. 買い物リスト集約
+
+**新規ファイル**: `src/utils/weeklyShoppingUtils.ts`
+
+```typescript
+export interface AggregatedIngredient {
+  name: string
+  totalQuantity: number
+  unit: string
+  inStock: boolean
 }
+
+// 7レシピの材料を集約 (同名同単位はマージ)
+export function aggregateIngredients(
+  recipes: Recipe[],
+  stockItems: StockItem[]
+): AggregatedIngredient[]
+
+// LINE形式でテキスト生成
+export function formatWeeklyShoppingList(
+  weekStart: string,
+  ingredients: AggregatedIngredient[]
+): string
 ```
 
 **ロジック**:
-- `useLiveQuery` で Dexie から preferences を取得（レコードは常に1つ）
-- 存在しない場合は `DEFAULT_PREFERENCES` をDBに挿入
-- `updatePreference()` で個別フィールドを更新（`updatedAt` も自動更新）
-- PreferencesProvider を App.tsx に追加
+- 同じ材料名+同じ単位 → 数量を合算
+- 在庫にある材料は `inStock: true` でマーク（表示時に取り消し線）
+- 適量 は数量集計せず、1件のみ表示
+- 調味料（category: 'sub'）は優先度を下げて後方表示
 
 ---
 
-### 5-C. SettingsPage UI拡張
+### 6-F. カレンダー一括登録 + 調理リマインダー
 
-**変更ファイル**: `src/pages/SettingsPage.tsx`
+**新規ファイル**: `src/utils/weeklyMenuCalendar.ts`
 
-既存のセクション（アカウント → Gemini APIキー → データ管理）の間に新しいセクションを追加。
+```typescript
+export async function registerWeeklyMenuToCalendar(
+  token: string,
+  menu: WeeklyMenu,
+  recipes: Recipe[],
+  preferences: UserPreferences
+): Promise<{ registered: number; errors: string[] }>
+```
 
-**セクション構成**（上から順）:
-1. アカウント（既存）
-2. **カレンダー設定** ← 新規
-3. **献立設定** ← 新規
-4. **通知設定** ← 新規
-5. Gemini API キー（既存）
-6. データ管理（既存）
+**処理内容**:
+1. 7日分の献立を `createCalendarEvent()` でカレンダー登録
+   - イベントタイトル: `"夕食: {レシピ名}"`
+   - 時間帯: preferences の `mealStartHour:Minute` 〜 `mealEndHour:Minute`
+2. 調理開始リマインダー（`cookingNotifyEnabled` がONの場合）
+   - 計算: `desiredMealHour:Minute - レシピの totalTimeMinutes = 調理開始時刻`
+   - Google Calendar の `reminders.overrides` で通知設定
+3. 各登録結果を `calendarEvents` テーブルに保存
+4. `weeklyMenu.status` を `'registered'` に更新
 
 ---
 
-#### 5-C-1. カレンダー設定セクション
+### 6-G. syncManager 拡張 (weeklyMenus)
 
+**変更ファイル**: `src/utils/syncManager.ts`, `src/utils/syncConverters.ts`, `src/lib/database.types.ts`
+
+```typescript
+// syncConverters.ts に追加
+export function weeklyMenuToCloud(menu: WeeklyMenu, userId: string): ...
+export function weeklyMenuFromCloud(row: WeeklyMenuRow): Omit<WeeklyMenu, 'id'>
+
+// syncManager.ts — syncAll() に追加 (8番目)
+const menuResult = await syncWeeklyMenus(userId)
+```
+
+**database.types.ts に追加**:
+```typescript
+weekly_menus: {
+  Row: {
+    id: string
+    user_id: string
+    week_start_date: string
+    items: string  // JSON serialized WeeklyMenuItem[]
+    shopping_list: string | null
+    status: string
+    created_at: string
+    updated_at: string
+  }
+}
+```
+
+---
+
+### Phase 6 変更ファイル一覧
+
+| ファイル | 操作 | 内容 |
+|---------|------|------|
+| `src/db/db.ts` | 変更 | v8 weeklyMenus テーブル + 型定義 |
+| `src/lib/database.types.ts` | 変更 | weekly_menus テーブル型 |
+| `src/utils/weeklyMenuSelector.ts` | **新規** | ローカル選択アルゴリズム |
+| `src/utils/geminiWeeklyMenu.ts` | **新規** | Gemini API リファイン |
+| `src/pages/WeeklyMenuPage.tsx` | **新規** | プレビュー/編集ページ |
+| `src/utils/weeklyShoppingUtils.ts` | **新規** | 買い物リスト集約 |
+| `src/utils/weeklyMenuCalendar.ts` | **新規** | カレンダー一括登録 |
+| `src/utils/syncConverters.ts` | 変更 | weeklyMenu 変換関数 |
+| `src/utils/syncManager.ts` | 変更 | weeklyMenus 同期追加 |
+| `src/App.tsx` | 変更 | `/weekly-menu` ルート追加 |
+
+---
+
+## Phase 8: 週間献立タイムライン表示
+
+### 8-A. WeeklyMenuTimeline コンポーネント
+
+**新規ファイル**: `src/components/WeeklyMenuTimeline.tsx`
+
+ScheduleGantt.tsx のデザインを踏襲した縦タイムライン。
+
+```typescript
+interface WeeklyMenuTimelineProps {
+  compact?: boolean     // true: today+2日のコンパクト表示 (HomePage用)
+  // fullは専用ページ用: 7日表示 + 前後の週切り替え
+}
+```
+
+**フルモードレイアウト** (専用ページ):
 ```
 ┌─────────────────────────────────────┐
-│ 📅 カレンダー設定                     │
-│                                     │
-│ デフォルト登録先カレンダー             │
-│ [▼ マイカレンダー                ]    │
-│                                     │
-│ 家族カレンダー                       │
-│ [▼ 家族のカレンダー             ]    │
-│ ※ 家族の予定から献立を提案します      │
-│                                     │
-│ 献立の時間帯                         │
-│ [18] : [00]  〜  [19] : [00]       │
+│ 週間献立                             │
+│ [< 前の週]  2/16-2/22  [次の週 >]   │
+├─────────────────────────────────────┤
+│ 2/16 ⚫━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│ (日) │ ┌─────────────────────────┐ │
+│ 今日 │ │ RecipeCard              │ │
+│      │ └─────────────────────────┘ │
+│      │                             │
+│ 2/17 ●━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│ (月) │ ┌─────────────────────────┐ │
+│      │ │ RecipeCard              │ │
+│      │ └─────────────────────────┘ │
+│      ...                           │
+│ 2/22 ●━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│ (土) │ ┌─────────────────────────┐ │
+│      │ │ RecipeCard              │ │
+│      │ └─────────────────────────┘ │
 └─────────────────────────────────────┘
 ```
 
-- カレンダー選択は `listCalendars()` で取得した一覧を `<select>` で表示
-- ログイン時のみ表示（`user && providerToken` がある場合）
-
----
-
-#### 5-C-2. 献立設定セクション
-
+**コンパクトモードレイアウト** (HomePage用):
 ```
 ┌─────────────────────────────────────┐
-│ 🍽️ 献立設定                         │
-│                                     │
-│ 週間献立の自動生成                    │
-│ 生成タイミング: [金曜日▼] [18]:[00]  │
-│                                     │
-│ 買い物リスト登録時間                  │
-│ [19] : [00]                         │
-│                                     │
-│ 旬の食材優先度                       │
-│ [低（たまに入れる）] [中] [高]       │
-│                                     │
-│ 献立リクエスト                       │
-│ ┌─────────────────────────────────┐ │
-│ │ 魚料理を多めに                   │ │
-│ └─────────────────────────────────┘ │
-│ ※ 週間献立生成時にAIが考慮します     │
+│ 📋 今週の献立                        │
+│ 2/18 (火) 鶏肉のトマト煮込み ⏱30分   │
+│ 2/19 (水) 豚肉の生姜焼き    ⏱20分   │
+│ 2/20 (木) サバの味噌煮      ⏱40分   │
+│                      [すべて見る →]  │
 └─────────────────────────────────────┘
 ```
 
-- 曜日選択は `<select>` (日〜土)
-- 時間は `<input type="number">` (0-23, 0-59)
-- 旬の食材優先度は3つのトグルボタン
-- 献立リクエストは `<textarea>` (16px以上のフォントサイズ)
+**デザイン要素** (ScheduleGantt準拠):
+- 左側にドット (`bg-accent` for today, `bg-white/30` for others)
+- タイムラインライン (`border-l-2 border-white/10`)
+- 今日のハイライト: ドットが大きく、背景に `bg-accent/10`
+- タップで `/recipe/:id` に遷移
+
+**データ取得**:
+- `useLiveQuery` で `weeklyMenus` テーブルから該当週を取得
+- `items[].recipeId` からレシピ情報を `db.recipes.bulkGet()` で取得
+- 在庫マッチ率もRecipeCardに渡す
 
 ---
 
-#### 5-C-3. 通知設定セクション
+### 8-B. HomePage統合
+
+**変更ファイル**: `src/pages/HomePage.tsx`
 
 ```
+ようこそ
 ┌─────────────────────────────────────┐
-│ 🔔 通知設定                          │
-│                                     │
-│ 調理開始通知                         │
-│ [● ON ○ OFF]                       │
-│                                     │
-│ 通知時刻                             │
-│ [16] : [00]                         │
-│ ※ この時刻に今日の調理開始時刻を通知  │
-│                                     │
-│ 食事開始希望時刻                      │
-│ [18] : [00]                         │
-│ ※ 逆算して調理開始時刻を計算          │
-│                                     │
-│ 週間献立完了通知  [● ON ○ OFF]       │
-│ 買い物リスト通知  [● ON ○ OFF]       │
+│ 📋 今週の献立 (compact timeline)      │  ← 新規追加
+│ 2/18 (火) 鶏肉のトマト煮込み ...     │
+│ 2/19 (水) 豚肉の生姜焼き ...        │
+│                      [すべて見る →]  │
 └─────────────────────────────────────┘
+
+✨ 在庫でつくれるレシピ (既存)
+
+🍃 旬のおすすめ (既存)
 ```
 
-- ON/OFF はトグルスイッチ風ボタン
-- 調理開始通知がOFFの場合、通知時刻と食事開始希望時刻はグレーアウト
+- `WeeklyMenuTimeline compact` を「在庫でつくれるレシピ」の上に挿入
+- `[すべて見る →]` は `/weekly-menu` に遷移
 
 ---
 
-### 5-D. App.tsx に PreferencesProvider 追加
+### 8-C. ルーティング追加
 
 **変更ファイル**: `src/App.tsx`
 
 ```typescript
-<AuthProvider>
-  <BrowserRouter>
-    <SyncProvider>
-      <PreferencesProvider>    {/* ← 追加 */}
-        <Routes>...</Routes>
-      </PreferencesProvider>
-    </SyncProvider>
-  </BrowserRouter>
-</AuthProvider>
+// AppLayout 内に追加
+<Route path="weekly-menu" element={<WeeklyMenuPage />} />
+
+// またはフルスクリーンページとして
+<Route path="/weekly-menu" element={<WeeklyMenuPageWrapper />} />
 ```
+
+→ フルスクリーンモーダルスタイル（RecipeDetail と同じパターン）を推奨。
+  BottomNav は Phase 10 でタブ変更時にまとめて修正。
 
 ---
 
-### 5-E. syncManager 拡張（userPreferences 同期）
-
-**変更ファイル**: `src/utils/syncManager.ts`, `src/utils/syncConverters.ts`
-
-`syncAll()` に `userPreferences` の同期を追加（7番目）:
-
-```typescript
-const prefResult = await syncPreferences(userId)
-result.pushed += prefResult.pushed
-result.pulled += prefResult.pulled
-```
-
-**特殊対応**:
-- userPreferences はユーザーごとに1レコードのみ
-- push/pull は単純なupsert（1レコードの比較のみ）
-- `updatedAt` の比較で競合解決（last-write-wins）
-
----
-
-### Phase 5 変更ファイル一覧
+### Phase 8 変更ファイル一覧
 
 | ファイル | 操作 | 内容 |
 |---------|------|------|
-| `src/db/db.ts` | 変更 | UserPreferences型追加, v7にテーブル追加 |
-| `src/lib/database.types.ts` | 変更 | user_preferences テーブル型追加 |
-| `src/contexts/PreferencesContext.tsx` | **新規** | PreferencesProvider |
-| `src/hooks/usePreferences.ts` | **新規** | usePreferences フック |
-| `src/pages/SettingsPage.tsx` | 変更 | カレンダー/献立/通知設定セクション追加 |
-| `src/App.tsx` | 変更 | PreferencesProvider でラップ |
-| `src/utils/syncManager.ts` | 変更 | userPreferences 同期追加 |
-| `src/utils/syncConverters.ts` | 変更 | preferences 変換関数追加 |
+| `src/components/WeeklyMenuTimeline.tsx` | **新規** | タイムラインコンポーネント |
+| `src/pages/HomePage.tsx` | 変更 | compact timeline 追加 |
+| `src/App.tsx` | 変更 | `/weekly-menu` ルート追加 (6-Dでも変更あり) |
 
 ---
 
-## 実装順序（依存関係を考慮）
+## Phase 11: 材料/手順タブ切り替え
 
+### 11-A. RecipeDetail タブUI追加
+
+**変更ファイル**: `src/components/RecipeDetail.tsx`
+
+現在の構成:
 ```
-Step 1: DB スキーマ拡張 (Phase 4 + 5 共通)
-  └─ db.ts v7: calendarEvents + userPreferences テーブル追加
-  └─ database.types.ts: 2テーブルの型追加
-      ↓
-Step 2: Google Calendar API クライアント (Phase 4-B)
-  └─ src/lib/googleCalendar.ts 新規作成
-      ↓
-Step 3: AuthContext 拡張 (Phase 4-A)
-  └─ providerToken 追加, Calendar scopes 追加
-      ↓
-Step 4: PreferencesContext 作成 (Phase 5-B)
-  └─ src/contexts/PreferencesContext.tsx 新規
-  └─ src/hooks/usePreferences.ts 新規
-  └─ App.tsx に PreferencesProvider 追加
-      ↓
-Step 5: CalendarRegistrationModal 作成 (Phase 4-D, 4-E)
-  └─ src/components/CalendarRegistrationModal.tsx 新規
-  └─ RecipeDetail.tsx にカレンダー登録ボタン追加
-      ↓
-Step 6: 家族カレンダー連携 (Phase 4-F)
-  └─ src/utils/familyCalendarUtils.ts 新規
-      ↓
-Step 7: SettingsPage UI拡張 (Phase 5-C)
-  └─ カレンダー設定 / 献立設定 / 通知設定セクション追加
-      ↓
-Step 8: syncManager 拡張 (Phase 4-G + 5-E)
-  └─ calendarEvents + userPreferences の同期追加
-  └─ syncConverters.ts に変換関数追加
-      ↓
-Step 9: ビルド確認 + lint修正
+材料セクション (常に表示)
+塩分計算
+逆算スケジュール
+調理手順 (常に表示)
+メモ
 ```
 
----
+変更後:
+```
+[材料] [手順]  ← タブ切り替え
+├── 材料タブ: 材料テーブル + 買い物リスト
+└── 手順タブ: 調理手順 (rawSteps)
 
-## 設計上の判断ポイント
+塩分計算 (タブ外、常に表示)
+逆算スケジュール (タブ外、常に表示)
+メモ (タブ外、常に表示)
+```
 
-### 1. Google Calendar API アクセス方式
-- **採用**: Supabase OAuth の `provider_token` を使用してREST APIを直接呼び出す
-- **理由**: 追加ライブラリ不要、クライアントサイドで完結
-- **制約**: provider_token は1時間で期限切れ → 再ログインが必要な場合がある
-- **対策**: API呼び出し失敗時に401なら `signInWithGoogle()` を再実行して再認証を促す
+**実装**:
+```typescript
+const [activeTab, setActiveTab] = useState<'ingredients' | 'steps'>('ingredients')
+```
 
-### 2. カレンダーイベントの同期範囲
-- Dexie にはローカルで作成したイベントのみ保存（Google Calendar 側の全イベントは保存しない）
-- 家族カレンダーの予定はキャッシュしない（毎回APIで取得）
+**タブUIデザイン** (既存 CategoryTags スタイル準拠):
+```
+┌───────────────────────────────┐
+│ [材料]  [手順]                 │  ← 選択中はbg-accent, 非選択はbg-bg-card
+└───────────────────────────────┘
+```
 
-### 3. userPreferences のレコード数
-- ユーザーごとに常に1レコード
-- 初回アクセス時に `DEFAULT_PREFERENCES` でレコードを自動作成
-- 同期時は単純な upsert（last-write-wins）
-
-### 4. SettingsPage の肥大化対策
-- 各設定セクションをサブコンポーネントに分割
-  - `CalendarSettings.tsx`（カレンダー設定）
-  - `MealPlanSettings.tsx`（献立設定）
-  - `NotificationSettings.tsx`（通知設定）
-- SettingsPage.tsx はこれらを組み立てるだけ
-
-### 5. 未ログイン時の動作
-- カレンダー設定セクション: 非表示（ログイン必要の旨を表示）
-- 献立設定 / 通知設定: ローカルのみで保存・動作（ログインなしでも使用可能）
-- 同期はログイン時のみ
+**注意**:
+- `rawSteps` がない場合（steps のみのレシピ）はタブを表示しない（従来通りの一体表示）
+- 塩分計算・逆算スケジュール・メモは材料/手順タブの外に残す
+- タブ切り替え時はアニメーションなし（シンプルに切り替え）
 
 ---
 
-## 新規ファイル一覧（Phase 4 + 5 合計）
+### Phase 11 変更ファイル一覧
+
+| ファイル | 操作 | 内容 |
+|---------|------|------|
+| `src/components/RecipeDetail.tsx` | 変更 | タブ切り替えUI + 表示分岐 |
+
+---
+
+## Phase 12: 逆算スケジュール計算ロジック変更
+
+### 12-A. 下ごしらえ時間計算関数
+
+**変更ファイル**: `src/utils/recipeUtils.ts`
+
+```typescript
+/**
+ * 品目数に応じた下ごしらえ時間を計算
+ * 基本時間: 5分 + (品目数 - 1) × 2分
+ */
+export function calculatePrepTime(ingredientCount: number): number {
+  if (ingredientCount <= 0) return 5
+  return 5 + Math.max(0, ingredientCount - 1) * 2
+}
+```
+
+---
+
+### 12-B. 新しいスケジュール計算関数
+
+**変更ファイル**: `src/utils/recipeUtils.ts`
+
+```typescript
+/**
+ * レシピから自動で3ステップ（下ごしらえ→調理→盛り付け）のスケジュールを生成
+ */
+export function calculateAutoSchedule(
+  targetTime: Date,
+  recipe: Recipe
+): ScheduleEntry[] {
+  const prepTime = calculatePrepTime(recipe.ingredients.length)
+  const cookingTime = parseCookingTime(recipe.cookingTime, recipe.totalTimeMinutes)
+  const plateTime = 3  // 盛り付け固定3分
+
+  const steps: CookingStep[] = [
+    { name: '下ごしらえ', durationMinutes: prepTime, isDeviceStep: false },
+    { name: `${deviceLabels[recipe.device]}調理`, durationMinutes: cookingTime, isDeviceStep: true },
+    { name: '盛り付け', durationMinutes: plateTime, isDeviceStep: false },
+  ]
+
+  return calculateSchedule(targetTime, steps)
+}
+
+/**
+ * cookingTime文字列からデバイス調理時間(分)を抽出
+ * 例: "約30分" → 30, "1時間10分" → 70
+ */
+function parseCookingTime(cookingTime: string | undefined, fallback: number): number {
+  if (!cookingTime) return Math.max(fallback - 8, 10)  // fallbackから下ごしらえ+盛り付け分を引く
+
+  const hourMatch = cookingTime.match(/(\d+)時間/)
+  const minMatch = cookingTime.match(/(\d+)分/)
+  const hours = hourMatch ? parseInt(hourMatch[1]) : 0
+  const mins = minMatch ? parseInt(minMatch[1]) : 0
+
+  return hours * 60 + mins || 30  // パース失敗時は30分
+}
+```
+
+---
+
+### 12-C. ScheduleGantt 変更
+
+**変更ファイル**: `src/components/ScheduleGantt.tsx`
+
+**変更点**:
+- props に `recipe: Recipe` を追加（オプション）
+- `recipe` が渡された場合: `calculateAutoSchedule()` を使用（新ロジック）
+- `recipe` が渡されない場合（既存の steps のみ）: 従来通り `calculateSchedule()` を使用
+- 後方互換性を維持
+
+```typescript
+interface ScheduleGanttProps {
+  steps: CookingStep[]
+  recipe?: Recipe          // ← 追加（オプション）
+}
+```
+
+RecipeDetail.tsx 側で `recipe` を渡すよう変更:
+```typescript
+<ScheduleGantt steps={recipe.steps} recipe={recipe} />
+```
+
+---
+
+### Phase 12 変更ファイル一覧
+
+| ファイル | 操作 | 内容 |
+|---------|------|------|
+| `src/utils/recipeUtils.ts` | 変更 | `calculatePrepTime`, `calculateAutoSchedule`, `parseCookingTime` 追加 |
+| `src/components/ScheduleGantt.tsx` | 変更 | `recipe` prop 追加、自動スケジュール計算 |
+| `src/components/RecipeDetail.tsx` | 変更 | ScheduleGantt に `recipe` を渡す |
+
+---
+
+## Phase 10: トップページ統合と改善
+
+### 10-A. BottomNav 4タブ構成
+
+**変更ファイル**: `src/components/BottomNav.tsx`, `src/db/db.ts`
+
+```typescript
+// db.ts — TabId 更新
+export type TabId = 'home' | 'menu' | 'stock' | 'settings'
+
+// BottomNav.tsx
+const tabs = [
+  { id: 'home', path: '/', icon: Home, label: 'ホーム' },
+  { id: 'menu', path: '/weekly-menu', icon: CalendarDays, label: '献立' },
+  { id: 'stock', path: '/stock', icon: Package, label: '在庫' },
+  { id: 'settings', path: '/settings', icon: Settings, label: '設定' },
+]
+```
+
+**削除タブ**: 検索(→ホームに統合), お気に入り(→ホーム内セクション), 履歴(→設定ページ内リンク)
+
+---
+
+### 10-B. HomePage 大幅改修
+
+**変更ファイル**: `src/pages/HomePage.tsx`
+
+**新規ファイル**: `src/components/CategoryGrid.tsx`
+
+**レイアウト**:
+```
+┌─────────────────────────────────────┐
+│ recipy                          ♡   │
+│ 今日は何つくる？                     │
+│                                     │
+│ 🔍 食材・料理名で検索                │  ← SearchBar 統合
+│                                     │
+│ カテゴリ                             │
+│ ┌────┐ ┌────┐ ┌────┐ ┌────┐      │
+│ │ 🍙 │ │ 🍛 │ │ 🥟 │ │ 🌶️ │      │
+│ │和食│ │洋食│ │中華│ │韓国│      │
+│ └────┘ └────┘ └────┘ └────┘      │
+│ ┌────┐ ┌────┐ ┌────┐ ┌────┐      │
+│ │ 🥗 │ │ 🍰 │ │ 🍜 │ │ ⚡ │      │
+│ │サラダ│ │スイーツ│ │スープ│ │時短│      │
+│ └────┘ └────┘ └────┘ └────┘      │
+│                                     │
+│ 📋 今週の献立 (compact timeline)     │  ← Phase 8 で追加済み
+│                                     │
+│ ⚡ 時短レシピ (30分以下)              │  ← 新規
+│ ← [RecipeCard] [RecipeCard] →      │  ← 横スクロール
+│                                     │
+│ 🍃 旬のレシピ                        │  ← 既存を改修
+│ ← [RecipeCard] [RecipeCard] →      │  ← 横スクロール
+│                                     │
+│ ✨ 在庫に基づいたおすすめ             │  ← 既存
+│ ← [RecipeCard] [RecipeCard] →      │  ← 横スクロール
+└─────────────────────────────────────┘
+```
+
+**CategoryGrid コンポーネント**:
+```typescript
+const categories = [
+  { label: '和食', emoji: '🍙', filter: '和食' },
+  { label: '洋食', emoji: '🍛', filter: '洋食' },
+  { label: '中華', emoji: '🥟', filter: '中華' },
+  { label: '韓国', emoji: '🌶️', filter: '韓国' },
+  { label: 'サラダ', emoji: '🥗', filter: 'サラダ' },
+  { label: 'スイーツ', emoji: '🍰', filter: 'デザート' },
+  { label: 'スープ', emoji: '🍜', filter: 'スープ' },
+  { label: '時短', emoji: '⚡', filter: 'quick' },   // 特殊フィルタ: totalTimeMinutes <= 30
+]
+```
+
+- カテゴリタップ → `/search?category=和食` にナビゲート（RecipeList をフィルタ付きで表示）
+- ただし `/search` ルートは AppLayout 内に維持（BottomNav には表示しない、直リンクのみ）
+
+**レシピセクション横スクロール**:
+- `overflow-x-auto flex gap-3` で横スクロール（カード幅: `w-64 shrink-0`）
+- RecipeCard を横長バリエーションで表示（コンパクト版）
+
+---
+
+### 10-C. お気に入り・履歴のアクセス手段
+
+**変更ファイル**: `src/pages/HomePage.tsx`, `src/pages/SettingsPage.tsx`
+
+- ホーム画面のヘッダー右に ♡ アイコン → `/favorites` に遷移
+- 設定ページ内に「閲覧履歴」リンクを追加
+
+---
+
+### 10-D. App.tsx ルーティング変更
+
+**変更ファイル**: `src/App.tsx`
+
+```typescript
+<Route element={<AppLayout />}>
+  <Route index element={<HomePage />} />
+  <Route path="search" element={<SearchPage />} />     // 維持（カテゴリ直リンク用）
+  <Route path="stock" element={<StockManager />} />
+  <Route path="history" element={<HistoryPage />} />    // 維持（設定からのリンク用）
+  <Route path="favorites" element={<FavoritesPage />} /> // 維持（ヘッダーからのリンク用）
+  <Route path="weekly-menu" element={<WeeklyMenuPage />} /> // AppLayout内に移動
+</Route>
+
+// 設定はフルスクリーンから AppLayout内に移動
+<Route path="settings" element={<SettingsPage />} /> // AppLayout内に移動
+```
+
+---
+
+### Phase 10 変更ファイル一覧
+
+| ファイル | 操作 | 内容 |
+|---------|------|------|
+| `src/db/db.ts` | 変更 | TabId 更新 |
+| `src/components/BottomNav.tsx` | 変更 | 4タブ構成 |
+| `src/pages/HomePage.tsx` | 変更 | 検索バー + カテゴリグリッド + 横スクロールセクション |
+| `src/components/CategoryGrid.tsx` | **新規** | 8カテゴリグリッド |
+| `src/App.tsx` | 変更 | ルーティング再構成 |
+| `src/pages/SettingsPage.tsx` | 変更 | 閲覧履歴リンク追加 |
+| `src/components/Header.tsx` | 変更 | お気に入りアイコン追加 |
+
+---
+
+## 全体の実装ステップ
+
+```
+Step 1:  [Phase 6-A]  DB v8 + WeeklyMenu型 + database.types.ts
+Step 2:  [Phase 6-B]  weeklyMenuSelector.ts (ローカル選択アルゴリズム)
+Step 3:  [Phase 6-C]  geminiWeeklyMenu.ts (オプション・Geminiリファイン)
+Step 4:  [Phase 6-E]  weeklyShoppingUtils.ts (買い物リスト集約)
+Step 5:  [Phase 6-F]  weeklyMenuCalendar.ts (カレンダー一括登録)
+Step 6:  [Phase 6-D]  WeeklyMenuPage.tsx (プレビュー/編集)
+Step 7:  [Phase 6-G]  syncManager + syncConverters拡張
+Step 8:  [Phase 6]    App.tsx ルート追加 + ビルド確認
+         ↓
+Step 9:  [Phase 8-A]  WeeklyMenuTimeline.tsx
+Step 10: [Phase 8-B]  HomePage.tsx に compact timeline 追加
+Step 11: [Phase 8]    ビルド確認
+         ↓
+Step 12: [Phase 11]   RecipeDetail.tsx タブ切り替え
+Step 13: [Phase 11]   ビルド確認
+         ↓
+Step 14: [Phase 12-A] recipeUtils.ts に新関数追加
+Step 15: [Phase 12-B] ScheduleGantt.tsx + RecipeDetail.tsx 変更
+Step 16: [Phase 12]   ビルド確認
+         ↓
+Step 17: [Phase 10-A] BottomNav 4タブ + TabId変更
+Step 18: [Phase 10-B] CategoryGrid.tsx + HomePage大幅改修
+Step 19: [Phase 10-C] App.tsx ルーティング再構成
+Step 20: [Phase 10]   ビルド確認 + lint修正
+         ↓
+Step 21: 最終ビルド + コミット + プッシュ
+```
+
+---
+
+## 新規ファイル一覧（Phase 6-12 合計）
 
 | ファイル | Phase | 概要 |
 |---------|-------|------|
-| `src/lib/googleCalendar.ts` | 4 | Google Calendar REST APIクライアント |
-| `src/components/CalendarRegistrationModal.tsx` | 4 | カレンダー登録モーダルUI |
-| `src/utils/familyCalendarUtils.ts` | 4 | 家族カレンダー読み取り・分析 |
-| `src/contexts/PreferencesContext.tsx` | 5 | 設定の状態管理Provider |
-| `src/hooks/usePreferences.ts` | 5 | 設定フック |
-| `src/components/CalendarSettings.tsx` | 5 | カレンダー設定UIセクション |
-| `src/components/MealPlanSettings.tsx` | 5 | 献立設定UIセクション |
-| `src/components/NotificationSettings.tsx` | 5 | 通知設定UIセクション |
+| `src/utils/weeklyMenuSelector.ts` | 6 | ローカル献立選択アルゴリズム |
+| `src/utils/geminiWeeklyMenu.ts` | 6 | Gemini APIリファインメント |
+| `src/pages/WeeklyMenuPage.tsx` | 6 | 週間献立プレビュー/編集ページ |
+| `src/utils/weeklyShoppingUtils.ts` | 6 | 買い物リスト集約ユーティリティ |
+| `src/utils/weeklyMenuCalendar.ts` | 6 | カレンダー一括登録ユーティリティ |
+| `src/components/WeeklyMenuTimeline.tsx` | 8 | 週間献立タイムラインコンポーネント |
+| `src/components/CategoryGrid.tsx` | 10 | 8カテゴリグリッドコンポーネント |
 
-## 変更ファイル一覧（Phase 4 + 5 合計）
+## 変更ファイル一覧（Phase 6-12 合計）
 
 | ファイル | 変更内容 |
 |---------|---------|
-| `src/db/db.ts` | v7スキーマ, CalendarEventRecord型, UserPreferences型 |
-| `src/lib/database.types.ts` | calendar_events, user_preferences テーブル型 |
-| `src/contexts/AuthContext.tsx` | providerToken追加, Calendarスコープ |
-| `src/components/RecipeDetail.tsx` | カレンダー登録ボタン追加 |
-| `src/pages/SettingsPage.tsx` | 3セクション追加(サブコンポーネント化) |
-| `src/App.tsx` | PreferencesProvider追加 |
-| `src/utils/syncManager.ts` | calendarEvents + userPreferences同期 |
-| `src/utils/syncConverters.ts` | 2テーブルの変換関数追加 |
+| `src/db/db.ts` | v8 weeklyMenus, TabId更新 |
+| `src/lib/database.types.ts` | weekly_menus テーブル型 |
+| `src/utils/syncConverters.ts` | weeklyMenu変換関数 |
+| `src/utils/syncManager.ts` | weeklyMenus同期 |
+| `src/utils/recipeUtils.ts` | calculatePrepTime, calculateAutoSchedule, parseCookingTime |
+| `src/components/ScheduleGantt.tsx` | recipe prop追加, 自動スケジュール |
+| `src/components/RecipeDetail.tsx` | タブ切り替え + ScheduleGanttにrecipe渡し |
+| `src/pages/HomePage.tsx` | compact timeline + 検索バー + カテゴリ + 横スクロール |
+| `src/components/BottomNav.tsx` | 4タブ構成 |
+| `src/App.tsx` | ルーティング再構成 |
+| `src/pages/SettingsPage.tsx` | 閲覧履歴リンク |
+| `src/components/Header.tsx` | お気に入りアイコン |

@@ -1,5 +1,5 @@
 import { subMinutes } from 'date-fns'
-import type { Ingredient, SaltMode, SaltResult, CookingStep, ScheduleEntry, RecipeSchedule, DeviceType } from '../db/db'
+import type { Ingredient, SaltMode, SaltResult, CookingStep, ScheduleEntry, RecipeSchedule, DeviceType, Recipe } from '../db/db'
 
 /**
  * Format a quantity with Japanese vibes:
@@ -263,4 +263,63 @@ export function calculateMatchRate(
   if (ingredients.length === 0) return 0
   const matched = ingredients.filter((i) => stockNames.has(i.name)).length
   return Math.round((matched / ingredients.length) * 100)
+}
+
+// ============================================================
+// Phase 12: Auto schedule calculation
+// ============================================================
+
+const autoDeviceLabels: Record<DeviceType, string> = {
+  hotcook: 'ホットクック調理',
+  healsio: 'ヘルシオ調理',
+  manual: '調理',
+}
+
+/**
+ * Calculate prep time based on ingredient count.
+ * Base: 5 min + (count - 1) × 2 min
+ */
+export function calculatePrepTime(ingredientCount: number): number {
+  if (ingredientCount <= 0) return 5
+  return 5 + Math.max(0, ingredientCount - 1) * 2
+}
+
+/**
+ * Parse cookingTime string to minutes.
+ * Examples: "約30分" → 30, "1時間10分" → 70
+ */
+export function parseCookingTime(cookingTime: string | undefined, fallbackTotal: number): number {
+  if (!cookingTime) {
+    // Use fallback total minus estimated prep+plate time
+    return Math.max(fallbackTotal - 8, 10)
+  }
+
+  const hourMatch = cookingTime.match(/(\d+)時間/)
+  const minMatch = cookingTime.match(/(\d+)分/)
+  const hours = hourMatch ? parseInt(hourMatch[1]) : 0
+  const mins = minMatch ? parseInt(minMatch[1]) : 0
+
+  const total = hours * 60 + mins
+  return total > 0 ? total : 30
+}
+
+/**
+ * Generate auto schedule with 3 steps: prep → device cooking → plating.
+ * Uses ingredient count for prep time and cookingTime for device time.
+ */
+export function calculateAutoSchedule(
+  targetTime: Date,
+  recipe: Recipe
+): ScheduleEntry[] {
+  const prepTime = calculatePrepTime(recipe.ingredients.length)
+  const cookingTime = parseCookingTime(recipe.cookingTime, recipe.totalTimeMinutes)
+  const plateTime = 3
+
+  const steps: CookingStep[] = [
+    { name: '下ごしらえ', durationMinutes: prepTime, isDeviceStep: false },
+    { name: autoDeviceLabels[recipe.device], durationMinutes: cookingTime, isDeviceStep: recipe.device !== 'manual' },
+    { name: '盛り付け', durationMinutes: plateTime, isDeviceStep: false },
+  ]
+
+  return calculateSchedule(targetTime, steps)
 }

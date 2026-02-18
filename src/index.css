@@ -46,6 +46,15 @@ body {
   contain-intrinsic-size: auto 88px;
 }
 
+/* Hide scrollbar for horizontal scroll sections */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* iOS auto-zoom prevention: all inputs must be >= 16px */
 input, select, textarea {
   font-size: 16px;

@@ -6,7 +6,7 @@ export type DeviceType = 'hotcook' | 'healsio' | 'manual'
 export type IngredientCategory = 'main' | 'sub'
 export type SaltMode = 0.6 | 0.8 | 1.2
 export type RecipeCategory = 'すべて' | '主菜' | '副菜' | 'スープ' | 'ご飯もの' | 'デザート'
-export type TabId = 'home' | 'search' | 'favorites' | 'stock' | 'history'
+export type TabId = 'home' | 'menu' | 'stock' | 'favorites' | 'history'
 
 export interface Ingredient {
   name: string
@@ -155,6 +155,26 @@ export interface UserPreferences {
   supabaseId?: string
 }
 
+export type WeeklyMenuStatus = 'draft' | 'confirmed' | 'registered'
+
+export interface WeeklyMenuItem {
+  recipeId: number
+  date: string            // 'YYYY-MM-DD'
+  mealType: 'dinner'
+  locked: boolean
+}
+
+export interface WeeklyMenu {
+  id?: number
+  weekStartDate: string   // 'YYYY-MM-DD' (Sunday start)
+  items: WeeklyMenuItem[]
+  shoppingList?: string
+  status: WeeklyMenuStatus
+  createdAt: Date
+  updatedAt: Date
+  supabaseId?: string
+}
+
 export type ViewState =
   | { view: 'list' }
   | { view: 'detail'; recipeId: number }
@@ -171,6 +191,7 @@ class RecipeDB extends Dexie {
   viewHistory!: Table<ViewHistory, number>
   calendarEvents!: Table<CalendarEventRecord, number>
   userPreferences!: Table<UserPreferences, number>
+  weeklyMenus!: Table<WeeklyMenu, number>
 
   constructor() {
     super('RecipeDB')
@@ -223,6 +244,17 @@ class RecipeDB extends Dexie {
       viewHistory: '++id, recipeId, viewedAt, supabaseId',
       calendarEvents: '++id, recipeId, googleEventId, supabaseId',
       userPreferences: '++id, supabaseId',
+    })
+    // v8: Add weeklyMenus table (Phase 6)
+    this.version(8).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
+      stock: '++id, &name, inStock, supabaseId',
+      favorites: '++id, &recipeId, addedAt, supabaseId',
+      userNotes: '++id, &recipeId, updatedAt, supabaseId',
+      viewHistory: '++id, recipeId, viewedAt, supabaseId',
+      calendarEvents: '++id, recipeId, googleEventId, supabaseId',
+      userPreferences: '++id, supabaseId',
+      weeklyMenus: '++id, weekStartDate, supabaseId',
     })
   }
 }

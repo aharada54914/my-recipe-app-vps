@@ -38,6 +38,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   const [showShoppingList, setShowShoppingList] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showCalendarModal, setShowCalendarModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<'ingredients' | 'steps'>('ingredients')
 
   // T-11: Keep screen on during recipe viewing
   useWakeLock()
@@ -178,120 +179,232 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
           />
         </div>
 
-        {/* Ingredients — Table Layout */}
-        <div className="rounded-2xl bg-bg-card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h4 className="text-sm font-bold text-text-secondary">材料</h4>
-            {/* Shopping list button */}
-            <button
-              onClick={() => setShowShoppingList(prev => !prev)}
-              className="flex items-center gap-1 rounded-lg bg-accent/20 px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/30"
-            >
-              <ShoppingCart className="h-3.5 w-3.5" />
-              買い物リスト
-              {missing.length > 0 && (
-                <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-white">
-                  {missing.length}
-                </span>
-              )}
-            </button>
-          </div>
+        {/* Tab switching: Ingredients / Steps */}
+        {recipe.rawSteps && recipe.rawSteps.length > 0 ? (
+          <>
+            {/* Tab buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveTab('ingredients')}
+                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${
+                  activeTab === 'ingredients'
+                    ? 'bg-accent text-white'
+                    : 'bg-bg-card text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                材料
+              </button>
+              <button
+                onClick={() => setActiveTab('steps')}
+                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${
+                  activeTab === 'steps'
+                    ? 'bg-accent text-white'
+                    : 'bg-bg-card text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                手順
+              </button>
+            </div>
 
-          {/* Shopping list panel */}
-          {showShoppingList && (
-            <div className="mb-4 rounded-xl bg-white/5 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-text-secondary">
-                  不足材料 ({missing.length}件)
-                </span>
-                <button
-                  onClick={handleCopyShoppingList}
-                  className="flex items-center gap-1 rounded-lg bg-bg-card px-2 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent"
-                >
-                  {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-                  {copied ? 'コピー済み' : 'LINEに送る'}
-                </button>
+            {/* Tab content */}
+            {activeTab === 'ingredients' ? (
+              <div className="rounded-2xl bg-bg-card p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-text-secondary">材料</h4>
+                  <button
+                    onClick={() => setShowShoppingList(prev => !prev)}
+                    className="flex items-center gap-1 rounded-lg bg-accent/20 px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/30"
+                  >
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                    買い物リスト
+                    {missing.length > 0 && (
+                      <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-white">
+                        {missing.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {showShoppingList && (
+                  <div className="mb-4 rounded-xl bg-white/5 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-medium text-text-secondary">
+                        不足材料 ({missing.length}件)
+                      </span>
+                      <button
+                        onClick={handleCopyShoppingList}
+                        className="flex items-center gap-1 rounded-lg bg-bg-card px-2 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent"
+                      >
+                        {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+                        {copied ? 'コピー済み' : 'LINEに送る'}
+                      </button>
+                    </div>
+                    {missing.length === 0 ? (
+                      <p className="text-xs text-green-400">全ての材料が揃っています！</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {missing.map(ing => (
+                          <li key={ing.name} className="flex justify-between text-xs text-text-secondary">
+                            <span>・{ing.name}</span>
+                            <span>{ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {mainIngredients.length > 0 && (
+                  <div className="mb-3">
+                    <div className="mb-1 text-xs font-medium text-accent">主材料</div>
+                    <table className="w-full">
+                      <tbody>
+                        {mainIngredients.map((ing) => (
+                          <tr key={ing.name} className="border-b border-white/5 last:border-0">
+                            <td className="py-1.5 text-sm">
+                              {ing.name}{ing.optional ? ' (任意)' : ''}
+                            </td>
+                            <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
+                              {formatQuantityVibe(ing.quantity, ing.unit)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {subIngredients.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-xs font-medium text-text-secondary">調味料・その他</div>
+                    <table className="w-full">
+                      <tbody>
+                        {subIngredients.map((ing) => (
+                          <tr key={ing.name} className="border-b border-white/5 last:border-0">
+                            <td className="py-1.5 text-sm">
+                              {ing.name}{ing.optional ? ' (任意)' : ''}
+                            </td>
+                            <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
+                              {formatQuantityVibe(ing.quantity, ing.unit)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              {missing.length === 0 ? (
-                <p className="text-xs text-green-400">✨ 全ての材料が揃っています！</p>
-              ) : (
-                <ul className="space-y-1">
-                  {missing.map(ing => (
-                    <li key={ing.name} className="flex justify-between text-xs text-text-secondary">
-                      <span>・{ing.name}</span>
-                      <span>{ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ''}</span>
-                    </li>
+            ) : (
+              <div className="rounded-2xl bg-bg-card p-4">
+                <h4 className="mb-3 text-sm font-bold text-text-secondary">調理手順</h4>
+                <div className="space-y-3">
+                  {recipe.rawSteps.map((step, i) => (
+                    <div key={i} className="flex items-start gap-3 rounded-xl bg-white/5 p-3">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
+                        {i + 1}
+                      </span>
+                      <span className="flex-1 text-sm leading-relaxed text-text-secondary">{step}</span>
+                    </div>
                   ))}
-                </ul>
-              )}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          /* No rawSteps — show ingredients only (legacy layout) */
+          <div className="rounded-2xl bg-bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-sm font-bold text-text-secondary">材料</h4>
+              <button
+                onClick={() => setShowShoppingList(prev => !prev)}
+                className="flex items-center gap-1 rounded-lg bg-accent/20 px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/30"
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+                買い物リスト
+                {missing.length > 0 && (
+                  <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-white">
+                    {missing.length}
+                  </span>
+                )}
+              </button>
             </div>
-          )}
 
-          {/* Main ingredients table */}
-          {mainIngredients.length > 0 && (
-            <div className="mb-3">
-              <div className="mb-1 text-xs font-medium text-accent">主材料</div>
-              <table className="w-full">
-                <tbody>
-                  {mainIngredients.map((ing) => (
-                    <tr key={ing.name} className="border-b border-white/5 last:border-0">
-                      <td className="py-1.5 text-sm">
-                        {ing.name}{ing.optional ? ' (任意)' : ''}
-                      </td>
-                      <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
-                        {formatQuantityVibe(ing.quantity, ing.unit)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+            {showShoppingList && (
+              <div className="mb-4 rounded-xl bg-white/5 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-text-secondary">
+                    不足材料 ({missing.length}件)
+                  </span>
+                  <button
+                    onClick={handleCopyShoppingList}
+                    className="flex items-center gap-1 rounded-lg bg-bg-card px-2 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent"
+                  >
+                    {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+                    {copied ? 'コピー済み' : 'LINEに送る'}
+                  </button>
+                </div>
+                {missing.length === 0 ? (
+                  <p className="text-xs text-green-400">全ての材料が揃っています！</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {missing.map(ing => (
+                      <li key={ing.name} className="flex justify-between text-xs text-text-secondary">
+                        <span>・{ing.name}</span>
+                        <span>{ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
-          {/* Sub ingredients table */}
-          {subIngredients.length > 0 && (
-            <div>
-              <div className="mb-1 text-xs font-medium text-text-secondary">調味料・その他</div>
-              <table className="w-full">
-                <tbody>
-                  {subIngredients.map((ing) => (
-                    <tr key={ing.name} className="border-b border-white/5 last:border-0">
-                      <td className="py-1.5 text-sm">
-                        {ing.name}{ing.optional ? ' (任意)' : ''}
-                      </td>
-                      <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
-                        {formatQuantityVibe(ing.quantity, ing.unit)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+            {mainIngredients.length > 0 && (
+              <div className="mb-3">
+                <div className="mb-1 text-xs font-medium text-accent">主材料</div>
+                <table className="w-full">
+                  <tbody>
+                    {mainIngredients.map((ing) => (
+                      <tr key={ing.name} className="border-b border-white/5 last:border-0">
+                        <td className="py-1.5 text-sm">
+                          {ing.name}{ing.optional ? ' (任意)' : ''}
+                        </td>
+                        <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
+                          {formatQuantityVibe(ing.quantity, ing.unit)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {subIngredients.length > 0 && (
+              <div>
+                <div className="mb-1 text-xs font-medium text-text-secondary">調味料・その他</div>
+                <table className="w-full">
+                  <tbody>
+                    {subIngredients.map((ing) => (
+                      <tr key={ing.name} className="border-b border-white/5 last:border-0">
+                        <td className="py-1.5 text-sm">
+                          {ing.name}{ing.optional ? ' (任意)' : ''}
+                        </td>
+                        <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
+                          {formatQuantityVibe(ing.quantity, ing.unit)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Salt Calculator */}
         <SaltCalculator totalWeightG={recipe.totalWeightG} />
 
         {/* Schedule */}
-        <ScheduleGantt steps={recipe.steps} />
-
-        {/* Raw Steps — numbered card format, default expanded */}
-        {recipe.rawSteps && recipe.rawSteps.length > 0 && (
-          <div className="rounded-2xl bg-bg-card p-4">
-            <h4 className="mb-3 text-sm font-bold text-text-secondary">📋 調理手順</h4>
-            <div className="space-y-3">
-              {recipe.rawSteps.map((step, i) => (
-                <div key={i} className="flex items-start gap-3 rounded-xl bg-white/5 p-3">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 text-sm leading-relaxed text-text-secondary">{step}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <ScheduleGantt steps={recipe.steps} recipe={recipe} />
 
         {/* Personal Notes */}
         <div className="rounded-2xl bg-bg-card p-4">

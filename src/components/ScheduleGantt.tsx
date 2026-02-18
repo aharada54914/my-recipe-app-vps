@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react'
 import { format, addMinutes } from 'date-fns'
-import type { CookingStep } from '../db/db'
-import { calculateSchedule } from '../utils/recipeUtils'
+import type { CookingStep, Recipe } from '../db/db'
+import { calculateSchedule, calculateAutoSchedule } from '../utils/recipeUtils'
 
 interface ScheduleGanttProps {
   steps: CookingStep[]
+  recipe?: Recipe
 }
 
 function roundToNext15(date: Date): Date {
@@ -12,13 +13,23 @@ function roundToNext15(date: Date): Date {
   return new Date(Math.ceil(date.getTime() / ms) * ms)
 }
 
-export function ScheduleGantt({ steps }: ScheduleGanttProps) {
+export function ScheduleGantt({ steps, recipe }: ScheduleGanttProps) {
   const [targetTime, setTargetTime] = useState(() => roundToNext15(addMinutes(new Date(), 60)))
 
   const schedule = useMemo(
-    () => calculateSchedule(targetTime, steps),
-    [targetTime, steps]
+    () => recipe ? calculateAutoSchedule(targetTime, recipe) : calculateSchedule(targetTime, steps),
+    [targetTime, steps, recipe]
   )
+
+  // Use auto-generated step durations when recipe is provided
+  const displaySteps = useMemo(() => {
+    if (!recipe) return steps
+    return schedule.map(entry => ({
+      name: entry.name,
+      durationMinutes: Math.round((entry.end.getTime() - entry.start.getTime()) / 60000),
+      isDeviceStep: entry.isDeviceStep,
+    }))
+  }, [recipe, steps, schedule])
 
   const adjustTime = (delta: number) => {
     setTargetTime((prev) => addMinutes(prev, delta))
@@ -78,7 +89,7 @@ export function ScheduleGantt({ steps }: ScheduleGanttProps) {
             >
               <div className="flex items-center justify-between">
                 <span>{entry.name}</span>
-                <span className="ml-2 opacity-60">{steps[i].durationMinutes}分</span>
+                <span className="ml-2 opacity-60">{displaySteps[i]?.durationMinutes ?? 0}分</span>
               </div>
               <div className="mt-0.5 text-[10px] opacity-40">
                 {format(entry.start, 'HH:mm')} → {format(entry.end, 'HH:mm')}
