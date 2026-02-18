@@ -1,14 +1,19 @@
-import { useState, useRef, useCallback, useTransition, useDeferredValue, useMemo } from 'react'
+import { useState, useRef, useCallback, useTransition, useDeferredValue, useMemo, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useSearchParams } from 'react-router-dom'
 import { db } from '../db/db'
-import type { RecipeCategory } from '../db/db'
+import type { RecipeCategory, DeviceType } from '../db/db'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { searchRecipes } from '../utils/searchUtils'
 import { useDebounce } from '../hooks/useDebounce'
+import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { SearchBar } from './SearchBar'
 import { CategoryTags } from './CategoryTags'
 import { RecipeCard } from './RecipeCard'
+
+const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', 'ご飯もの', 'デザート']
+const seasonalIngredients = getCurrentSeasonalIngredients()
 
 interface RecipeListProps {
   onSelectRecipe: (id: number) => void
@@ -17,6 +22,10 @@ interface RecipeListProps {
 export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<RecipeCategory>('すべて')
+  const [deviceFilter, setDeviceFilter] = useState<DeviceType | null>(null)
+  const [quickFilter, setQuickFilter] = useState(false)
+  const [seasonalFilter, setSeasonalFilter] = useState(false)
+
   const debouncedSearch = useDebounce(search, 300)
   // T-22: useDeferredValue defers re-renders during rapid input
   const deferredSearch = useDeferredValue(debouncedSearch)
@@ -24,30 +33,81 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   // T-22: useTransition marks filtering as non-urgent so input stays responsive
   const [isPending] = useTransition()
 
+  // Read URL ?filter= param and initialize state
+  const [searchParams] = useSearchParams()
+  const filterParam = searchParams.get('filter') ?? ''
+
+  useEffect(() => {
+    if (filterParam.startsWith('device:')) {
+      const device = filterParam.replace('device:', '') as DeviceType
+      setDeviceFilter(device)
+      setCategory('すべて')
+      setQuickFilter(false)
+      setSeasonalFilter(false)
+    } else if (filterParam === 'quick') {
+      setQuickFilter(true)
+      setCategory('すべて')
+      setDeviceFilter(null)
+      setSeasonalFilter(false)
+    } else if (filterParam === 'seasonal') {
+      setSeasonalFilter(true)
+      setCategory('すべて')
+      setDeviceFilter(null)
+      setQuickFilter(false)
+    } else if (filterParam && (RECIPE_CATEGORIES as string[]).includes(filterParam)) {
+      setCategory(filterParam as RecipeCategory)
+      setDeviceFilter(null)
+      setQuickFilter(false)
+      setSeasonalFilter(false)
+    }
+  }, [filterParam])
+
   const PAGE_SIZE = 200
 
   // T-03: DB-side filtering with combined query (T-09)
   const data = useLiveQuery(
     async () => {
+      let recipesQuery
+      if (deviceFilter) {
+        recipesQuery = db.recipes.where('device').equals(deviceFilter).limit(PAGE_SIZE)
+      } else if (category !== 'すべて') {
+        recipesQuery = db.recipes.where('category').equals(category).limit(PAGE_SIZE)
+      } else {
+        recipesQuery = db.recipes.limit(PAGE_SIZE)
+      }
+
       const [recipes, stockItems] = await Promise.all([
-        category !== 'すべて'
-          ? db.recipes.where('category').equals(category).limit(PAGE_SIZE).toArray()
-          : db.recipes.limit(PAGE_SIZE).toArray(),
+        recipesQuery.toArray(),
         db.stock.filter(item => item.inStock).toArray(),
       ])
       return { recipes, stockItems }
     },
-    [category],
+    [category, deviceFilter],
     { recipes: [], stockItems: [] }
   )
 
   const stockNames = useMemo(() => new Set(data.stockItems.map((s) => s.name)), [data.stockItems])
 
-  // T-01 + T-22: Fuzzy search wrapped in transition for smooth typing
+  // T-01 + T-22: Fuzzy search + filters wrapped in transition for smooth typing
   const withRates = useMemo(() => {
-    const filtered = deferredSearch
+    let filtered = deferredSearch
       ? searchRecipes(data.recipes, deferredSearch)
       : data.recipes
+
+    // JS-side filters (no DB index available for these)
+    if (quickFilter) {
+      filtered = filtered.filter((r) => r.totalTimeMinutes <= 30)
+    }
+    if (seasonalFilter) {
+      filtered = filtered.filter(
+        (r) =>
+          !isHelsioDeli(r) &&
+          r.ingredients.some((ing) =>
+            seasonalIngredients.some((s) => ing.name.includes(s))
+          )
+      )
+    }
+
     return filtered
       .map((r) => ({
         recipe: r,
@@ -59,7 +119,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         if (a.isDeli !== b.isDeli) return a.isDeli ? 1 : -1
         return b.matchRate - a.matchRate
       })
-  }, [data.recipes, deferredSearch, stockNames])
+  }, [data.recipes, deferredSearch, stockNames, quickFilter, seasonalFilter])
 
   // T-04: Virtual scrolling
   const virtualizer = useVirtualizer({
@@ -74,10 +134,44 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     [onSelectRecipe]
   )
 
+  // When user picks a category tag, clear device/quick/seasonal filters
+  const handleCategorySelect = useCallback((cat: RecipeCategory) => {
+    setCategory(cat)
+    setDeviceFilter(null)
+    setQuickFilter(false)
+    setSeasonalFilter(false)
+  }, [])
+
+  // Active filter label for display
+  const activeFilterLabel = deviceFilter
+    ? deviceFilter === 'hotcook' ? 'ホットクック' : 'ヘルシオ'
+    : quickFilter ? '時短 (30分以内)'
+    : seasonalFilter ? '旬のレシピ'
+    : null
+
   return (
     <>
       <SearchBar value={search} onChange={setSearch} />
-      <CategoryTags selected={category} onSelect={setCategory} />
+      <CategoryTags selected={category} onSelect={handleCategorySelect} />
+
+      {/* Active special filter badge */}
+      {activeFilterLabel && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="rounded-xl bg-accent/20 px-3 py-1 text-sm font-medium text-accent">
+            {activeFilterLabel}
+          </span>
+          <button
+            onClick={() => {
+              setDeviceFilter(null)
+              setQuickFilter(false)
+              setSeasonalFilter(false)
+            }}
+            className="text-xs text-text-secondary hover:text-accent"
+          >
+            ✕ 解除
+          </button>
+        </div>
+      )}
 
       {withRates.length === 0 ? (
         <p className="py-12 text-center text-sm text-text-secondary">

@@ -24,8 +24,9 @@ export function BottomNav() {
               key={id}
               onClick={() => navigate(path)}
               aria-label={label}
-              className={`flex flex-col items-center gap-1 px-3 py-1 transition-colors ${isActive ? 'text-accent' : 'text-text-secondary hover:text-accent'
-                }`}
+              className={`flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-1 px-3 py-1 transition-all duration-150 active:scale-90 ${
+                isActive ? 'text-accent' : 'text-text-secondary hover:text-accent'
+              }`}
             >
               <Icon className="h-5 w-5" />
               <span className="text-[10px]">{label}</span>

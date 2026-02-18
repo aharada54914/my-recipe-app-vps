@@ -1,5 +1,6 @@
 import { subMinutes } from 'date-fns'
 import type { Ingredient, SaltMode, SaltResult, CookingStep, ScheduleEntry, RecipeSchedule, DeviceType, Recipe } from '../db/db'
+import { resolveIngredientName } from '../data/ingredientVariants'
 
 /**
  * Format a quantity with Japanese vibes:
@@ -255,13 +256,17 @@ export function isHelsioDeli(recipe: { title: string; rawSteps?: string[] }): bo
 /**
  * Calculate ingredient match rate based on stock.
  * Considers all ingredients (not just 'main' category).
+ * Uses resolveIngredientName to handle 表記ゆれ (name variants).
  */
 export function calculateMatchRate(
   ingredients: Ingredient[],
   stockNames: Set<string>
 ): number {
   if (ingredients.length === 0) return 0
-  const matched = ingredients.filter((i) => stockNames.has(i.name)).length
+  const matched = ingredients.filter((i) => {
+    const canonical = resolveIngredientName(i.name)
+    return stockNames.has(canonical) || stockNames.has(i.name)
+  }).length
   return Math.round((matched / ingredients.length) * 100)
 }
 

@@ -38,11 +38,12 @@ export function FavoritesPage() {
                     お気に入りに登録されたレシピはありません
                 </p>
             ) : (
-                <div className="grid gap-2">
+                <div className="grid grid-cols-2 gap-3">
                     {recipes.map((recipe) => (
                         <RecipeCard
                             key={recipe.id}
                             recipe={recipe}
+                            variant="grid"
                             matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
                             onClick={() => navigate(`/recipe/${recipe.id}`)}
                         />

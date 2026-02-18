@@ -13,6 +13,7 @@ interface RecipeCardProps {
   recipe: Recipe
   matchRate?: number
   onClick: () => void
+  variant?: 'list' | 'grid'
 }
 
 // T-08: React.memo to prevent unnecessary re-renders
@@ -20,7 +21,54 @@ export const RecipeCard = memo(function RecipeCard({
   recipe,
   matchRate,
   onClick,
+  variant = 'list',
 }: RecipeCardProps) {
+  if (variant === 'grid') {
+    return (
+      <button
+        onClick={onClick}
+        className="recipe-card-grid w-full overflow-hidden rounded-2xl bg-bg-card text-left transition-colors active:scale-[0.97] hover:bg-bg-card-hover"
+      >
+        {/* Image */}
+        <RecipeImage
+          recipe={recipe}
+          placeholderHeight="h-28"
+          className="w-full rounded-none rounded-t-2xl"
+        />
+        {/* Content */}
+        <div className="p-3">
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className="inline-block rounded-md bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+              {deviceLabels[recipe.device]}
+            </span>
+          </div>
+          <h3 className="mb-2 line-clamp-2 text-sm font-bold leading-snug">
+            {recipe.title}
+          </h3>
+          <div className="flex items-center gap-2 text-xs text-text-secondary">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {recipe.totalTimeMinutes}分
+            </span>
+            {matchRate !== undefined && (
+              <span
+                className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${matchRate >= 80
+                    ? 'bg-green-500/20 text-green-400'
+                    : matchRate >= 50
+                      ? 'bg-yellow-500/20 text-yellow-400'
+                      : 'bg-white/5 text-text-secondary'
+                  }`}
+              >
+                在庫 {matchRate}%
+              </span>
+            )}
+          </div>
+        </div>
+      </button>
+    )
+  }
+
+  // Default: list variant
   return (
     <button
       onClick={onClick}

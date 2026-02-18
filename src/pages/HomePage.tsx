@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { Search, Leaf, Sparkles, ChevronRight } from 'lucide-react'
@@ -10,6 +10,8 @@ import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { getLocalRecommendations } from '../utils/geminiRecommender'
 import { WeeklyMenuTimeline } from '../components/WeeklyMenuTimeline'
 import { CategoryGrid } from '../components/CategoryGrid'
+import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
@@ -19,11 +21,11 @@ function findSeasonalRecipes(recipes: Recipe[]): Recipe[] {
     r.ingredients.some((ing) =>
       seasonalIngredients.some((s) => ing.name.includes(s))
     )
-  ).slice(0, 10)
+  ).slice(0, 6)
 }
 
-/** Horizontal scroll section with a "more" link */
-function HorizontalRecipeSection({
+/** 2-column tile grid section with a "more" link */
+function TwoColRecipeSection({
   icon,
   title,
   recipes,
@@ -40,8 +42,6 @@ function HorizontalRecipeSection({
   onMore?: () => void
   onSelect: (id: number) => void
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-
   return (
     <div className="mb-6">
       <div className="mb-3 flex items-center justify-between">
@@ -60,20 +60,17 @@ function HorizontalRecipeSection({
         )}
       </div>
 
-      <div
-        ref={scrollRef}
-        className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide"
-      >
+      <div className="grid grid-cols-2 gap-3">
         {recipes.map((recipe) => {
           const mr = matchRates?.get(recipe.id!) ?? calculateMatchRate(recipe.ingredients, stockNames)
           return (
-            <div key={recipe.id} className="w-[260px] flex-shrink-0">
-              <RecipeCard
-                recipe={recipe}
-                matchRate={mr}
-                onClick={() => onSelect(recipe.id!)}
-              />
-            </div>
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              variant="grid"
+              matchRate={mr}
+              onClick={() => onSelect(recipe.id!)}
+            />
           )
         })}
       </div>
@@ -83,6 +80,7 @@ function HorizontalRecipeSection({
 
 export function HomePage() {
   const navigate = useNavigate()
+  const { user, signInWithGoogle, loading: authLoading } = useAuth()
   const [recommendations, setRecommendations] = useState<{ recipe: Recipe; matchRate: number }[]>([])
 
   const data = useLiveQuery(async () => {
@@ -110,9 +108,12 @@ export function HomePage() {
 
   const { seasonal, stockNames } = data
 
-  // Only show recommendations when stock exists; avoids synchronous setState in effect
+  // Only show recommendations when stock exists
   const displayRecs = data.hasStock ? recommendations : []
   const recMatchRates = new Map(displayRecs.map(r => [r.recipe.id!, r.matchRate]))
+
+  // Show login banner when Supabase is configured and user is not logged in
+  const showLoginBanner = !!supabase && !authLoading && !user
 
   return (
     <div>
@@ -125,6 +126,22 @@ export function HomePage() {
         <span className="text-sm text-text-secondary">レシピを検索...</span>
       </button>
 
+      {/* Login banner — non-intrusive, only when not logged in */}
+      {showLoginBanner && (
+        <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-bg-card px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">クラウド同期を有効にする</p>
+            <p className="text-xs text-text-secondary">どのデバイスでも同じデータを利用</p>
+          </div>
+          <button
+            onClick={signInWithGoogle}
+            className="min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white transition-transform active:scale-95"
+          >
+            ログイン
+          </button>
+        </div>
+      )}
+
       {/* Category grid */}
       <div className="mb-6">
         <CategoryGrid />
@@ -135,9 +152,9 @@ export function HomePage() {
         <WeeklyMenuTimeline compact />
       </div>
 
-      {/* Stock-based recommendations — horizontal scroll */}
+      {/* Stock-based recommendations — 2-column grid */}
       {displayRecs.length > 0 && (
-        <HorizontalRecipeSection
+        <TwoColRecipeSection
           icon={<Sparkles className="h-5 w-5 text-accent" />}
           title="在庫でつくれるレシピ"
           recipes={displayRecs.map(r => r.recipe)}
@@ -147,7 +164,7 @@ export function HomePage() {
         />
       )}
 
-      {/* Seasonal recipes — horizontal scroll */}
+      {/* Seasonal recipes — 2-column grid */}
       {seasonal.length > 0 && (
         <>
           <div className="mb-3 flex flex-wrap gap-1.5">
@@ -160,7 +177,7 @@ export function HomePage() {
               </span>
             ))}
           </div>
-          <HorizontalRecipeSection
+          <TwoColRecipeSection
             icon={<Leaf className="h-5 w-5 text-green-400" />}
             title="旬のおすすめ"
             recipes={seasonal}

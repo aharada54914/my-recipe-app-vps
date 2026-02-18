@@ -1,5 +1,8 @@
 import { Search, Sparkles, CalendarClock, Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { ForkKnifeIcon } from './ForkKnifeIcon'
+import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 
 interface HeaderProps {
   onSearchToggle?: () => void
@@ -9,6 +12,9 @@ interface HeaderProps {
 }
 
 export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings }: HeaderProps) {
+  const { user, signInWithGoogle } = useAuth()
+  const navigate = useNavigate()
+
   return (
     <header className="px-4 pt-6 pb-4">
       <div className="flex items-center justify-between">
@@ -35,15 +41,6 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
               <CalendarClock className="h-5 w-5 text-text-secondary" />
             </button>
           )}
-          {onSettings && (
-            <button
-              onClick={onSettings}
-              aria-label="設定"
-              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
-            >
-              <Settings className="h-5 w-5 text-text-secondary" />
-            </button>
-          )}
           {onSearchToggle && (
             <button
               onClick={onSearchToggle}
@@ -52,6 +49,40 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
             >
               <Search className="h-5 w-5 text-text-secondary" />
             </button>
+          )}
+
+          {/* Auth badge — visible only when Supabase is configured */}
+          {supabase ? (
+            user ? (
+              /* Logged in: avatar initial links to Settings */
+              <button
+                onClick={() => navigate('/settings')}
+                aria-label="アカウント設定"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-bold text-white transition-transform active:scale-90"
+              >
+                {user.email?.[0]?.toUpperCase() ?? '?'}
+              </button>
+            ) : (
+              /* Logged out: prominent Login button */
+              <button
+                onClick={signInWithGoogle}
+                aria-label="Googleでログイン"
+                className="min-h-[44px] rounded-xl bg-accent px-3 py-1 text-xs font-bold text-white transition-transform active:scale-95"
+              >
+                ログイン
+              </button>
+            )
+          ) : (
+            /* Supabase not configured: show settings gear */
+            onSettings && (
+              <button
+                onClick={onSettings}
+                aria-label="設定"
+                className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+              >
+                <Settings className="h-5 w-5 text-text-secondary" />
+              </button>
+            )
           )}
         </div>
       </div>

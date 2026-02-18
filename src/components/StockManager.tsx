@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Search } from 'lucide-react'
 import { db } from '../db/db'
 import { useDebounce } from '../hooks/useDebounce'
 import { expandSynonyms } from '../data/synonyms'
-import { buildIngredientIndex, type IngredientInfo } from '../utils/ingredientIndex'
+import { STOCK_MASTER } from '../data/stockMaster'
+
+// Build the ingredient list from STOCK_MASTER, sorted 50音順
+const INGREDIENT_INDEX = [...STOCK_MASTER]
+  .map((item) => ({ name: item.name, defaultUnit: item.unit }))
+  .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
 
 function StockRow({
   name,
@@ -18,7 +23,7 @@ function StockRow({
   onUpdateQuantity: (quantity: number) => void
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-[#1a1a1c] px-4 py-3">
+    <div className="flex items-center gap-2 rounded-xl bg-bg-card px-4 py-3">
       <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
         {name}
       </span>
@@ -41,16 +46,10 @@ function StockRow({
 }
 
 export function StockManager() {
-  const [index, setIndex] = useState<IngredientInfo[] | null>(null)
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebounce(query, 300)
 
   const stockItems = useLiveQuery(() => db.stock.toArray())
-
-  // Build ingredient index from recipe DB on mount
-  useEffect(() => {
-    buildIngredientIndex().then(setIndex)
-  }, [])
 
   const handleUpdateQuantity = async (name: string, unit: string, quantity: number) => {
     const existing = await db.stock.where('name').equals(name).first()
@@ -61,36 +60,43 @@ export function StockManager() {
     }
   }
 
-  if (!index || !stockItems) return null
-
   // Build a map of current stock quantities
-  const stockMap = new Map(stockItems.map(s => [s.name, s]))
+  const stockMap = useMemo(
+    () => new Map((stockItems ?? []).map((s) => [s.name, s])),
+    [stockItems]
+  )
 
-  // Items with quantity > 0, sorted in 50音順
-  const inStockItems = index
-    .filter(ing => {
-      const s = stockMap.get(ing.name)
-      return s && s.quantity && s.quantity > 0
-    })
-    .map(ing => ({
-      ...ing,
-      quantity: stockMap.get(ing.name)!.quantity!,
-    }))
+  // Items with quantity > 0, sorted 50音順
+  const inStockItems = useMemo(
+    () =>
+      INGREDIENT_INDEX.filter((ing) => {
+        const s = stockMap.get(ing.name)
+        return s && s.quantity && s.quantity > 0
+      }).map((ing) => ({
+        ...ing,
+        quantity: stockMap.get(ing.name)!.quantity!,
+      })),
+    [stockMap]
+  )
 
   // Search results: filter by debounced query, exclude already-stocked items
-  const inStockNames = new Set(inStockItems.map(i => i.name))
-  let searchResults: IngredientInfo[] = []
+  const inStockNames = useMemo(() => new Set(inStockItems.map((i) => i.name)), [inStockItems])
 
-  if (debouncedQuery.trim()) {
+  const searchResults = useMemo(() => {
+    if (!debouncedQuery.trim()) return []
     const synonyms = expandSynonyms(debouncedQuery.trim())
-    searchResults = index.filter(ing => {
+    return INGREDIENT_INDEX.filter((ing) => {
       if (inStockNames.has(ing.name)) return false
       const nameLower = ing.name.toLowerCase()
-      return synonyms.some(syn =>
-        nameLower.includes(syn.toLowerCase()) || syn.toLowerCase().includes(nameLower)
+      return synonyms.some(
+        (syn) =>
+          nameLower.includes(syn.toLowerCase()) ||
+          syn.toLowerCase().includes(nameLower)
       )
     })
-  }
+  }, [debouncedQuery, inStockNames])
+
+  if (!stockItems) return null
 
   return (
     <div>
@@ -113,7 +119,7 @@ export function StockManager() {
         <div className="mb-6">
           <h3 className="mb-2 text-xs font-bold text-text-secondary">在庫あり ({inStockItems.length})</h3>
           <div className="space-y-2">
-            {inStockItems.map(item => (
+            {inStockItems.map((item) => (
               <StockRow
                 key={item.name}
                 name={item.name}
@@ -131,7 +137,7 @@ export function StockManager() {
         <div>
           <h3 className="mb-2 text-xs font-bold text-text-secondary">検索結果 ({searchResults.length})</h3>
           <div className="space-y-2">
-            {searchResults.map(ing => (
+            {searchResults.map((ing) => (
               <StockRow
                 key={ing.name}
                 name={ing.name}

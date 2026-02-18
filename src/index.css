@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  /* Design tokens — actual values set via :root below */
   --color-bg-primary: #121214;
   --color-bg-card: rgba(255, 255, 255, 0.05);
   --color-bg-card-hover: rgba(255, 255, 255, 0.08);
@@ -9,6 +10,20 @@
   --color-text-primary: rgba(255, 255, 255, 0.92);
   --color-text-secondary: rgba(255, 255, 255, 0.55);
   --color-border: rgba(255, 255, 255, 0.1);
+}
+
+/* Light mode: override theme tokens */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg-primary: #F8F9FA;
+    --color-bg-card: #FFFFFF;
+    --color-bg-card-hover: #F0F0F0;
+    --color-accent: #F57C00;
+    --color-accent-hover: #E65100;
+    --color-text-primary: #212121;
+    --color-text-secondary: #757575;
+    --color-border: rgba(0, 0, 0, 0.12);
+  }
 }
 
 /* T-17: iOS 100vh fix + safe-area support */
@@ -39,11 +54,16 @@ body {
   padding-right: var(--sar);
 }
 
-/* T-08: CSS Containment for RecipeCard */
+/* T-08: CSS Containment for RecipeCard (list mode) */
 .recipe-card {
   contain: layout style paint;
   content-visibility: auto;
   contain-intrinsic-size: auto 88px;
+}
+
+/* Grid mode cards: no fixed intrinsic-size (height varies with content) */
+.recipe-card-grid {
+  contain: layout style paint;
 }
 
 /* Hide scrollbar for horizontal scroll sections */
