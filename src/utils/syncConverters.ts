@@ -3,7 +3,7 @@
  * Each table has toCloud() and fromCloud() converters.
  */
 
-import type { Recipe, StockItem, Favorite, UserNote, ViewHistory } from '../db/db'
+import type { Recipe, StockItem, Favorite, UserNote, ViewHistory, CalendarEventRecord, UserPreferences } from '../db/db'
 import type { Database } from '../lib/database.types'
 
 // --- Type aliases for brevity ---
@@ -17,6 +17,10 @@ type UserNoteRow = Database['public']['Tables']['user_notes']['Row']
 type UserNoteInsert = Database['public']['Tables']['user_notes']['Insert']
 type ViewHistoryRow = Database['public']['Tables']['view_history']['Row']
 type ViewHistoryInsert = Database['public']['Tables']['view_history']['Insert']
+type CalendarEventRow = Database['public']['Tables']['calendar_events']['Row']
+type CalendarEventInsert = Database['public']['Tables']['calendar_events']['Insert']
+type UserPreferencesRow = Database['public']['Tables']['user_preferences']['Row']
+type UserPreferencesInsert = Database['public']['Tables']['user_preferences']['Insert']
 
 // ============================================================
 // recipes
@@ -180,6 +184,106 @@ export function viewHistoryFromCloud(
   return {
     recipeId: localRecipeId,
     viewedAt: new Date(row.viewed_at),
+    supabaseId: row.id,
+  }
+}
+
+// ============================================================
+// calendarEvents
+// ============================================================
+
+export function calendarEventToCloud(
+  item: CalendarEventRecord,
+  userId: string,
+  recipeSupabaseId: string,
+): CalendarEventInsert {
+  return {
+    id: item.supabaseId ?? undefined,
+    user_id: userId,
+    recipe_id: recipeSupabaseId,
+    google_event_id: item.googleEventId,
+    calendar_id: item.calendarId,
+    event_type: item.eventType,
+    start_time: item.startTime.toISOString(),
+    end_time: item.endTime.toISOString(),
+  }
+}
+
+export function calendarEventFromCloud(
+  row: CalendarEventRow,
+  localRecipeId: number,
+): Omit<CalendarEventRecord, 'id'> {
+  return {
+    recipeId: localRecipeId,
+    googleEventId: row.google_event_id,
+    calendarId: row.calendar_id,
+    eventType: row.event_type as CalendarEventRecord['eventType'],
+    startTime: new Date(row.start_time),
+    endTime: new Date(row.end_time),
+    createdAt: new Date(row.created_at),
+    supabaseId: row.id,
+  }
+}
+
+// ============================================================
+// userPreferences
+// ============================================================
+
+export function userPreferencesToCloud(
+  prefs: UserPreferences,
+  userId: string,
+): UserPreferencesInsert {
+  return {
+    id: prefs.supabaseId ?? undefined,
+    user_id: userId,
+    family_calendar_id: prefs.familyCalendarId ?? null,
+    meal_start_hour: prefs.mealStartHour,
+    meal_start_minute: prefs.mealStartMinute,
+    meal_end_hour: prefs.mealEndHour,
+    meal_end_minute: prefs.mealEndMinute,
+    default_calendar_id: prefs.defaultCalendarId ?? null,
+    weekly_menu_generation_day: prefs.weeklyMenuGenerationDay,
+    weekly_menu_generation_hour: prefs.weeklyMenuGenerationHour,
+    weekly_menu_generation_minute: prefs.weeklyMenuGenerationMinute,
+    shopping_list_hour: prefs.shoppingListHour,
+    shopping_list_minute: prefs.shoppingListMinute,
+    seasonal_priority: prefs.seasonalPriority,
+    user_prompt: prefs.userPrompt,
+    notify_weekly_menu_done: prefs.notifyWeeklyMenuDone,
+    notify_shopping_list_done: prefs.notifyShoppingListDone,
+    cooking_notify_enabled: prefs.cookingNotifyEnabled,
+    cooking_notify_hour: prefs.cookingNotifyHour,
+    cooking_notify_minute: prefs.cookingNotifyMinute,
+    desired_meal_hour: prefs.desiredMealHour,
+    desired_meal_minute: prefs.desiredMealMinute,
+  }
+}
+
+export function userPreferencesFromCloud(
+  row: UserPreferencesRow,
+): Omit<UserPreferences, 'id'> {
+  return {
+    familyCalendarId: row.family_calendar_id ?? undefined,
+    mealStartHour: row.meal_start_hour,
+    mealStartMinute: row.meal_start_minute,
+    mealEndHour: row.meal_end_hour,
+    mealEndMinute: row.meal_end_minute,
+    defaultCalendarId: row.default_calendar_id ?? undefined,
+    weeklyMenuGenerationDay: row.weekly_menu_generation_day,
+    weeklyMenuGenerationHour: row.weekly_menu_generation_hour,
+    weeklyMenuGenerationMinute: row.weekly_menu_generation_minute,
+    shoppingListHour: row.shopping_list_hour,
+    shoppingListMinute: row.shopping_list_minute,
+    seasonalPriority: row.seasonal_priority as UserPreferences['seasonalPriority'],
+    userPrompt: row.user_prompt,
+    notifyWeeklyMenuDone: row.notify_weekly_menu_done,
+    notifyShoppingListDone: row.notify_shopping_list_done,
+    cookingNotifyEnabled: row.cooking_notify_enabled,
+    cookingNotifyHour: row.cooking_notify_hour,
+    cookingNotifyMinute: row.cooking_notify_minute,
+    desiredMealHour: row.desired_meal_hour,
+    desiredMealMinute: row.desired_meal_minute,
+    updatedAt: new Date(row.updated_at),
     supabaseId: row.id,
   }
 }

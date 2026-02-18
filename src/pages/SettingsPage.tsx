@@ -5,6 +5,9 @@ import { importData, type ImportMode } from '../utils/dataImport'
 import { useAuth } from '../hooks/useAuth'
 import { useSync } from '../hooks/useSync'
 import { supabase } from '../lib/supabase'
+import { CalendarSettings } from '../components/CalendarSettings'
+import { MealPlanSettings } from '../components/MealPlanSettings'
+import { NotificationSettings } from '../components/NotificationSettings'
 
 function formatTimeAgo(date: Date): string {
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -191,6 +194,15 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                         )}
                     </div>
                 )}
+
+                {/* Calendar Settings */}
+                <CalendarSettings />
+
+                {/* Meal Plan Settings */}
+                <MealPlanSettings />
+
+                {/* Notification Settings */}
+                <NotificationSettings />
 
                 {/* API Key Section */}
                 <div className="rounded-2xl bg-bg-card p-4">

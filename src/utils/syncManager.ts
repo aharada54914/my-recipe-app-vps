@@ -12,7 +12,7 @@
  * Conflict resolution: last-write-wins based on updated_at / added_at.
  */
 
-import { db, type Recipe, type StockItem, type Favorite, type UserNote, type ViewHistory } from '../db/db'
+import { db, type Recipe, type StockItem, type Favorite, type UserNote, type ViewHistory, type CalendarEventRecord } from '../db/db'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../lib/database.types'
 import {
@@ -21,6 +21,8 @@ import {
   favoriteToCloud, favoriteFromCloud,
   userNoteToCloud, userNoteFromCloud,
   viewHistoryToCloud, viewHistoryFromCloud,
+  calendarEventToCloud, calendarEventFromCloud,
+  userPreferencesToCloud, userPreferencesFromCloud,
 } from './syncConverters'
 
 // --- Row type aliases for explicit typing ---
@@ -29,6 +31,8 @@ type StockRow = Database['public']['Tables']['stock']['Row']
 type FavoriteRow = Database['public']['Tables']['favorites']['Row']
 type UserNoteRow = Database['public']['Tables']['user_notes']['Row']
 type ViewHistoryRow = Database['public']['Tables']['view_history']['Row']
+type CalendarEventRow = Database['public']['Tables']['calendar_events']['Row']
+type UserPreferencesRow = Database['public']['Tables']['user_preferences']['Row']
 
 export interface SyncResult {
   pushed: number
@@ -66,6 +70,14 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     const histResult = await syncViewHistory(userId, recipeIdMap)
     result.pushed += histResult.pushed
     result.pulled += histResult.pulled
+
+    const calResult = await syncCalendarEvents(userId, recipeIdMap)
+    result.pushed += calResult.pushed
+    result.pulled += calResult.pulled
+
+    const prefResult = await syncPreferences(userId)
+    result.pushed += prefResult.pushed
+    result.pulled += prefResult.pulled
   } catch (err) {
     result.errors.push(err instanceof Error ? err.message : String(err))
   }
@@ -413,6 +425,122 @@ async function syncViewHistory(
 
     await db.viewHistory.add(viewHistoryFromCloud(row, localRecipeId) as ViewHistory)
     pulled++
+  }
+
+  return { pushed, pulled }
+}
+
+// ============================================================
+// CalendarEvents sync
+// ============================================================
+
+async function syncCalendarEvents(
+  userId: string,
+  idMap: RecipeIdMap,
+): Promise<{ pushed: number; pulled: number }> {
+  let pushed = 0
+  let pulled = 0
+
+  // --- PUSH: unsynced ---
+  const unsyncedEvents = await db.calendarEvents.filter((e) => !e.supabaseId).toArray()
+
+  for (const event of unsyncedEvents) {
+    const recipeCloudId = idMap.localToCloud.get(event.recipeId)
+    if (!recipeCloudId) continue
+
+    const cloudData = calendarEventToCloud(event, userId, recipeCloudId)
+    delete (cloudData as Record<string, unknown>).id
+    const { data, error } = await supabase!
+      .from('calendar_events')
+      .insert(cloudData)
+      .select('id')
+      .single<{ id: string }>()
+
+    if (error || !data) continue
+    await db.calendarEvents.update(event.id!, { supabaseId: data.id })
+    pushed++
+  }
+
+  // --- PULL ---
+  const { data: cloudEvents, error: pullError } = await supabase!
+    .from('calendar_events')
+    .select('*')
+    .eq('user_id', userId)
+    .returns<CalendarEventRow[]>()
+
+  if (pullError || !cloudEvents) return { pushed, pulled }
+
+  const localSupabaseIds = new Set(
+    (await db.calendarEvents.filter((e) => !!e.supabaseId).toArray()).map((e) => e.supabaseId),
+  )
+
+  for (const row of cloudEvents) {
+    if (localSupabaseIds.has(row.id)) continue
+    const localRecipeId = idMap.cloudToLocal.get(row.recipe_id)
+    if (localRecipeId == null) continue
+
+    await db.calendarEvents.add(calendarEventFromCloud(row, localRecipeId) as CalendarEventRecord)
+    pulled++
+  }
+
+  return { pushed, pulled }
+}
+
+// ============================================================
+// UserPreferences sync (single record per user)
+// ============================================================
+
+async function syncPreferences(userId: string): Promise<{ pushed: number; pulled: number }> {
+  let pushed = 0
+  let pulled = 0
+
+  const localPrefs = await db.userPreferences.toCollection().first()
+  if (!localPrefs) return { pushed, pulled }
+
+  // --- PULL first to check if cloud has preferences ---
+  const { data: cloudPrefs, error: pullError } = await supabase!
+    .from('user_preferences')
+    .select('*')
+    .eq('user_id', userId)
+    .returns<UserPreferencesRow[]>()
+
+  if (pullError) return { pushed, pulled }
+
+  const cloudPref = cloudPrefs?.[0]
+
+  if (cloudPref) {
+    const cloudUpdated = new Date(cloudPref.updated_at)
+    const localUpdated = localPrefs.updatedAt ?? new Date(0)
+
+    if (cloudUpdated > localUpdated) {
+      // Cloud is newer — pull
+      const fromCloud = userPreferencesFromCloud(cloudPref)
+      await db.userPreferences.update(localPrefs.id!, fromCloud)
+      pulled++
+    } else if (localUpdated > cloudUpdated) {
+      // Local is newer — push
+      const cloudData = userPreferencesToCloud(localPrefs, userId)
+      const { error } = await supabase!
+        .from('user_preferences')
+        .upsert(cloudData, { onConflict: 'id' })
+
+      if (!error) pushed++
+    }
+    // Otherwise equal — no action
+  } else {
+    // No cloud record — push local
+    const cloudData = userPreferencesToCloud(localPrefs, userId)
+    delete (cloudData as Record<string, unknown>).id
+    const { data, error } = await supabase!
+      .from('user_preferences')
+      .insert(cloudData)
+      .select('id')
+      .single<{ id: string }>()
+
+    if (!error && data) {
+      await db.userPreferences.update(localPrefs.id!, { supabaseId: data.id })
+      pushed++
+    }
   }
 
   return { pushed, pulled }

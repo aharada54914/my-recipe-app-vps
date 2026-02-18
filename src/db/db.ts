@@ -107,6 +107,54 @@ export interface ViewHistory {
   supabaseId?: string
 }
 
+export interface CalendarEventRecord {
+  id?: number
+  recipeId: number
+  googleEventId: string
+  calendarId: string
+  eventType: 'meal' | 'shopping'
+  startTime: Date
+  endTime: Date
+  createdAt: Date
+  supabaseId?: string
+}
+
+export type SeasonalPriority = 'low' | 'medium' | 'high'
+
+export interface UserPreferences {
+  id?: number
+  // Calendar settings
+  familyCalendarId?: string
+  mealStartHour: number
+  mealStartMinute: number
+  mealEndHour: number
+  mealEndMinute: number
+  defaultCalendarId?: string
+  // Weekly menu settings
+  weeklyMenuGenerationDay: number
+  weeklyMenuGenerationHour: number
+  weeklyMenuGenerationMinute: number
+  shoppingListHour: number
+  shoppingListMinute: number
+  // Seasonal priority
+  seasonalPriority: SeasonalPriority
+  // User prompt
+  userPrompt: string
+  // Notification settings
+  notifyWeeklyMenuDone: boolean
+  notifyShoppingListDone: boolean
+  // Cooking start notification
+  cookingNotifyEnabled: boolean
+  cookingNotifyHour: number
+  cookingNotifyMinute: number
+  // Desired meal time
+  desiredMealHour: number
+  desiredMealMinute: number
+  // Meta
+  updatedAt: Date
+  supabaseId?: string
+}
+
 export type ViewState =
   | { view: 'list' }
   | { view: 'detail'; recipeId: number }
@@ -121,6 +169,8 @@ class RecipeDB extends Dexie {
   favorites!: Table<Favorite, number>
   userNotes!: Table<UserNote, number>
   viewHistory!: Table<ViewHistory, number>
+  calendarEvents!: Table<CalendarEventRecord, number>
+  userPreferences!: Table<UserPreferences, number>
 
   constructor() {
     super('RecipeDB')
@@ -163,6 +213,16 @@ class RecipeDB extends Dexie {
       favorites: '++id, &recipeId, addedAt, supabaseId',
       userNotes: '++id, &recipeId, updatedAt, supabaseId',
       viewHistory: '++id, recipeId, viewedAt, supabaseId',
+    })
+    // v7: Add calendarEvents + userPreferences tables (Phase 4-5)
+    this.version(7).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
+      stock: '++id, &name, inStock, supabaseId',
+      favorites: '++id, &recipeId, addedAt, supabaseId',
+      userNotes: '++id, &recipeId, updatedAt, supabaseId',
+      viewHistory: '++id, recipeId, viewedAt, supabaseId',
+      calendarEvents: '++id, recipeId, googleEventId, supabaseId',
+      userPreferences: '++id, supabaseId',
     })
   }
 }

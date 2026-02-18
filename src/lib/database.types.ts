@@ -186,6 +186,124 @@ export interface Database {
         }
         Relationships: []
       }
+      calendar_events: {
+        Row: {
+          id: string
+          user_id: string
+          recipe_id: string
+          google_event_id: string
+          calendar_id: string
+          event_type: string
+          start_time: string
+          end_time: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          recipe_id: string
+          google_event_id: string
+          calendar_id: string
+          event_type?: string
+          start_time: string
+          end_time: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          recipe_id?: string
+          google_event_id?: string
+          calendar_id?: string
+          event_type?: string
+          start_time?: string
+          end_time?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_preferences: {
+        Row: {
+          id: string
+          user_id: string
+          family_calendar_id: string | null
+          meal_start_hour: number
+          meal_start_minute: number
+          meal_end_hour: number
+          meal_end_minute: number
+          default_calendar_id: string | null
+          weekly_menu_generation_day: number
+          weekly_menu_generation_hour: number
+          weekly_menu_generation_minute: number
+          shopping_list_hour: number
+          shopping_list_minute: number
+          seasonal_priority: string
+          user_prompt: string
+          notify_weekly_menu_done: boolean
+          notify_shopping_list_done: boolean
+          cooking_notify_enabled: boolean
+          cooking_notify_hour: number
+          cooking_notify_minute: number
+          desired_meal_hour: number
+          desired_meal_minute: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          family_calendar_id?: string | null
+          meal_start_hour?: number
+          meal_start_minute?: number
+          meal_end_hour?: number
+          meal_end_minute?: number
+          default_calendar_id?: string | null
+          weekly_menu_generation_day?: number
+          weekly_menu_generation_hour?: number
+          weekly_menu_generation_minute?: number
+          shopping_list_hour?: number
+          shopping_list_minute?: number
+          seasonal_priority?: string
+          user_prompt?: string
+          notify_weekly_menu_done?: boolean
+          notify_shopping_list_done?: boolean
+          cooking_notify_enabled?: boolean
+          cooking_notify_hour?: number
+          cooking_notify_minute?: number
+          desired_meal_hour?: number
+          desired_meal_minute?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          family_calendar_id?: string | null
+          meal_start_hour?: number
+          meal_start_minute?: number
+          meal_end_hour?: number
+          meal_end_minute?: number
+          default_calendar_id?: string | null
+          weekly_menu_generation_day?: number
+          weekly_menu_generation_hour?: number
+          weekly_menu_generation_minute?: number
+          shopping_list_hour?: number
+          shopping_list_minute?: number
+          seasonal_priority?: string
+          user_prompt?: string
+          notify_weekly_menu_done?: boolean
+          notify_shopping_list_done?: boolean
+          cooking_notify_enabled?: boolean
+          cooking_notify_hour?: number
+          cooking_notify_minute?: number
+          desired_meal_hour?: number
+          desired_meal_minute?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

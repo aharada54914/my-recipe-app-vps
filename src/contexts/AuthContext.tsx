@@ -6,13 +6,20 @@ import { AuthContext } from './authContextDef'
 export interface AuthContextValue {
   user: User | null
   loading: boolean
+  providerToken: string | null
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
 }
 
+const CALENDAR_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.readonly',
+].join(' ')
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(!!supabase)
+  const [providerToken, setProviderToken] = useState<string | null>(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -20,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Restore session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      setProviderToken(session?.provider_token ?? null)
       setLoading(false)
     })
 
@@ -27,6 +35,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user ?? null)
+        // provider_token is only available on initial sign-in callback
+        if (session?.provider_token) {
+          setProviderToken(session.provider_token)
+        }
       },
     )
 
@@ -39,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       provider: 'google',
       options: {
         redirectTo: window.location.origin + '/settings',
+        scopes: CALENDAR_SCOPES,
       },
     })
   }, [])
@@ -46,10 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     if (!supabase) return
     await supabase.auth.signOut()
+    setProviderToken(null)
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, providerToken, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   )

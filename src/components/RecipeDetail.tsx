@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, Clock, Hash } from 'lucide-react'
+import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, Clock, Hash, Calendar } from 'lucide-react'
 import { db } from '../db/db'
 import type { DeviceType } from '../db/db'
 import { adjustIngredients, formatQuantityVibe } from '../utils/recipeUtils'
@@ -11,6 +11,7 @@ import { RecipeImage } from './RecipeImage'
 import { ServingAdjuster } from './ServingAdjuster'
 import { SaltCalculator } from './SaltCalculator'
 import { ScheduleGantt } from './ScheduleGantt'
+import { CalendarRegistrationModal } from './CalendarRegistrationModal'
 
 const deviceLabels: Record<DeviceType, string> = {
   hotcook: 'ホットクック',
@@ -36,6 +37,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   // T-18: Shopping list state
   const [showShoppingList, setShowShoppingList] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showCalendarModal, setShowCalendarModal] = useState(false)
 
   // T-11: Keep screen on during recipe viewing
   useWakeLock()
@@ -120,6 +122,12 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             <ExternalLink className="h-5 w-5 text-accent" />
           </a>
         )}
+        <button
+          onClick={() => setShowCalendarModal(true)}
+          className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+        >
+          <Calendar className="h-5 w-5 text-text-secondary" />
+        </button>
         <button
           onClick={() => toggleFavorite(recipeId)}
           className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
@@ -308,6 +316,15 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
           </div>
         </div>
       </main>
+
+      {/* Calendar Registration Modal */}
+      {showCalendarModal && (
+        <CalendarRegistrationModal
+          recipe={recipe}
+          stockItems={stockItems ?? []}
+          onClose={() => setShowCalendarModal(false)}
+        />
+      )}
     </div>
   )
 }
