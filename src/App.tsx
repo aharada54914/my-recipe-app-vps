@@ -15,6 +15,7 @@ import { HomePage } from './pages/HomePage'
 import { HistoryPage } from './pages/HistoryPage'
 import { FavoritesPage } from './pages/FavoritesPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { WeeklyMenuPage } from './pages/WeeklyMenuPage'
 
 function AppLayout() {
   const navigate = useNavigate()
@@ -107,6 +108,7 @@ function App() {
                 <Route path="stock" element={<StockManager />} />
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="favorites" element={<FavoritesPage />} />
+                <Route path="weekly-menu" element={<WeeklyMenuPage />} />
               </Route>
               <Route path="/recipe/:id" element={<RecipeDetailPage />} />
               <Route path="/ai-parse" element={<AiParsePage />} />

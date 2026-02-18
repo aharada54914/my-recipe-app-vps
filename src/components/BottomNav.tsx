@@ -1,10 +1,10 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, Search, Package, Star, Clock } from 'lucide-react'
+import { Home, CalendarDays, Package, Star, Clock } from 'lucide-react'
 import type { TabId } from '../db/db'
 
-const tabs: { id: TabId; path: string; icon: typeof Search; label: string }[] = [
+const tabs: { id: TabId; path: string; icon: typeof Home; label: string }[] = [
   { id: 'home', path: '/', icon: Home, label: 'ホーム' },
-  { id: 'search', path: '/search', icon: Search, label: '検索' },
+  { id: 'menu', path: '/weekly-menu', icon: CalendarDays, label: '献立' },
   { id: 'stock', path: '/stock', icon: Package, label: '在庫' },
   { id: 'favorites', path: '/favorites', icon: Star, label: 'お気に入り' },
   { id: 'history', path: '/history', icon: Clock, label: '履歴' },

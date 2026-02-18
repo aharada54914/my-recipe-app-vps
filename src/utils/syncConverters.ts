@@ -3,7 +3,7 @@
  * Each table has toCloud() and fromCloud() converters.
  */
 
-import type { Recipe, StockItem, Favorite, UserNote, ViewHistory, CalendarEventRecord, UserPreferences } from '../db/db'
+import type { Recipe, StockItem, Favorite, UserNote, ViewHistory, CalendarEventRecord, UserPreferences, WeeklyMenu } from '../db/db'
 import type { Database } from '../lib/database.types'
 
 // --- Type aliases for brevity ---
@@ -21,6 +21,8 @@ type CalendarEventRow = Database['public']['Tables']['calendar_events']['Row']
 type CalendarEventInsert = Database['public']['Tables']['calendar_events']['Insert']
 type UserPreferencesRow = Database['public']['Tables']['user_preferences']['Row']
 type UserPreferencesInsert = Database['public']['Tables']['user_preferences']['Insert']
+type WeeklyMenuRow = Database['public']['Tables']['weekly_menus']['Row']
+type WeeklyMenuInsert = Database['public']['Tables']['weekly_menus']['Insert']
 
 // ============================================================
 // recipes
@@ -283,6 +285,39 @@ export function userPreferencesFromCloud(
     cookingNotifyMinute: row.cooking_notify_minute,
     desiredMealHour: row.desired_meal_hour,
     desiredMealMinute: row.desired_meal_minute,
+    updatedAt: new Date(row.updated_at),
+    supabaseId: row.id,
+  }
+}
+
+// ============================================================
+// weeklyMenus
+// ============================================================
+
+export function weeklyMenuToCloud(
+  menu: WeeklyMenu,
+  userId: string,
+): WeeklyMenuInsert {
+  return {
+    id: menu.supabaseId ?? undefined,
+    user_id: userId,
+    week_start_date: menu.weekStartDate,
+    items: JSON.stringify(menu.items),
+    shopping_list: menu.shoppingList ?? null,
+    status: menu.status,
+    updated_at: menu.updatedAt.toISOString(),
+  }
+}
+
+export function weeklyMenuFromCloud(
+  row: WeeklyMenuRow,
+): Omit<WeeklyMenu, 'id'> {
+  return {
+    weekStartDate: row.week_start_date,
+    items: JSON.parse(row.items),
+    shoppingList: row.shopping_list ?? undefined,
+    status: row.status as WeeklyMenu['status'],
+    createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     supabaseId: row.id,
   }

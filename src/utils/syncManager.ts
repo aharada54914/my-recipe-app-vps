@@ -12,7 +12,7 @@
  * Conflict resolution: last-write-wins based on updated_at / added_at.
  */
 
-import { db, type Recipe, type StockItem, type Favorite, type UserNote, type ViewHistory, type CalendarEventRecord } from '../db/db'
+import { db, type Recipe, type StockItem, type Favorite, type UserNote, type ViewHistory, type CalendarEventRecord, type WeeklyMenu } from '../db/db'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../lib/database.types'
 import {
@@ -23,6 +23,7 @@ import {
   viewHistoryToCloud, viewHistoryFromCloud,
   calendarEventToCloud, calendarEventFromCloud,
   userPreferencesToCloud, userPreferencesFromCloud,
+  weeklyMenuToCloud, weeklyMenuFromCloud,
 } from './syncConverters'
 
 // --- Row type aliases for explicit typing ---
@@ -33,6 +34,7 @@ type UserNoteRow = Database['public']['Tables']['user_notes']['Row']
 type ViewHistoryRow = Database['public']['Tables']['view_history']['Row']
 type CalendarEventRow = Database['public']['Tables']['calendar_events']['Row']
 type UserPreferencesRow = Database['public']['Tables']['user_preferences']['Row']
+type WeeklyMenuRow = Database['public']['Tables']['weekly_menus']['Row']
 
 export interface SyncResult {
   pushed: number
@@ -78,6 +80,10 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     const prefResult = await syncPreferences(userId)
     result.pushed += prefResult.pushed
     result.pulled += prefResult.pulled
+
+    const menuResult = await syncWeeklyMenus(userId)
+    result.pushed += menuResult.pushed
+    result.pulled += menuResult.pulled
   } catch (err) {
     result.errors.push(err instanceof Error ? err.message : String(err))
   }
@@ -541,6 +547,65 @@ async function syncPreferences(userId: string): Promise<{ pushed: number; pulled
       await db.userPreferences.update(localPrefs.id!, { supabaseId: data.id })
       pushed++
     }
+  }
+
+  return { pushed, pulled }
+}
+
+// ============================================================
+// WeeklyMenus sync
+// ============================================================
+
+async function syncWeeklyMenus(userId: string): Promise<{ pushed: number; pulled: number }> {
+  let pushed = 0
+  let pulled = 0
+
+  // --- PUSH: unsynced ---
+  const unsyncedMenus = await db.weeklyMenus.filter((m) => !m.supabaseId).toArray()
+
+  for (const menu of unsyncedMenus) {
+    const cloudData = weeklyMenuToCloud(menu, userId)
+    delete (cloudData as Record<string, unknown>).id
+    const { data, error } = await supabase!
+      .from('weekly_menus')
+      .insert(cloudData)
+      .select('id')
+      .single<{ id: string }>()
+
+    if (error || !data) continue
+    await db.weeklyMenus.update(menu.id!, { supabaseId: data.id })
+    pushed++
+  }
+
+  // --- PUSH: synced ---
+  const syncedMenus = await db.weeklyMenus.filter((m) => !!m.supabaseId).toArray()
+
+  for (const menu of syncedMenus) {
+    const cloudData = weeklyMenuToCloud(menu, userId)
+    const { error } = await supabase!
+      .from('weekly_menus')
+      .upsert(cloudData, { onConflict: 'id' })
+
+    if (!error) pushed++
+  }
+
+  // --- PULL ---
+  const { data: cloudMenus, error: pullError } = await supabase!
+    .from('weekly_menus')
+    .select('*')
+    .eq('user_id', userId)
+    .returns<WeeklyMenuRow[]>()
+
+  if (pullError || !cloudMenus) return { pushed, pulled }
+
+  const localSupabaseIds = new Set(
+    (await db.weeklyMenus.filter((m) => !!m.supabaseId).toArray()).map((m) => m.supabaseId),
+  )
+
+  for (const row of cloudMenus) {
+    if (localSupabaseIds.has(row.id)) continue
+    await db.weeklyMenus.add(weeklyMenuFromCloud(row) as WeeklyMenu)
+    pulled++
   }
 
   return { pushed, pulled }
