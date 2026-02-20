@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return (
-      <AuthContext.Provider value={{ user, loading: false, providerToken, signInWithGoogle, signOut }}>
+      <AuthContext.Provider value={{ user, loading: false, isOAuthAvailable: false, providerToken, signInWithGoogle, signOut }}>
         {children}
       </AuthContext.Provider>
     )
@@ -146,7 +146,7 @@ function OAuthEnabledAuthProvider({
   }, [setProviderToken, setUser])
 
   return (
-    <AuthContext.Provider value={{ user, loading, providerToken, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, isOAuthAvailable: true, providerToken, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   )

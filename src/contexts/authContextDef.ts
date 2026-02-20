@@ -10,6 +10,7 @@ export interface GoogleUser {
 export interface AuthContextValue {
   user: GoogleUser | null
   loading: boolean
+  isOAuthAvailable: boolean
   providerToken: string | null
   signInWithGoogle: () => void
   signOut: () => void

@@ -28,7 +28,6 @@ function AppLayout() {
   return (
     <div className="min-h-dvh bg-bg-primary">
       <Header
-        onAiParse={() => navigate('/ai-parse')}
         onMultiSchedule={() => navigate('/multi-schedule')}
         onSettings={() => navigate('/settings')}
       />

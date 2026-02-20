@@ -1,17 +1,16 @@
-import { Search, Sparkles, CalendarClock, Settings } from 'lucide-react'
+import { Search, CalendarClock, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { ForkKnifeIcon } from './ForkKnifeIcon'
 import { useAuth } from '../hooks/useAuth'
 
 interface HeaderProps {
   onSearchToggle?: () => void
-  onAiParse?: () => void
   onMultiSchedule?: () => void
   onSettings?: () => void
 }
 
-export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings }: HeaderProps) {
-  const { user, signInWithGoogle } = useAuth()
+export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderProps) {
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   return (
@@ -22,15 +21,6 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
           <h1 className="text-xl font-bold tracking-tight">Kitchen App</h1>
         </div>
         <div className="flex items-center gap-2">
-          {onAiParse && (
-            <button
-              onClick={onAiParse}
-              aria-label="AIレシピ解析"
-              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
-            >
-              <Sparkles className="h-5 w-5 text-text-secondary" />
-            </button>
-          )}
           {onMultiSchedule && (
             <button
               onClick={onMultiSchedule}
@@ -63,15 +53,7 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
                 user.email[0].toUpperCase()
               )}
             </button>
-          ) : (
-            <button
-              onClick={signInWithGoogle}
-              aria-label="Googleでログイン"
-              className="min-h-[44px] rounded-xl bg-bg-card px-3 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-card-hover hover:text-accent"
-            >
-              ログイン
-            </button>
-          )}
+          ) : null}
 
           {onSettings && (
             <button

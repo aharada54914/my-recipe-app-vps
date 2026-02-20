@@ -79,7 +79,7 @@ function TwoColRecipeSection({
 
 export function HomePage() {
   const navigate = useNavigate()
-  const { user, signInWithGoogle, loading: authLoading } = useAuth()
+  const { user, signInWithGoogle, loading: authLoading, isOAuthAvailable } = useAuth()
   const [recommendations, setRecommendations] = useState<{ recipe: Recipe; matchRate: number }[]>([])
 
   const data = useLiveQuery(async () => {
@@ -112,7 +112,7 @@ export function HomePage() {
   const recMatchRates = new Map(displayRecs.map(r => [r.recipe.id!, r.matchRate]))
 
   // Show login banner when not logged in
-  const showLoginBanner = !authLoading && !user
+  const showLoginBanner = isOAuthAvailable && !authLoading && !user
 
   return (
     <div>
@@ -149,6 +149,15 @@ export function HomePage() {
           >
             ログイン
           </button>
+        </div>
+      )}
+
+      {!isOAuthAvailable && (
+        <div className="mb-5 rounded-2xl border border-border bg-bg-card px-4 py-3">
+          <p className="text-sm font-medium">Googleログインは現在未設定です</p>
+          <p className="mt-1 text-xs text-text-secondary">
+            バックアップ連携を使うには `VITE_GOOGLE_CLIENT_ID` の設定が必要です。
+          </p>
         </div>
       )}
 

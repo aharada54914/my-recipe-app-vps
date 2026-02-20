@@ -23,6 +23,7 @@ export function BottomNav() {
       <div className="flex justify-around py-2">
         {tabs.map(({ id, path, icon: Icon, label }) => {
           const isActive = location.pathname === path
+          const iconClass = id === 'gemini' ? 'h-[22px] w-[22px]' : 'h-5 w-5'
           return (
             <button
               key={id}
@@ -32,7 +33,7 @@ export function BottomNav() {
                 isActive ? 'text-accent' : 'text-text-secondary hover:text-accent'
               }`}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className={iconClass} />
               <span className="text-[10px]">{label}</span>
             </button>
           )

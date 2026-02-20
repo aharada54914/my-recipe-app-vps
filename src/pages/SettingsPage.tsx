@@ -51,7 +51,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
   const [importMode, setImportMode] = useState<ImportMode>('overwrite')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { user, loading: authLoading, signInWithGoogle, signOut } = useAuth()
+  const { user, loading: authLoading, isOAuthAvailable, signInWithGoogle, signOut } = useAuth()
   const { isBackingUp, isRestoring, lastBackupAt, backupNow, error: backupError } = useGoogleDriveSync()
 
   useEffect(() => {
@@ -146,20 +146,21 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
           </div>
         </div>
 
-        {/* Tab bar */}
-        <div className="border-b border-white/10">
-          <div className="flex overflow-x-auto scrollbar-none px-2">
-            {TABS.map(tab => (
+        {/* Vertical section buttons */}
+        <div className="border-t border-b border-white/10 px-4 py-3">
+          <div className="flex flex-col gap-2">
+            {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex shrink-0 flex-col items-center gap-1 px-3 py-2.5 text-[10px] font-medium transition-colors ${activeTab === tab.id
-                    ? 'border-b-2 border-accent text-accent'
-                    : 'text-text-secondary hover:text-text-primary'
-                  }`}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-accent/15 text-accent ring-1 ring-accent/40'
+                    : 'bg-bg-card text-text-secondary hover:text-text-primary'
+                }`}
               >
                 {tab.icon}
-                {tab.label}
+                <span>{tab.label}</span>
               </button>
             ))}
           </div>
@@ -233,7 +234,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                   ログアウト
                 </button>
               </div>
-            ) : (
+            ) : isOAuthAvailable ? (
               <div className="space-y-3">
                 <button
                   onClick={signInWithGoogle}
@@ -245,6 +246,21 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 <p className="text-xs text-text-secondary leading-relaxed">
                   ログインするとデータ（在庫・お気に入り・メモ・履歴・献立）があなたのGoogle Driveに自動バックアップされ、機種変更時も復元できます。
                 </p>
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-xl bg-white/5 px-4 py-3">
+                <p className="text-sm text-text-primary">Googleログインを有効にするには環境変数の設定が必要です。</p>
+                <p className="text-xs text-text-secondary">
+                  `VITE_GOOGLE_CLIENT_ID` を設定後、再デプロイするとログインボタンが表示されます。
+                </p>
+                <a
+                  href="https://accounts.google.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex rounded-lg bg-bg-card px-3 py-2 text-xs font-medium text-text-secondary hover:text-accent"
+                >
+                  Googleログインページを開く
+                </a>
               </div>
             )}
           </div>
