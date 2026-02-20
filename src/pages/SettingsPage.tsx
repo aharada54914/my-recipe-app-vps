@@ -11,6 +11,7 @@ import { useGoogleDriveSync } from '../hooks/useGoogleDriveSync'
 import { CalendarSettings } from '../components/CalendarSettings'
 import { MealPlanSettings } from '../components/MealPlanSettings'
 import { NotificationSettings } from '../components/NotificationSettings'
+import { APP_VERSION } from '../constants/appVersion'
 
 function formatTimeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -444,6 +445,11 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
             </div>
           </>
         )}
+
+        <div className="rounded-2xl bg-white/5 px-4 py-3">
+          <p className="text-xs text-text-secondary">アプリバージョン</p>
+          <p className="mt-1 font-mono text-sm text-text-primary">v{APP_VERSION}</p>
+        </div>
       </main>
     </div>
   )
