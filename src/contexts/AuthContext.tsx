@@ -1,65 +1,91 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react'
-import type { User } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { useState, useCallback, type ReactNode } from 'react'
+import { useGoogleLogin } from '@react-oauth/google'
 import { AuthContext } from './authContextDef'
+import type { GoogleUser, AuthContextValue } from './authContextDef'
 
-export interface AuthContextValue {
-  user: User | null
-  loading: boolean
-  providerToken: string | null
-  signInWithGoogle: () => Promise<void>
-  signOut: () => Promise<void>
-}
+export type { GoogleUser, AuthContextValue }
 
-const CALENDAR_SCOPES = [
+const USER_KEY = 'google_user'
+const TOKEN_KEY = 'google_access_token'
+const TOKEN_EXPIRY_KEY = 'google_token_expiry'
+
+const SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/drive.appdata',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
 ].join(' ')
 
+function loadStoredToken(): string | null {
+  try {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    const expiry = sessionStorage.getItem(TOKEN_EXPIRY_KEY)
+    if (token && expiry && new Date(expiry) > new Date()) return token
+    return null
+  } catch {
+    return null
+  }
+}
+
+function loadStoredUser(): GoogleUser | null {
+  try {
+    const stored = localStorage.getItem(USER_KEY)
+    return stored ? (JSON.parse(stored) as GoogleUser) : null
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(!!supabase)
-  const [providerToken, setProviderToken] = useState<string | null>(null)
+  const [user, setUser] = useState<GoogleUser | null>(() => loadStoredUser())
+  const [loading, setLoading] = useState(false)
+  const [providerToken, setProviderToken] = useState<string | null>(() => loadStoredToken())
 
-  useEffect(() => {
-    if (!supabase) return
+  const storeToken = useCallback((token: string, expiresIn: number) => {
+    const expiry = new Date(Date.now() + expiresIn * 1000).toISOString()
+    try {
+      sessionStorage.setItem(TOKEN_KEY, token)
+      sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiry)
+    } catch { /* ignore storage errors */ }
+    setProviderToken(token)
+  }, [])
 
-    // Restore session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setProviderToken(session?.provider_token ?? null)
-      setLoading(false)
-    })
-
-    // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null)
-        // provider_token is only available on initial sign-in callback
-        if (session?.provider_token) {
-          setProviderToken(session.provider_token)
+  const googleLogin = useGoogleLogin({
+    scope: SCOPES,
+    onSuccess: async (tokenResponse) => {
+      storeToken(tokenResponse.access_token, tokenResponse.expires_in)
+      try {
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        })
+        if (res.ok) {
+          const userInfo = (await res.json()) as GoogleUser
+          setUser(userInfo)
+          localStorage.setItem(USER_KEY, JSON.stringify(userInfo))
         }
-      },
-    )
+      } catch { /* ignore fetch errors */ }
+      setLoading(false)
+    },
+    onError: () => {
+      setLoading(false)
+    },
+  })
 
-    return () => subscription.unsubscribe()
-  }, [])
+  const signInWithGoogle = useCallback(() => {
+    setLoading(true)
+    googleLogin()
+  }, [googleLogin])
 
-  const signInWithGoogle = useCallback(async () => {
-    if (!supabase) return
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin + '/',
-        scopes: CALENDAR_SCOPES,
-      },
-    })
-  }, [])
-
-  const signOut = useCallback(async () => {
-    if (!supabase) return
-    await supabase.auth.signOut()
+  const signOut = useCallback(() => {
+    setUser(null)
     setProviderToken(null)
+    try {
+      localStorage.removeItem(USER_KEY)
+      sessionStorage.removeItem(TOKEN_KEY)
+      sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
+    } catch { /* ignore */ }
   }, [])
 
   return (

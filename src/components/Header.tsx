@@ -2,7 +2,6 @@ import { Search, Sparkles, CalendarClock, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { ForkKnifeIcon } from './ForkKnifeIcon'
 import { useAuth } from '../hooks/useAuth'
-import { supabase } from '../lib/supabase'
 
 interface HeaderProps {
   onSearchToggle?: () => void
@@ -51,38 +50,37 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
             </button>
           )}
 
-          {/* Auth badge — visible only when Supabase is configured */}
-          {supabase ? (
-            user ? (
-              /* Logged in: avatar initial links to Settings */
-              <button
-                onClick={() => navigate('/settings')}
-                aria-label="アカウント設定"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-bold text-white transition-transform active:scale-90"
-              >
-                {user.email?.[0]?.toUpperCase() ?? '?'}
-              </button>
-            ) : (
-              /* Logged out: prominent Login button */
-              <button
-                onClick={signInWithGoogle}
-                aria-label="Googleでログイン"
-                className="min-h-[44px] rounded-xl bg-accent px-3 py-1 text-xs font-bold text-white transition-transform active:scale-95"
-              >
-                ログイン
-              </button>
-            )
+          {/* Auth badge */}
+          {user ? (
+            <button
+              onClick={() => navigate('/settings')}
+              aria-label="アカウント設定"
+              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-accent text-sm font-bold text-white transition-transform active:scale-90"
+            >
+              {user.picture ? (
+                <img src={user.picture} alt="" className="h-full w-full object-cover" />
+              ) : (
+                user.email[0].toUpperCase()
+              )}
+            </button>
           ) : (
-            /* Supabase not configured: show settings gear */
-            onSettings && (
-              <button
-                onClick={onSettings}
-                aria-label="設定"
-                className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
-              >
-                <Settings className="h-5 w-5 text-text-secondary" />
-              </button>
-            )
+            <button
+              onClick={signInWithGoogle}
+              aria-label="Googleでログイン"
+              className="min-h-[44px] rounded-xl bg-bg-card px-3 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-card-hover hover:text-accent"
+            >
+              ログイン
+            </button>
+          )}
+
+          {onSettings && (
+            <button
+              onClick={onSettings}
+              aria-label="設定"
+              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+            >
+              <Settings className="h-5 w-5 text-text-secondary" />
+            </button>
           )}
         </div>
       </div>

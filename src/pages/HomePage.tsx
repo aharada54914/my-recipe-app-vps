@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Search, Leaf, Sparkles, ChevronRight } from 'lucide-react'
+import { Search, Leaf, Sparkles, ChevronRight, Package } from 'lucide-react'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { RecipeCard } from '../components/RecipeCard'
@@ -11,7 +11,6 @@ import { getLocalRecommendations } from '../utils/geminiRecommender'
 import { WeeklyMenuTimeline } from '../components/WeeklyMenuTimeline'
 import { CategoryGrid } from '../components/CategoryGrid'
 import { useAuth } from '../hooks/useAuth'
-import { supabase } from '../lib/supabase'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
@@ -112,8 +111,8 @@ export function HomePage() {
   const displayRecs = data.hasStock ? recommendations : []
   const recMatchRates = new Map(displayRecs.map(r => [r.recipe.id!, r.matchRate]))
 
-  // Show login banner when Supabase is configured and user is not logged in
-  const showLoginBanner = !!supabase && !authLoading && !user
+  // Show login banner when not logged in
+  const showLoginBanner = !authLoading && !user
 
   return (
     <div>
@@ -126,12 +125,23 @@ export function HomePage() {
         <span className="text-sm text-text-secondary">レシピを検索...</span>
       </button>
 
+      {/* Quick actions */}
+      <div className="mb-5 flex gap-2">
+        <button
+          onClick={() => navigate('/stock')}
+          className="flex items-center gap-1.5 rounded-xl bg-bg-card px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:text-accent active:scale-95"
+        >
+          <Package className="h-4 w-4" />
+          在庫管理
+        </button>
+      </div>
+
       {/* Login banner — non-intrusive, only when not logged in */}
       {showLoginBanner && (
         <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-bg-card px-4 py-3">
           <div>
-            <p className="text-sm font-medium">クラウド同期を有効にする</p>
-            <p className="text-xs text-text-secondary">どのデバイスでも同じデータを利用</p>
+            <p className="text-sm font-medium">Google Driveにバックアップ</p>
+            <p className="text-xs text-text-secondary">在庫・お気に入り・献立を自動保存</p>
           </div>
           <button
             onClick={signInWithGoogle}

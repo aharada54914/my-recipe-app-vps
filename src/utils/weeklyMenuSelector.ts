@@ -37,9 +37,13 @@ export async function selectWeeklyMenu(
   config: MenuSelectionConfig,
   lockedItems?: WeeklyMenuItem[]
 ): Promise<WeeklyMenuItem[]> {
-  // Gather data
+  // Gather data — random offset prevents always sampling the same first-N recipes
+  const totalCount = await db.recipes.count()
+  const maxOffset = Math.max(0, totalCount - 200)
+  const randomOffset = maxOffset > 0 ? Math.floor(Math.random() * maxOffset) : 0
+
   const [recipes, stockItems, recentMenus, recentHistory] = await Promise.all([
-    db.recipes.limit(200).toArray(),
+    db.recipes.offset(randomOffset).limit(200).toArray(),
     db.stock.filter(item => item.inStock).toArray(),
     db.weeklyMenus.orderBy('weekStartDate').reverse().limit(2).toArray(),
     db.viewHistory.orderBy('viewedAt').reverse().limit(30).toArray(),

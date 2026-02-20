@@ -1,4 +1,18 @@
 import { createContext } from 'react'
-import type { AuthContextValue } from './AuthContext'
+
+export interface GoogleUser {
+  sub: string
+  email: string
+  name: string
+  picture?: string
+}
+
+export interface AuthContextValue {
+  user: GoogleUser | null
+  loading: boolean
+  providerToken: string | null
+  signInWithGoogle: () => void
+  signOut: () => void
+}
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

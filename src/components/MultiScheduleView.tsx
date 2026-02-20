@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { format, addMinutes } from 'date-fns'
 import { ArrowLeft, CalendarClock, Search, X } from 'lucide-react'
+import Fuse from 'fuse.js'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { calculateMultiRecipeSchedule } from '../utils/recipeUtils'
@@ -46,14 +47,22 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
     [] as Recipe[]
   )
 
-  // Filter recipes by search query (lightweight client-side filter)
+  // Fuse.js index for fuzzy search (rebuilt only when recipe list changes)
+  const fuse = useMemo(
+    () => recipeSummaries
+      ? new Fuse(recipeSummaries, { keys: ['title'], threshold: 0.4, ignoreLocation: true })
+      : null,
+    [recipeSummaries]
+  )
+
+  // Filter recipes by search query using Fuse.js fuzzy search
   const filteredResults = useMemo(() => {
-    if (!recipeSummaries || !debouncedQuery.trim()) return []
-    const q = debouncedQuery.toLowerCase()
-    return recipeSummaries
-      .filter(r => !selectedIds.has(r.id) && r.title.toLowerCase().includes(q))
+    if (!fuse || !debouncedQuery.trim()) return []
+    return fuse.search(debouncedQuery)
+      .map(r => r.item)
+      .filter(r => !selectedIds.has(r.id))
       .slice(0, 20)
-  }, [recipeSummaries, debouncedQuery, selectedIds])
+  }, [fuse, debouncedQuery, selectedIds])
 
   const selectedSummaries = useMemo(() => {
     if (!recipeSummaries) return []
