@@ -6,7 +6,7 @@ export type DeviceType = 'hotcook' | 'healsio' | 'manual'
 export type IngredientCategory = 'main' | 'sub'
 export type SaltMode = 0.6 | 0.8 | 1.2
 export type RecipeCategory = 'すべて' | '主菜' | '副菜' | 'スープ' | 'ご飯もの' | 'デザート'
-export type TabId = 'home' | 'menu' | 'stock' | 'favorites' | 'history'
+export type TabId = 'home' | 'menu' | 'gemini' | 'favorites' | 'history'
 
 export interface Ingredient {
   name: string

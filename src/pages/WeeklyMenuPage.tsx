@@ -9,18 +9,20 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Lock, Unlock, RefreshCw, Calendar, ShoppingCart, Copy, Check, CalendarClock, X } from 'lucide-react'
+import { Lock, Unlock, RefreshCw, Calendar, ShoppingCart, CalendarClock, X, Search, Star } from 'lucide-react'
 import { format, addDays, parse, addMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import Fuse from 'fuse.js'
 import { db, type Recipe, type WeeklyMenu } from '../db/db'
 import { usePreferences } from '../hooks/usePreferences'
 import { useAuth } from '../hooks/useAuth'
+import { useDebounce } from '../hooks/useDebounce'
 import { RecipeCard } from '../components/RecipeCard'
-import { selectWeeklyMenu, getWeekStartDate, getAlternativeRecipes } from '../utils/weeklyMenuSelector'
-import { aggregateIngredients, formatWeeklyShoppingList, getMissingWeeklyIngredients } from '../utils/weeklyShoppingUtils'
+import { selectWeeklyMenu, getWeekStartDate } from '../utils/weeklyMenuSelector'
+import { aggregateIngredients, getMissingWeeklyIngredients } from '../utils/weeklyShoppingUtils'
 import { registerWeeklyMenuToCalendar, registerShoppingListToCalendar } from '../utils/weeklyMenuCalendar'
-import { calculateMatchRate, calculateMultiRecipeSchedule } from '../utils/recipeUtils'
-import { copyToClipboard } from '../utils/shoppingUtils'
+import { calculateMatchRate, calculateMultiRecipeSchedule, isHelsioDeli } from '../utils/recipeUtils'
+import { EditableShoppingList } from '../components/EditableShoppingList'
 
 const LANE_COLORS = [
   { bg: 'rgba(249,115,22,0.25)', border: '#F97316', text: '#F97316' },
@@ -46,10 +48,12 @@ export function WeeklyMenuPage() {
   const [generating, setGenerating] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [showShoppingList, setShowShoppingList] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [swapDayIndex, setSwapDayIndex] = useState<number | null>(null)
   const [swapType, setSwapType] = useState<'main' | 'side'>('main')
-  const [alternatives, setAlternatives] = useState<Recipe[]>([])
+  const [swapCandidates, setSwapCandidates] = useState<Recipe[]>([])
+  const [swapFavorites, setSwapFavorites] = useState<Recipe[]>([])
+  const [swapSearchQuery, setSwapSearchQuery] = useState('')
+  const debouncedSwapSearch = useDebounce(swapSearchQuery, 250)
   const [ganttDayIndex, setGanttDayIndex] = useState<number | null>(null)
 
   const stockItems = useLiveQuery(() => db.stock.filter(s => s.inStock).toArray(), [])
@@ -135,11 +139,28 @@ export function WeeklyMenuPage() {
       if (i.sideRecipeId != null) ids.push(i.sideRecipeId)
       return ids
     }))
-    const alts = await getAlternativeRecipes(usedIds, 10)
-    setAlternatives(alts)
+
+    // Load candidates: top 200 recipes excluding used + ヘルシオデリ, sorted by stock match
+    const [allRecipes, favRecords] = await Promise.all([
+      db.recipes.limit(200).toArray(),
+      db.favorites.toArray(),
+    ])
+
+    const favIds = new Set(favRecords.map(f => f.recipeId))
+    const candidates = allRecipes
+      .filter(r => r.id != null && !usedIds.has(r.id) && !isHelsioDeli(r))
+      .map(r => ({ recipe: r, matchRate: calculateMatchRate(r.ingredients, stockNames) }))
+      .sort((a, b) => b.matchRate - a.matchRate)
+      .map(r => r.recipe)
+
+    const favorites = candidates.filter(r => favIds.has(r.id!))
+
+    setSwapCandidates(candidates)
+    setSwapFavorites(favorites)
+    setSwapSearchQuery('')
     setSwapDayIndex(dayIndex)
     setSwapType(type)
-  }, [menu])
+  }, [menu, stockNames])
 
   const handleSelectSwap = useCallback(async (recipe: Recipe) => {
     if (!menu || swapDayIndex === null) return
@@ -181,19 +202,6 @@ export function WeeklyMenuPage() {
       setRegistering(false)
     }
   }, [menu, providerToken, recipes, preferences, stockItems, weekStart, weekStartStr])
-
-  // Shopping list copy
-  const handleCopyShoppingList = useCallback(async () => {
-    if (!menu || !stockItems) return
-    const recipeList = menu.items.map(i => recipes.get(i.recipeId)).filter(Boolean) as Recipe[]
-    const aggregated = aggregateIngredients(recipeList, stockItems)
-    const text = formatWeeklyShoppingList(weekStartStr, aggregated)
-    const ok = await copyToClipboard(text)
-    if (ok) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }, [menu, recipes, stockItems, weekStartStr])
 
   // Week navigation
   const adjustWeek = (delta: number) => {
@@ -373,20 +381,14 @@ export function WeeklyMenuPage() {
             {/* Shopping list section */}
             {showShoppingList && stockItems && (
               <div className="rounded-2xl bg-bg-card p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-text-secondary">買い物リスト</h4>
-                  <button
-                    onClick={handleCopyShoppingList}
-                    className="flex items-center gap-1 rounded-lg bg-bg-card-hover px-2 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent"
-                  >
-                    {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-                    {copied ? 'コピー済み' : 'LINEに送る'}
-                  </button>
-                </div>
-                <ShoppingListContent
-                  menu={menu}
-                  recipes={recipes}
-                  stockItems={stockItems}
+                <h4 className="mb-3 text-sm font-bold text-text-secondary">買い物リスト</h4>
+                <EditableShoppingList
+                  weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
+                  ingredients={aggregateIngredients(
+                    menu.items.map(i => recipes.get(i.recipeId)).filter(Boolean) as Recipe[],
+                    stockItems as never[]
+                  )}
+                  storageKey={`shopping_checked_${weekStartStr}`}
                 />
               </div>
             )}
@@ -395,32 +397,17 @@ export function WeeklyMenuPage() {
 
         {/* Swap modal */}
         {swapDayIndex !== null && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setSwapDayIndex(null)}>
-            <div
-              className="max-h-[70vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-bg-primary p-4"
-              onClick={e => e.stopPropagation()}
-            >
-              <h3 className="mb-3 text-sm font-bold">
-                {swapType === 'main' ? '主菜' : '副菜・スープ'}を変更
-              </h3>
-              <div className="space-y-2">
-                {alternatives.map(recipe => (
-                  <RecipeCard
-                    key={recipe.id}
-                    recipe={recipe}
-                    matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
-                    onClick={() => handleSelectSwap(recipe)}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={() => setSwapDayIndex(null)}
-                className="mt-4 w-full rounded-xl bg-bg-card py-3 text-sm text-text-secondary"
-              >
-                キャンセル
-              </button>
-            </div>
-          </div>
+          <SwapModal
+            swapType={swapType}
+            candidates={swapCandidates}
+            favorites={swapFavorites}
+            searchQuery={swapSearchQuery}
+            debouncedSearch={debouncedSwapSearch}
+            stockNames={stockNames}
+            onSearchChange={setSwapSearchQuery}
+            onSelect={handleSelectSwap}
+            onClose={() => setSwapDayIndex(null)}
+          />
         )}
 
         {/* Gantt chart day modal */}
@@ -469,6 +456,133 @@ export function WeeklyMenuPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// --- Swap modal with search + favorites ---
+
+interface SwapModalProps {
+  swapType: 'main' | 'side'
+  candidates: Recipe[]
+  favorites: Recipe[]
+  searchQuery: string
+  debouncedSearch: string
+  stockNames: Set<string>
+  onSearchChange: (q: string) => void
+  onSelect: (recipe: Recipe) => void
+  onClose: () => void
+}
+
+function SwapModal({
+  swapType, candidates, favorites, searchQuery, debouncedSearch,
+  stockNames, onSearchChange, onSelect, onClose,
+}: SwapModalProps) {
+  const fuse = useMemo(
+    () => new Fuse(candidates, { keys: ['title'], threshold: 0.4 }),
+    [candidates]
+  )
+
+  const filtered = useMemo(() => {
+    if (!debouncedSearch.trim()) return null
+    return fuse.search(debouncedSearch).map(r => r.item).slice(0, 20)
+  }, [fuse, debouncedSearch])
+
+  const showSearch = !!filtered
+  const topAlternatives = useMemo(
+    () => candidates.slice(0, 10),
+    [candidates]
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="flex max-h-[75vh] w-full max-w-lg flex-col rounded-t-2xl bg-bg-primary"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          <h3 className="text-sm font-bold">
+            {swapType === 'main' ? '主菜' : '副菜・スープ'}を変更
+          </h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-text-secondary hover:text-accent">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Search bar */}
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-2 rounded-xl bg-bg-card px-3 py-2.5">
+            <Search className="h-4 w-4 shrink-0 text-text-secondary" />
+            <input
+              autoFocus
+              type="search"
+              value={searchQuery}
+              onChange={e => onSearchChange(e.target.value)}
+              placeholder="レシピを検索..."
+              className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-secondary outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
+          {showSearch ? (
+            /* Search results */
+            filtered!.length > 0 ? (
+              <div className="space-y-2">
+                {filtered!.map(recipe => (
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                    onClick={() => onSelect(recipe)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-sm text-text-secondary">該当するレシピがありません</p>
+            )
+          ) : (
+            <>
+              {/* Favorites section */}
+              {favorites.length > 0 && (
+                <div>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <Star className="h-3.5 w-3.5 text-accent" />
+                    <h4 className="text-xs font-bold text-text-secondary">お気に入り</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {favorites.slice(0, 5).map(recipe => (
+                      <RecipeCard
+                        key={recipe.id}
+                        recipe={recipe}
+                        matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                        onClick={() => onSelect(recipe)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stock-based recommendations */}
+              <div>
+                <div className="mb-2 text-xs font-bold text-text-secondary">在庫でつくれるレシピ</div>
+                <div className="space-y-2">
+                  {topAlternatives.map(recipe => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                      onClick={() => onSelect(recipe)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -601,55 +715,3 @@ function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, onClose 
   )
 }
 
-// --- Sub-component: Shopping List Content ---
-
-function ShoppingListContent({
-  menu,
-  recipes,
-  stockItems,
-}: {
-  menu: WeeklyMenu
-  recipes: Map<number, Recipe>
-  stockItems: { name: string; inStock: boolean }[]
-}) {
-  const recipeList = menu.items
-    .map(i => recipes.get(i.recipeId))
-    .filter(Boolean) as Recipe[]
-
-  const aggregated = aggregateIngredients(recipeList, stockItems as never[])
-  const missing = aggregated.filter(i => !i.inStock)
-  const inStock = aggregated.filter(i => i.inStock)
-
-  return (
-    <div className="space-y-3">
-      {missing.length === 0 ? (
-        <p className="text-xs text-green-400">全ての材料が揃っています！</p>
-      ) : (
-        <div>
-          <div className="mb-1 text-xs font-medium text-accent">不足材料 ({missing.length}件)</div>
-          <ul className="space-y-1">
-            {missing.map(ing => (
-              <li key={`${ing.name}_${ing.unit}`} className="flex justify-between text-xs text-text-secondary">
-                <span>・{ing.name}</span>
-                <span>{ing.unit === '適量' ? '適量' : `${Math.round(ing.totalQuantity * 10) / 10}${ing.unit}`}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {inStock.length > 0 && (
-        <div>
-          <div className="mb-1 text-xs font-medium text-text-secondary">在庫あり ({inStock.length}件)</div>
-          <ul className="space-y-1">
-            {inStock.map(ing => (
-              <li key={`${ing.name}_${ing.unit}`} className="flex justify-between text-xs text-text-secondary line-through opacity-50">
-                <span>・{ing.name}</span>
-                <span>{ing.unit === '適量' ? '適量' : `${Math.round(ing.totalQuantity * 10) / 10}${ing.unit}`}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Search, Leaf, Sparkles, ChevronRight } from 'lucide-react'
+import { Search, Leaf, Sparkles, ChevronRight, Package } from 'lucide-react'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { RecipeCard } from '../components/RecipeCard'
@@ -124,6 +124,17 @@ export function HomePage() {
         <Search className="h-5 w-5 text-text-secondary" />
         <span className="text-sm text-text-secondary">レシピを検索...</span>
       </button>
+
+      {/* Quick actions */}
+      <div className="mb-5 flex gap-2">
+        <button
+          onClick={() => navigate('/stock')}
+          className="flex items-center gap-1.5 rounded-xl bg-bg-card px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:text-accent active:scale-95"
+        >
+          <Package className="h-4 w-4" />
+          在庫管理
+        </button>
+      </div>
 
       {/* Login banner — non-intrusive, only when not logged in */}
       {showLoginBanner && (

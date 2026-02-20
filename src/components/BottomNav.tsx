@@ -1,11 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, CalendarDays, Package, Star, Clock } from 'lucide-react'
+import { Home, CalendarDays, Star, Clock } from 'lucide-react'
+import type { ComponentType } from 'react'
 import type { TabId } from '../db/db'
+import { GeminiIcon } from './GeminiIcon'
 
-const tabs: { id: TabId; path: string; icon: typeof Home; label: string }[] = [
+type AnyIcon = typeof Home | ComponentType<{ className?: string }>
+
+const tabs: { id: TabId; path: string; icon: AnyIcon; label: string }[] = [
   { id: 'home', path: '/', icon: Home, label: 'ホーム' },
   { id: 'menu', path: '/weekly-menu', icon: CalendarDays, label: '献立' },
-  { id: 'stock', path: '/stock', icon: Package, label: '在庫' },
+  { id: 'gemini', path: '/gemini', icon: GeminiIcon, label: 'Gemini' },
   { id: 'favorites', path: '/favorites', icon: Star, label: 'お気に入り' },
   { id: 'history', path: '/history', icon: Clock, label: '履歴' },
 ]
