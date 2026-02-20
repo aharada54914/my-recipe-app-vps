@@ -44,8 +44,7 @@ export interface Recipe {
   saltContent?: string
   cookingTime?: string
   rawSteps?: string[]
-  // Cloud sync fields
-  supabaseId?: string
+  // Metadata fields
   updatedAt?: Date
 }
 
@@ -56,8 +55,7 @@ export interface StockItem {
   // T-27: Quantity fields
   quantity?: number
   unit?: string
-  // Cloud sync fields
-  supabaseId?: string
+  // Metadata fields
   updatedAt?: Date
 }
 
@@ -89,7 +87,6 @@ export interface Favorite {
   id?: number
   recipeId: number
   addedAt: Date
-  supabaseId?: string
 }
 
 export interface UserNote {
@@ -97,14 +94,12 @@ export interface UserNote {
   recipeId: number
   content: string
   updatedAt: Date
-  supabaseId?: string
 }
 
 export interface ViewHistory {
   id?: number
   recipeId: number
   viewedAt: Date
-  supabaseId?: string
 }
 
 export interface CalendarEventRecord {
@@ -116,7 +111,6 @@ export interface CalendarEventRecord {
   startTime: Date
   endTime: Date
   createdAt: Date
-  supabaseId?: string
 }
 
 export type SeasonalPriority = 'low' | 'medium' | 'high'
@@ -152,7 +146,6 @@ export interface UserPreferences {
   desiredMealMinute: number
   // Meta
   updatedAt: Date
-  supabaseId?: string
 }
 
 export type WeeklyMenuStatus = 'draft' | 'confirmed' | 'registered'
@@ -173,7 +166,6 @@ export interface WeeklyMenu {
   status: WeeklyMenuStatus
   createdAt: Date
   updatedAt: Date
-  supabaseId?: string
 }
 
 export type ViewState =
@@ -228,34 +220,34 @@ class RecipeDB extends Dexie {
       userNotes: '++id, &recipeId, updatedAt',
       viewHistory: '++id, recipeId, viewedAt',
     })
-    // v6: Add supabaseId for cloud sync
+    // v6: keep schema compatibility (legacy migration step)
     this.version(6).stores({
-      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
-      stock: '++id, &name, inStock, supabaseId',
-      favorites: '++id, &recipeId, addedAt, supabaseId',
-      userNotes: '++id, &recipeId, updatedAt, supabaseId',
-      viewHistory: '++id, recipeId, viewedAt, supabaseId',
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
     })
     // v7: Add calendarEvents + userPreferences tables (Phase 4-5)
     this.version(7).stores({
-      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
-      stock: '++id, &name, inStock, supabaseId',
-      favorites: '++id, &recipeId, addedAt, supabaseId',
-      userNotes: '++id, &recipeId, updatedAt, supabaseId',
-      viewHistory: '++id, recipeId, viewedAt, supabaseId',
-      calendarEvents: '++id, recipeId, googleEventId, supabaseId',
-      userPreferences: '++id, supabaseId',
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
     })
     // v8: Add weeklyMenus table (Phase 6)
     this.version(8).stores({
-      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId',
-      stock: '++id, &name, inStock, supabaseId',
-      favorites: '++id, &recipeId, addedAt, supabaseId',
-      userNotes: '++id, &recipeId, updatedAt, supabaseId',
-      viewHistory: '++id, recipeId, viewedAt, supabaseId',
-      calendarEvents: '++id, recipeId, googleEventId, supabaseId',
-      userPreferences: '++id, supabaseId',
-      weeklyMenus: '++id, weekStartDate, supabaseId',
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
     })
   }
 }

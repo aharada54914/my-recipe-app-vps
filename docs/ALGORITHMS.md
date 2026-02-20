@@ -255,7 +255,6 @@
 
 ---
 
-## 12. Supabase双方向同期アルゴリズム
 
 対象: `/Users/jrmag/my-recipe-app/src/utils/syncManager.ts`
 
@@ -270,7 +269,6 @@
   8. `weeklyMenus`
 - 戦略: 小規模データ前提のフルテーブル同期。
 - 競合方針: 基本は最終更新優先（`updated_at` など）。
-- IDマッピング: `recipe` の `local id <-> supabaseId` を構築して関連テーブル同期に使用。
 - テーブル別規則:
   - 未同期ローカルを push
   - 同期済みを upsert

@@ -1,6 +1,6 @@
 # Setup & Deployment Guide
 
-Step-by-step instructions for local development, Supabase configuration, and deployment.
+Step-by-step instructions for local development, Google OAuth setup, and deployment.
 
 ---
 
@@ -8,12 +8,11 @@ Step-by-step instructions for local development, Supabase configuration, and dep
 
 1. [Prerequisites](#1-prerequisites)
 2. [Local Development](#2-local-development)
-3. [Supabase Setup](#3-supabase-setup)
-4. [Google OAuth & Calendar Setup](#4-google-oauth--calendar-setup)
-5. [Gemini API Setup](#5-gemini-api-setup)
-6. [Production Build & Deployment](#6-production-build--deployment)
-7. [PWA Installation](#7-pwa-installation)
-8. [Updating Recipe Data](#8-updating-recipe-data)
+3. [Google OAuth & Google APIs Setup](#3-google-oauth--google-apis-setup)
+4. [Gemini API Setup](#4-gemini-api-setup)
+5. [Production Build & Deployment](#5-production-build--deployment)
+6. [PWA Installation](#6-pwa-installation)
+7. [Updating Recipe Data](#7-updating-recipe-data)
 
 ---
 
@@ -25,9 +24,8 @@ Step-by-step instructions for local development, Supabase configuration, and dep
 | npm | 10+ | Comes with Node.js |
 | Git | any | |
 
-Optional (for cloud features):
-- A [Supabase](https://supabase.com) project
-- A [Google Cloud](https://console.cloud.google.com) project with Calendar API enabled
+Optional:
+- A [Google Cloud](https://console.cloud.google.com) project (OAuth + Calendar + Drive)
 - A [Google AI Studio](https://aistudio.google.com) Gemini API key
 
 ---
@@ -44,294 +42,139 @@ npm install
 
 # Copy environment template
 cp .env.example .env
-# → Edit .env with your values (all optional for offline-only use)
 
-# Start the dev server
+# Start dev server
 npm run dev
-# → Opens at http://localhost:5173
+# -> http://localhost:5173
 ```
 
-On first load, the app auto-inserts ~1,700 recipes into IndexedDB.
-This takes a second or two — subsequent loads are instant.
+On first load, the app auto-inserts recipe data into IndexedDB.
 
 ### Available npm scripts
 
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Start Vite dev server with HMR |
-| `npm run build` | Run prebuild → tsc type-check → Vite production bundle |
-| `npm run preview` | Serve the production build locally |
-| `npm run lint` | Run ESLint (TypeScript + React Hooks rules) |
+| `npm run build` | Run prebuild -> tsc -> Vite production bundle |
+| `npm run preview` | Serve production build locally |
+| `npm run lint` | Run ESLint |
 | `npm run test` | Run Vitest unit tests |
-| `npm run test:watch` | Run Vitest in watch mode |
-
-### Build pipeline detail
-
-`npm run build` executes three steps in order:
-
-```
-1. scripts/prebuild-recipes.mjs
-   Reads CSV files → parses ingredients/steps → outputs:
-     src/data/recipes-hotcook.json
-     src/data/recipes-healsio.json
-
-2. tsc -b
-   TypeScript strict-mode type check (no emit)
-
-3. vite build
-   Bundles app → dist/
-   Generates Service Worker via vite-plugin-pwa
-```
 
 ---
 
-## 3. Supabase Setup
+## 3. Google OAuth & Google APIs Setup
 
-> Skip this section if you only need offline functionality.
+Required for:
+- Google login
+- Google Drive backup/restore
+- Google Calendar registration
 
-### 3.1 Create a project
+### 3.1 Create Google Cloud project
 
-1. Go to [app.supabase.com](https://app.supabase.com) and create a new project.
-2. Note your **Project URL** and **anon public key** from Project Settings → API.
+1. Open [Google Cloud Console](https://console.cloud.google.com)
+2. Create a project
+3. Enable APIs:
+   - Google Calendar API
+   - Google Drive API
 
-### 3.2 Run migrations
+### 3.2 OAuth consent screen
 
-In the Supabase SQL Editor, run the migration files in order:
-
-```sql
--- Run first:
--- supabase/migrations/001_initial_schema.sql
-
--- Run second:
--- supabase/migrations/002_rls_policies.sql
-```
-
-This creates all 8 tables with proper RLS policies (each user can only access their own data).
-
-### 3.3 Configure environment
-
-```env
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-```
-
-### 3.4 Verify
-
-Start the app, go to Settings, and tap **Googleでログイン**.
-After authentication, the sync button should become active.
-
----
-
-## 4. Google OAuth & Calendar Setup
-
-> Required for Google login and calendar registration features.
-
-### 4.1 Create a Google Cloud project
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a new project (or use an existing one)
-3. Enable the **Google Calendar API**:
-   - APIs & Services → Library → search "Google Calendar API" → Enable
-
-### 4.2 Configure OAuth consent screen
-
-1. APIs & Services → OAuth consent screen
-2. Select **External** user type
-3. Fill in app name, support email, developer email
+1. APIs & Services -> OAuth consent screen
+2. User type: External
+3. Fill app name/support email/developer email
 4. Add scopes:
+   - `openid`
+   - `email`
+   - `profile`
+   - `https://www.googleapis.com/auth/drive.appdata`
    - `https://www.googleapis.com/auth/calendar.events`
    - `https://www.googleapis.com/auth/calendar.readonly`
-5. Add test users (your Google accounts for testing)
+5. Add test users for development
 
-### 4.3 Create OAuth credentials
+### 3.3 Create OAuth client
 
-1. APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID
-2. Application type: **Web application**
-3. Authorized redirect URIs — add your Supabase callback URL:
-   ```
-   https://your-project-id.supabase.co/auth/v1/callback
-   ```
+1. APIs & Services -> Credentials -> Create OAuth client ID
+2. Application type: Web application
+3. Add Authorized JavaScript origins:
+   - `http://localhost:5173`
+   - your production domain (for example `https://your-app.vercel.app`)
 
-### 4.4 Configure Supabase Google provider
+### 3.4 Configure app env
 
-1. Supabase Dashboard → Authentication → Providers → Google
-2. Enable Google
-3. Paste the **Client ID** and **Client Secret** from step 4.3
-4. Save
+```env
+VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+```
 
-### 4.5 Verify
-
-In the app, go to Settings → tap **Googleでログイン**.
-After OAuth consent, you should see your email displayed and the calendar dropdown should populate.
+If this variable is missing, the app boots normally and OAuth features stay disabled.
 
 ---
 
-## 5. Gemini API Setup
+## 4. Gemini API Setup
 
-> Required for AI recipe import and weekly menu refinement.
+Required for AI recipe import and optional weekly menu refinement.
 
-### 5.1 Get an API key
-
-1. Go to [Google AI Studio](https://aistudio.google.com)
-2. Click **Get API key** → Create API key
-3. Copy the key
-
-### 5.2 Configure
-
-**Option A — via `.env` (recommended for development):**
+1. Create an API key in [Google AI Studio](https://aistudio.google.com)
+2. Set either:
 
 ```env
 VITE_GEMINI_API_KEY=your-gemini-api-key
 ```
 
-**Option B — via the Settings page (no rebuild needed):**
+or save it in Settings inside the app.
 
-1. Open the app → Settings
-2. Find the **Gemini API Key** section
-3. Paste your key and tap Save
-4. Tap **接続テスト** to verify
-
-> The `.env` value always takes priority over the Settings page value.
-
-### 5.3 Model used
-
-The app uses `gemini-2.0-flash` for all AI operations.
-Typical usage:
-- AI recipe import: 1 request per URL
-- Weekly menu refinement: 1 request per generation (optional step)
+The `.env` value has priority over the Settings-stored key.
 
 ---
 
-## 6. Production Build & Deployment
+## 5. Production Build & Deployment
 
 ### Build
 
 ```bash
 npm run build
-# Output goes to dist/
+# output: dist/
 ```
 
 ### Deploy to Vercel
 
-```bash
-npm install -g vercel
-vercel
-# Follow prompts — set environment variables in the Vercel dashboard
-```
+This repository includes `vercel.json` with SPA rewrites.
+Deep links such as `/settings` and `/recipe/1` resolve to `index.html`.
 
-Or connect your GitHub repo in the Vercel dashboard for automatic deploys on push.
-
-**Environment variables to set in Vercel:**
-- `VITE_GOOGLE_CLIENT_ID` (optional, required for Google login / Drive backup)
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+Set environment variables in Vercel:
+- `VITE_GOOGLE_CLIENT_ID` (optional, required for OAuth features)
 - `VITE_GEMINI_API_KEY` (optional)
-
-This repository includes `vercel.json` with SPA rewrites, so deep links like `/settings` and `/recipe/1` resolve to `index.html`.
-
-### Deploy to Netlify
-
-```bash
-npm install -g netlify-cli
-netlify deploy --prod --dir=dist
-```
-
-Or drag the `dist/` folder into the Netlify dashboard.
 
 ### Deploy to any static host
 
-The `dist/` folder is a fully self-contained static site.
-Upload it to any web server, S3 bucket, GitHub Pages, Cloudflare Pages, etc.
-
-**Important:** Configure the server to return `index.html` for all routes (client-side routing):
-
-**Nginx example:**
-```nginx
-location / {
-  try_files $uri $uri/ /index.html;
-}
-```
-
-**Apache example (`.htaccess`):**
-```apache
-RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^ /index.html [L]
-```
-
-### HTTPS requirement
-
-The following features **require HTTPS** (browser security restrictions):
-- Service Worker (PWA offline caching)
-- Screen Wake Lock API
-- Google OAuth redirect
-
-Local `http://localhost:5173` is exempt and works fine for development.
+Upload `dist/` and configure SPA fallback to `/index.html`.
 
 ---
 
-## 7. PWA Installation
+## 6. PWA Installation
 
-### iOS (iPhone / iPad)
+### iOS (Safari only)
 
-1. Open the deployed app URL in **Safari** (not Chrome or Firefox)
-2. Tap the **Share** button (box with up arrow)
-3. Scroll down and tap **ホーム画面に追加** (Add to Home Screen)
-4. Edit the name if desired → tap **追加**
+1. Open deployed URL in Safari
+2. Share -> Add to Home Screen
+3. Tap Add
 
-The app now opens full-screen without browser UI, using theme color `#121214`.
+### Android (Chrome)
 
-> **Note:** iOS Chrome and Firefox cannot install PWAs — only Safari supports this on iOS.
-
-### Android
-
-1. Open the deployed app URL in **Chrome**
-2. An **"Install app"** banner should appear at the bottom automatically
-3. If not, tap the three-dot menu → **Install app** (or **Add to Home Screen**)
-
-### Checking PWA status
-
-Open DevTools → Application → Service Workers to verify the Service Worker is registered and the manifest is detected.
+1. Open deployed URL in Chrome
+2. Tap Install app (or menu -> Add to Home Screen)
 
 ---
 
-## 8. Updating Recipe Data
+## 7. Updating Recipe Data
 
-Recipe data lives in two CSV files at the project root:
+Recipe source CSV files:
+- `KN-HW24H_recipes_complete_complete.csv`
+- `AX-XA20_recipes_complete.csv`
 
-| File | Device | Recipes |
-|------|--------|---------|
-| `KN-HW24H_recipes_complete_complete.csv` | Hotcook (KN-HW24H) | ~350 |
-| `AX-XA20_recipes_complete.csv` | Healsio (AX-XA20) | ~1,372 |
-
-### Regenerate JSON from CSV
+Regenerate JSON:
 
 ```bash
 node scripts/prebuild-recipes.mjs
-# Outputs: src/data/recipes-hotcook.json
-#          src/data/recipes-healsio.json
 ```
 
-This runs automatically as part of `npm run build`.
-
-### Deploying updated data
-
-1. Update or replace the CSV file(s)
-2. Run `npm run build`
-3. Deploy the new `dist/` folder
-
-Existing users will receive the updated recipes on their next sync.
-If they already have recipes in IndexedDB, `initDb()` will **not** overwrite them (it only runs when the table is empty).
-
-To force a data refresh for existing users, you would need to implement a schema version bump in Dexie (increment the version number in `db.ts`) with a migration that clears and re-inserts the pre-built data.
-
----
-
-## Troubleshooting (Vercel)
-
-- Build fails with Node engine errors:
-  - Use Node `22.12+` (configured by `.nvmrc` and `package.json#engines`).
-- App opens but deep links return 404:
-  - Confirm `vercel.json` is present in the deployed commit so SPA rewrites apply.
-- Google login button does nothing:
-  - Set `VITE_GOOGLE_CLIENT_ID` in Vercel project environment variables.
+This runs automatically during `npm run build`.

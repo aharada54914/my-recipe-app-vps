@@ -1,7 +1,7 @@
 /**
  * Google Calendar REST API v3 client.
  * Uses fetch() directly — no external library required.
- * Requires a Google OAuth access token (provider_token from Supabase).
+ * Requires a Google OAuth access token.
  */
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3'

@@ -63,9 +63,7 @@ my-recipe-app/
 │   │   └── db.ts                 # Dexie schema, all type definitions, initDb()
 │   │
 │   ├── lib/                      # External service clients
-│   │   ├── supabase.ts           # Supabase client init
 │   │   ├── googleCalendar.ts     # Google Calendar API v3 wrappers
-│   │   └── database.types.ts     # Generated Supabase TypeScript types
 │   │
 │   ├── utils/                    # Pure functions and business logic
 │   │   ├── recipeUtils.ts        # formatQuantityVibe, adjustIngredients, isHelsioDeli
@@ -94,7 +92,6 @@ my-recipe-app/
 ├── scripts/
 │   └── prebuild-recipes.mjs     # CSV → JSON pipeline (runs before npm run build)
 │
-├── supabase/
 │   └── migrations/
 │       ├── 001_initial_schema.sql
 │       └── 002_rls_policies.sql
@@ -116,7 +113,6 @@ my-recipe-app/
 ### recipes
 
 ```
-indexes: ++id, title, device, category, recipeNumber, [category+device], imageUrl, supabaseId
 ```
 
 | Field | Type | Description |
@@ -138,13 +134,11 @@ indexes: ++id, title, device, category, recipeNumber, [category+device], imageUr
 | `cookingTime` | `string?` | Original time string |
 | `rawSteps` | `string[]?` | Raw step-by-step text |
 | `imageUrl` | `string?` | External CDN image URL |
-| `supabaseId` | `string?` | Cloud record UUID |
 | `updatedAt` | `Date?` | Last modification timestamp |
 
 ### stock
 
 ```
-indexes: ++id, &name, inStock, supabaseId
 ```
 
 | Field | Type | Description |
@@ -154,13 +148,11 @@ indexes: ++id, &name, inStock, supabaseId
 | `inStock` | `boolean` | quantity > 0 |
 | `quantity` | `number?` | Amount (e.g., 500 for 500 g) |
 | `unit` | `string?` | Unit: g / ml / 個 / etc. |
-| `supabaseId` | `string?` | Cloud record UUID |
 | `updatedAt` | `Date?` | Last modification timestamp |
 
 ### favorites
 
 ```
-indexes: ++id, &recipeId, addedAt, supabaseId
 ```
 
 | Field | Type | Description |
@@ -168,12 +160,10 @@ indexes: ++id, &recipeId, addedAt, supabaseId
 | `id` | `number` (auto) | |
 | `recipeId` | `number` (unique) | FK → recipes.id |
 | `addedAt` | `Date` | When favorited |
-| `supabaseId` | `string?` | |
 
 ### userNotes
 
 ```
-indexes: ++id, &recipeId, updatedAt, supabaseId
 ```
 
 | Field | Type | Description |
@@ -182,12 +172,10 @@ indexes: ++id, &recipeId, updatedAt, supabaseId
 | `recipeId` | `number` (unique) | FK → recipes.id |
 | `content` | `string` | Free-form cooking notes |
 | `updatedAt` | `Date` | |
-| `supabaseId` | `string?` | |
 
 ### viewHistory
 
 ```
-indexes: ++id, recipeId, viewedAt, supabaseId
 ```
 
 | Field | Type | Description |
@@ -195,12 +183,10 @@ indexes: ++id, recipeId, viewedAt, supabaseId
 | `id` | `number` (auto) | |
 | `recipeId` | `number` | FK → recipes.id |
 | `viewedAt` | `Date` | When the recipe detail was opened |
-| `supabaseId` | `string?` | |
 
 ### calendarEvents
 
 ```
-indexes: ++id, recipeId, googleEventId, supabaseId
 ```
 
 | Field | Type | Description |
@@ -213,12 +199,10 @@ indexes: ++id, recipeId, googleEventId, supabaseId
 | `startTime` | `Date` | |
 | `endTime` | `Date` | |
 | `createdAt` | `Date` | |
-| `supabaseId` | `string?` | |
 
 ### userPreferences
 
 ```
-indexes: ++id, supabaseId
 ```
 
 | Field | Type | Default | Description |
@@ -238,12 +222,10 @@ indexes: ++id, supabaseId
 | `cookingNotifyHour/Minute` | `number` | 18:30 | Cooking start reminder time |
 | `desiredMealHour/Minute` | `number` | 19:00 | Target "いただきます" time for Gantt |
 | `updatedAt` | `Date` | | |
-| `supabaseId` | `string?` | | |
 
 ### weeklyMenus
 
 ```
-indexes: ++id, weekStartDate, supabaseId
 ```
 
 | Field | Type | Description |
@@ -255,7 +237,6 @@ indexes: ++id, weekStartDate, supabaseId
 | `status` | `'draft' \| 'confirmed' \| 'registered'` | |
 | `createdAt` | `Date` | |
 | `updatedAt` | `Date` | |
-| `supabaseId` | `string?` | |
 
 ### Key Types
 
@@ -403,11 +384,8 @@ const [hotcook, healsio] = useLiveQuery(() =>
 Each table follows this pattern:
 
 **PUSH (local → cloud):**
-1. Find local records without `supabaseId` → upsert to Supabase → store returned UUID as `supabaseId`
-2. Find local records with `supabaseId` + recent `updatedAt` → upsert to Supabase
 
 **PULL (cloud → local):**
-1. Fetch all records for this `user_id` from Supabase
 2. For records not in local DB → insert
 3. For records in both → compare `updated_at`, apply cloud version if newer
 
@@ -453,26 +431,19 @@ URL input
   → save to db.recipes
 ```
 
-### Supabase
 
-**Client:** `src/lib/supabase.ts`
-Returns `null` if `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` is not set (graceful degradation).
 
 **Authentication:**
-- `supabase.auth.signInWithOAuth({ provider: 'google', scopes: 'calendar.events calendar.readonly' })`
 - `provider_token` from the session is used directly for Google Calendar API calls.
 
-**Tables** (see `supabase/migrations/001_initial_schema.sql`):
 - `recipes`, `stock`, `favorites`, `user_notes`, `view_history`, `calendar_events`, `user_preferences`, `weekly_menus`
 - All tables have a `user_id` column (UUID, FK to `auth.users`)
 
-**RLS policies** (see `supabase/migrations/002_rls_policies.sql`):
 - Each table is restricted to `auth.uid() = user_id` — users can only read/write their own data.
 
 ### Google Calendar API v3
 
 **Base URL:** `https://www.googleapis.com/calendar/v3`
-**Auth:** Bearer token (`providerToken` from Supabase OAuth session)
 
 | Function | HTTP call | Description |
 |----------|-----------|-------------|

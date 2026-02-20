@@ -108,7 +108,6 @@ Start times are calculated **backward** from the target meal time set in Setting
 
 ### Personal Notes
 
-A free-form textarea below the recipe. Notes are saved to `db.userNotes` and synced to Supabase when online.
 Examples: *"塩を少なめにした"*, *"大きく切ると食感が良い"*
 
 ### Calendar Registration
@@ -199,7 +198,6 @@ Tap **カレンダー登録** to:
 2. Create a shopping list event one day before the week starts
 3. Optionally add reminders (e.g., 30 min before meal time)
 
-Calendar events are saved to `db.calendarEvents` for tracking and synced to Supabase.
 
 ---
 
@@ -210,7 +208,6 @@ Calendar events are saved to `db.calendarEvents` for tracking and synced to Supa
 - Tap the **star icon** (☆ → ★) on any recipe detail page to add it to favorites.
 - Tap again to remove.
 - The Favorites page lists all bookmarked recipes sorted by `addedAt` (most recent first).
-- Favorites are stored in `db.favorites` and synced to Supabase.
 
 ---
 
@@ -221,7 +218,6 @@ Calendar events are saved to `db.calendarEvents` for tracking and synced to Supa
 - Every time you open a recipe detail page, a `viewedAt` timestamp is automatically recorded.
 - The History page shows up to **200 most recent** entries.
 - Useful for quickly re-finding a recipe you cooked recently.
-- History is synced to Supabase (limited to 200 records per sync).
 
 ---
 
@@ -239,7 +235,6 @@ Calendar events are saved to `db.calendarEvents` for tracking and synced to Supa
 3. A **preview** of the parsed recipe is shown — title, ingredients, steps, image.
 4. Tap **Save** to write to `db.recipes`.
 5. Before saving, the app checks for duplicate titles to avoid double-imports.
-6. Saved recipes are flagged for cloud sync (`supabaseId` is set after next sync).
 
 ### What gets extracted
 
@@ -275,14 +270,12 @@ Calendar events are saved to `db.calendarEvents` for tracking and synced to Supa
 
 ### Google Login (Account section)
 
-- Tap **Googleでログイン** to authenticate via Google OAuth (Supabase).
 - Requested scopes: `calendar.events`, `calendar.readonly`
 - After login, the Google OAuth token is available for Calendar API calls.
 - Tap **ログアウト** to sign out and return to offline-only mode.
 
 ### Cloud Sync
 
-- **今すぐ同期** triggers a full bidirectional sync between local IndexedDB and Supabase.
 - Last sync time is shown ("最終同期: X分前").
 - Sync errors appear in red below the button.
 - See [docs/ARCHITECTURE.md](ARCHITECTURE.md#sync-system) for the detailed sync order and conflict resolution strategy.
@@ -387,7 +380,6 @@ All of the following work completely offline:
 
 The following require internet:
 
-- Cloud sync (Supabase)
 - Google Calendar registration
 - AI recipe import and weekly menu refinement (Gemini API)
 - Google login

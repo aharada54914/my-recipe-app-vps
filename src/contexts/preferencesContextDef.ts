@@ -1,7 +1,7 @@
 import { createContext } from 'react'
 import type { UserPreferences } from '../db/db'
 
-export const DEFAULT_PREFERENCES: Omit<UserPreferences, 'id' | 'supabaseId'> = {
+export const DEFAULT_PREFERENCES: Omit<UserPreferences, 'id'> = {
   familyCalendarId: undefined,
   mealStartHour: 18,
   mealStartMinute: 0,

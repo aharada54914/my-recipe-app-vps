@@ -76,9 +76,6 @@ cp .env.example .env
 ```
 
 ```env
-# Supabase — optional. All offline features work without this.
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
 
 # Google OAuth — optional, required for Google login + Drive backup + Calendar integration.
 VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
@@ -143,7 +140,6 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 |------|-------------|
 | [docs/FEATURES.md](docs/FEATURES.md) | Detailed usage guide for every feature |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | DB schema, API specs, sync system, component map |
-| [docs/SETUP.md](docs/SETUP.md) | Full setup, Supabase config, deployment, PWA install |
 
 ---
 
@@ -155,7 +151,6 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 | Styling | Tailwind CSS 4 |
 | Routing | React Router 7 |
 | Local DB | Dexie.js 4.3 (IndexedDB) + dexie-react-hooks |
-| Cloud | Google OAuth + Google Drive AppData backup (Supabase optional) |
 | AI | Google Gemini API (`gemini-2.0-flash`) |
 | Search | Fuse.js 7.1 (fuzzy search) |
 | Virtual Scroll | @tanstack/react-virtual 3.13 |
