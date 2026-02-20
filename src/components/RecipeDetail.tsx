@@ -97,7 +97,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   return (
     <div className="min-h-dvh bg-bg-primary">
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 pt-6 pb-4">
+      <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md flex items-center gap-3 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)]">
         <button
           onClick={onBack}
           className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
@@ -186,21 +186,19 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             <div className="flex gap-2">
               <button
                 onClick={() => setActiveTab('ingredients')}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${
-                  activeTab === 'ingredients'
+                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${activeTab === 'ingredients'
                     ? 'bg-accent text-white'
                     : 'bg-bg-card text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 材料
               </button>
               <button
                 onClick={() => setActiveTab('steps')}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${
-                  activeTab === 'steps'
+                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${activeTab === 'steps'
                     ? 'bg-accent text-white'
                     : 'bg-bg-card text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 手順
               </button>

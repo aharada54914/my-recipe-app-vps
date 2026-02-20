@@ -110,7 +110,7 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
   return (
     <div className="min-h-dvh bg-bg-primary">
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 pt-6 pb-4">
+      <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md flex items-center gap-3 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)]">
         <button
           onClick={onBack}
           className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"

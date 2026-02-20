@@ -15,7 +15,7 @@ export function Header({ onSearchToggle, onAiParse, onMultiSchedule, onSettings 
   const navigate = useNavigate()
 
   return (
-    <header className="px-4 pt-6 pb-4">
+    <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)]">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ForkKnifeIcon className="h-7 w-7 text-accent" />

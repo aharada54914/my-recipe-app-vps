@@ -48,7 +48,6 @@ body {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   /* Safe-area padding for notch/Dynamic Island */
-  padding-top: var(--sat);
   padding-bottom: var(--sab);
   padding-left: var(--sal);
   padding-right: var(--sar);

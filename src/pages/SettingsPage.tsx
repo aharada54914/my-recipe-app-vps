@@ -132,38 +132,39 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
 
   return (
     <div className="min-h-dvh bg-bg-primary">
-      <header className="flex items-center gap-3 px-4 pt-6 pb-4">
-        <button
-          onClick={onBack}
-          className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="flex items-center gap-2">
-          <Settings className="h-5 w-5 text-accent" />
-          <h1 className="text-lg font-bold">設定</h1>
+      <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md pt-[calc(env(safe-area-inset-top,0px)+1.5rem)]">
+        <div className="flex items-center gap-3 px-4 pb-4">
+          <button
+            onClick={onBack}
+            className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <Settings className="h-5 w-5 text-accent" />
+            <h1 className="text-lg font-bold">設定</h1>
+          </div>
+        </div>
+
+        {/* Tab bar */}
+        <div className="border-b border-white/10">
+          <div className="flex overflow-x-auto scrollbar-none px-2">
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex shrink-0 flex-col items-center gap-1 px-3 py-2.5 text-[10px] font-medium transition-colors ${activeTab === tab.id
+                    ? 'border-b-2 border-accent text-accent'
+                    : 'text-text-secondary hover:text-text-primary'
+                  }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
-
-      {/* Tab bar */}
-      <div className="sticky top-0 z-10 border-b border-white/10 bg-bg-primary">
-        <div className="flex overflow-x-auto scrollbar-none px-2">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex shrink-0 flex-col items-center gap-1 px-3 py-2.5 text-[10px] font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <main className="space-y-4 px-4 py-4 pb-8">
 
@@ -315,7 +316,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                       className={`flex-1 rounded-xl py-2.5 text-sm font-bold text-white transition-colors ${confirmSave
                         ? 'bg-red-500 hover:bg-red-600'
                         : 'bg-accent hover:bg-accent-hover'
-                      }`}
+                        }`}
                     >
                       {confirmSave ? '本当に保存しますか？' : '保存'}
                     </button>
@@ -383,7 +384,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                   className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${importMode === 'overwrite'
                     ? 'bg-accent text-white'
                     : 'bg-white/5 text-text-secondary hover:bg-white/10'
-                  }`}
+                    }`}
                 >
                   上書き
                 </button>
@@ -392,7 +393,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                   className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${importMode === 'merge'
                     ? 'bg-accent text-white'
                     : 'bg-white/5 text-text-secondary hover:bg-white/10'
-                  }`}
+                    }`}
                 >
                   マージ
                 </button>
