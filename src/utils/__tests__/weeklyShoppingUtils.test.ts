@@ -9,14 +9,12 @@ function makeRecipe(overrides: Partial<Recipe> = {}): Recipe {
     title: 'テストレシピ',
     device: 'hotcook',
     category: '主菜',
-    servings: 2,
+    recipeNumber: '',
+    baseServings: 2,
+    totalWeightG: 400,
     ingredients: [],
     steps: [],
-    saltContent: null,
-    totalTimeMinutes: null,
-    imageUrl: null,
-    recipeNumber: null,
-    sourceUrl: null,
+    totalTimeMinutes: 30,
     ...overrides,
   }
 }

@@ -32,7 +32,8 @@ function ImportTab() {
   const navigate = useNavigate()
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
-  const [status, setStatus] = useState<'idle' | 'parsing' | 'previewing' | 'saving' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'parsing' | 'previewing' | 'error'>('idle')
+  const [isSaving, setIsSaving] = useState(false)
   const [parsed, setParsed] = useState<Omit<Recipe, 'id'> | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -59,7 +60,7 @@ function ImportTab() {
     if (existing) {
       if (!window.confirm(`「${parsed.title}」は既に登録されています。重複して保存しますか？`)) return
     }
-    setStatus('saving')
+    setIsSaving(true)
     await db.recipes.add(parsed as Recipe)
     navigate('/search')
   }
@@ -105,11 +106,11 @@ function ImportTab() {
           </button>
           <button
             onClick={handleSave}
-            disabled={status === 'saving'}
+            disabled={isSaving}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-3 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            {status === 'saving' ? '保存中...' : 'レシピを保存'}
+            {isSaving ? '保存中...' : 'レシピを保存'}
           </button>
         </div>
       </div>
