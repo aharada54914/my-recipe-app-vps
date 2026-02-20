@@ -1,6 +1,5 @@
 import { Search, CalendarClock, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { ForkKnifeIcon } from './ForkKnifeIcon'
 import { useAuth } from '../hooks/useAuth'
 
 interface HeaderProps {
@@ -17,7 +16,11 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
     <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)]">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ForkKnifeIcon className="h-7 w-7 text-accent" />
+          <img
+            src="/apple-touch-icon.png"
+            alt="Kitchen App icon"
+            className="h-8 w-8 rounded-lg object-cover"
+          />
           <h1 className="text-xl font-bold tracking-tight">Kitchen App</h1>
         </div>
         <div className="flex items-center gap-2">
