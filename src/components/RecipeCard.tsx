@@ -13,7 +13,7 @@ interface RecipeCardProps {
   recipe: Recipe
   matchRate?: number
   onClick: () => void
-  variant?: 'list' | 'grid'
+  variant?: 'list' | 'grid' | 'menu'
 }
 
 // T-08: React.memo to prevent unnecessary re-renders
@@ -23,6 +23,48 @@ export const RecipeCard = memo(function RecipeCard({
   onClick,
   variant = 'list',
 }: RecipeCardProps) {
+  // Compact tile for weekly menu 2-column layout
+  if (variant === 'menu') {
+    return (
+      <button
+        onClick={onClick}
+        className="w-full overflow-hidden rounded-xl bg-bg-card text-left transition-colors active:scale-[0.97] hover:bg-bg-card-hover"
+      >
+        <RecipeImage
+          recipe={recipe}
+          placeholderHeight="h-20"
+          className="w-full rounded-none rounded-t-xl"
+        />
+        <div className="p-2">
+          <span className="mb-1 inline-block rounded px-1 py-0.5 text-[9px] font-medium text-accent" style={{ backgroundColor: 'rgba(249,115,22,0.15)' }}>
+            {deviceLabels[recipe.device]}
+          </span>
+          <h3 className="mb-1.5 line-clamp-2 text-[11px] font-bold leading-snug">
+            {recipe.title}
+          </h3>
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-0.5 text-[10px] text-text-secondary">
+              <Clock className="h-2.5 w-2.5" />
+              {recipe.totalTimeMinutes}分
+            </span>
+            {matchRate !== undefined && (
+              <span
+                className={`rounded px-1 py-0.5 text-[9px] font-bold ${matchRate >= 80
+                    ? 'bg-green-500/20 text-green-400'
+                    : matchRate >= 50
+                      ? 'bg-yellow-500/20 text-yellow-400'
+                      : 'bg-white/5 text-text-secondary'
+                  }`}
+              >
+                {matchRate}%
+              </span>
+            )}
+          </div>
+        </div>
+      </button>
+    )
+  }
+
   if (variant === 'grid') {
     return (
       <button

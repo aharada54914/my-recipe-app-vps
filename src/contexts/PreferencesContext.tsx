@@ -6,17 +6,23 @@ import { DEFAULT_PREFERENCES, PreferencesContext } from './preferencesContextDef
 export type { PreferencesContextValue } from './preferencesContextDef'
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
-  const stored = useLiveQuery(() => db.userPreferences.toCollection().first())
+  // Return null when loaded-but-empty to distinguish from undefined (still loading)
+  const stored = useLiveQuery(async () => {
+    const prefs = await db.userPreferences.toCollection().first()
+    return prefs ?? null
+  })
 
   // Auto-create default preferences if none exist
   useEffect(() => {
     if (stored === undefined) return // still loading
-    if (stored === null || stored === undefined) {
+    if (stored === null) {
       db.userPreferences.add({ ...DEFAULT_PREFERENCES, updatedAt: new Date() })
     }
   }, [stored])
 
-  const preferences: UserPreferences = stored ?? { ...DEFAULT_PREFERENCES, updatedAt: new Date() }
+  const preferences: UserPreferences = (stored !== null && stored !== undefined)
+    ? stored
+    : { ...DEFAULT_PREFERENCES, updatedAt: new Date() }
 
   const updatePreference = useCallback(async <K extends keyof UserPreferences>(
     key: K,

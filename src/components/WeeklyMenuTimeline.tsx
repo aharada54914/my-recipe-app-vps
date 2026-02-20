@@ -36,11 +36,15 @@ export function WeeklyMenuTimeline({ compact = false }: WeeklyMenuTimelineProps)
     [weekStartStr]
   )
 
-  // Load recipes for menu items
-  const recipeIds = useMemo(
-    () => menu?.items.map(i => i.recipeId) ?? [],
-    [menu]
-  )
+  // Load recipes for menu items (main + side)
+  const recipeIds = useMemo(() => {
+    const ids: number[] = []
+    for (const item of menu?.items ?? []) {
+      ids.push(item.recipeId)
+      if (item.sideRecipeId != null) ids.push(item.sideRecipeId)
+    }
+    return ids
+  }, [menu])
 
   const recipesData = useLiveQuery(
     async () => {
@@ -140,6 +144,11 @@ export function WeeklyMenuTimeline({ compact = false }: WeeklyMenuTimelineProps)
                   <div className="truncate text-sm font-medium">
                     {recipe?.title ?? '未設定'}
                   </div>
+                  {item.sideRecipeId != null && recipeMap.get(item.sideRecipeId) && (
+                    <div className="truncate text-[10px] text-text-secondary">
+                      + {recipeMap.get(item.sideRecipeId)!.title}
+                    </div>
+                  )}
                 </div>
                 {recipe && recipe.totalTimeMinutes > 0 && (
                   <div className="flex shrink-0 items-center gap-1 text-xs text-text-secondary">

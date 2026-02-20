@@ -107,7 +107,7 @@ export async function selectWeeklyMenu(
     }
   }
 
-  // Greedy selection for 7 days
+  // Greedy selection for 7 days — main dishes
   const result: WeeklyMenuItem[] = []
   const usedRecipeIds = new Set<number>()
   const selectedCategories: string[] = []
@@ -173,6 +173,57 @@ export async function selectWeeklyMenu(
         mealType: 'dinner',
         locked: false,
       })
+    }
+  }
+
+  // Second pass — select side dishes (副菜 or スープ) for each day
+  const sideEligible = eligible.filter(
+    r => r.category === '副菜' || r.category === 'スープ'
+  )
+
+  if (sideEligible.length > 0) {
+    // Score side candidates with same base scoring
+    const scoredSides: ScoredRecipe[] = sideEligible.map(recipe => {
+      let score = 0
+      const matchRate = calculateMatchRate(recipe.ingredients, stockNames)
+      score += matchRate * 3.0
+      const hasSeasonalIngredient = recipe.ingredients.some(
+        ing => seasonalIngredients.some(s => ing.name.includes(s))
+      )
+      if (hasSeasonalIngredient) score += 10 * seasonalWeight
+      if (recentMenuRecipeIds.has(recipe.id!)) score -= 20
+      if (recentViewIds.has(recipe.id!)) score -= 5
+      return { recipe, baseScore: score }
+    })
+    scoredSides.sort((a, b) => b.baseScore - a.baseScore)
+
+    const usedSideIds = new Set<number>()
+    for (const item of result) {
+      let bestSide: Recipe | null = null
+      let bestSideScore = -Infinity
+
+      for (const { recipe, baseScore } of scoredSides) {
+        if (usedSideIds.has(recipe.id!)) continue
+        // Avoid same recipe as the main dish
+        if (recipe.id === item.recipeId) continue
+
+        // Penalise over-representation of the same sub-category
+        let score = baseScore
+        const subCatCount = [...usedSideIds]
+          .map(id => sideEligible.find(r => r.id === id)?.category ?? '')
+          .filter(c => c === recipe.category).length
+        if (subCatCount >= 3) score -= (subCatCount - 2) * 8
+
+        if (score > bestSideScore) {
+          bestSideScore = score
+          bestSide = recipe
+        }
+      }
+
+      if (bestSide) {
+        usedSideIds.add(bestSide.id!)
+        item.sideRecipeId = bestSide.id!
+      }
     }
   }
 
