@@ -8,6 +8,7 @@ export type { GoogleUser, AuthContextValue }
 const USER_KEY = 'google_user'
 const TOKEN_KEY = 'google_access_token'
 const TOKEN_EXPIRY_KEY = 'google_token_expiry'
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 
 const SCOPES = [
   'openid',
@@ -52,6 +53,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProviderToken(token)
   }, [])
 
+  if (!GOOGLE_CLIENT_ID) {
+    const signInWithGoogle = () => {}
+
+    const signOut = () => {
+      setUser(null)
+      setProviderToken(null)
+      try {
+        localStorage.removeItem(USER_KEY)
+        sessionStorage.removeItem(TOKEN_KEY)
+        sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
+      } catch { /* ignore */ }
+    }
+
+    return (
+      <AuthContext.Provider value={{ user, loading: false, providerToken, signInWithGoogle, signOut }}>
+        {children}
+      </AuthContext.Provider>
+    )
+  }
+
+  return (
+    <OAuthEnabledAuthProvider
+      user={user}
+      loading={loading}
+      providerToken={providerToken}
+      setLoading={setLoading}
+      setUser={setUser}
+      storeToken={storeToken}
+      setProviderToken={setProviderToken}
+    >
+      {children}
+    </OAuthEnabledAuthProvider>
+  )
+}
+
+interface OAuthEnabledAuthProviderProps {
+  user: GoogleUser | null
+  loading: boolean
+  providerToken: string | null
+  setLoading: (value: boolean) => void
+  setUser: (value: GoogleUser | null) => void
+  storeToken: (token: string, expiresIn: number) => void
+  setProviderToken: (value: string | null) => void
+  children: ReactNode
+}
+
+function OAuthEnabledAuthProvider({
+  user,
+  loading,
+  providerToken,
+  setLoading,
+  setUser,
+  storeToken,
+  setProviderToken,
+  children,
+}: OAuthEnabledAuthProviderProps) {
   const googleLogin = useGoogleLogin({
     scope: SCOPES,
     onSuccess: async (tokenResponse) => {
@@ -76,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(() => {
     setLoading(true)
     googleLogin()
-  }, [googleLogin])
+  }, [googleLogin, setLoading])
 
   const signOut = useCallback(() => {
     setUser(null)
@@ -86,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem(TOKEN_KEY)
       sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
     } catch { /* ignore */ }
-  }, [])
+  }, [setProviderToken, setUser])
 
   return (
     <AuthContext.Provider value={{ user, loading, providerToken, signInWithGoogle, signOut }}>

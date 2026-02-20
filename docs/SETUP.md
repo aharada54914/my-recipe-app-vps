@@ -21,7 +21,7 @@ Step-by-step instructions for local development, Supabase configuration, and dep
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Node.js | 20+ | LTS recommended |
+| Node.js | 22.12+ | Recommended (matches `.nvmrc` and CI) |
 | npm | 10+ | Comes with Node.js |
 | Git | any | |
 
@@ -222,9 +222,12 @@ vercel
 Or connect your GitHub repo in the Vercel dashboard for automatic deploys on push.
 
 **Environment variables to set in Vercel:**
+- `VITE_GOOGLE_CLIENT_ID` (optional, required for Google login / Drive backup)
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_GEMINI_API_KEY` (optional)
+
+This repository includes `vercel.json` with SPA rewrites, so deep links like `/settings` and `/recipe/1` resolve to `index.html`.
 
 ### Deploy to Netlify
 
@@ -321,3 +324,14 @@ Existing users will receive the updated recipes on their next sync.
 If they already have recipes in IndexedDB, `initDb()` will **not** overwrite them (it only runs when the table is empty).
 
 To force a data refresh for existing users, you would need to implement a schema version bump in Dexie (increment the version number in `db.ts`) with a migration that clears and re-inserts the pre-built data.
+
+---
+
+## Troubleshooting (Vercel)
+
+- Build fails with Node engine errors:
+  - Use Node `22.12+` (configured by `.nvmrc` and `package.json#engines`).
+- App opens but deep links return 404:
+  - Confirm `vercel.json` is present in the deployed commit so SPA rewrites apply.
+- Google login button does nothing:
+  - Set `VITE_GOOGLE_CLIENT_ID` in Vercel project environment variables.

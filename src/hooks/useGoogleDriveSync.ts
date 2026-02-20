@@ -74,6 +74,7 @@ export function DriveBackupProvider({ children }: { children: ReactNode }) {
     if (!providerToken || !user || hasRestoredRef.current) return
     hasRestoredRef.current = true
     setIsRestoring(true)
+    setError(null)
     restoreFromGoogleDrive(providerToken)
       .then((restored) => {
         setIsRestoring(false)
@@ -81,7 +82,12 @@ export function DriveBackupProvider({ children }: { children: ReactNode }) {
           addToast({ message: 'Google Driveからデータを復元しました', type: 'success', durationMs: 4000 })
         }
       })
-      .catch(() => { setIsRestoring(false) })
+      .catch((err) => {
+        setIsRestoring(false)
+        const msg = err instanceof Error ? err.message : '復元に失敗しました'
+        setError(msg)
+        addToast({ message: `復元失敗: ${msg}`, type: 'error' })
+      })
   }, [providerToken, user, addToast])
 
   // Periodic backup

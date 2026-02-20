@@ -24,7 +24,7 @@ Offline-first design with AI-powered weekly meal planning, ingredient stock mana
 | Stock Management | Register fridge ingredients and see each recipe's stock match rate |
 | AI Weekly Menu | Auto-generate a 7-day meal plan using Gemini API with diversity scoring |
 | Google Calendar | Register meals as calendar events, add a shopping list reminder |
-| Cloud Sync | Sync all data across devices via Supabase |
+| Cloud Backup | Backup/restore user data via Google Drive AppData |
 | PWA | Install to home screen and use as a native app |
 | Favorites & History | Bookmark recipes and track recently viewed |
 | Personal Notes | Save cooking tips per recipe (e.g., "added less salt") |
@@ -36,6 +36,8 @@ Offline-first design with AI-powered weekly meal planning, ingredient stock mana
 ---
 
 ## Quick Start
+
+Node.js `22.12.0+` is recommended (see `.nvmrc`).
 
 ```bash
 # Install dependencies
@@ -78,12 +80,17 @@ cp .env.example .env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 
+# Google OAuth — optional, required for Google login + Drive backup + Calendar integration.
+VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+
 # Gemini API — optional. Can also be entered in the Settings page.
 VITE_GEMINI_API_KEY=your-gemini-api-key
 ```
 
 > **Note:** The `.env` value takes priority over the key saved in the Settings page (localStorage).
 > The Gemini API key stored in localStorage is acceptable for personal use but should not be used in shared environments.
+> If `VITE_GOOGLE_CLIENT_ID` is not set, OAuth-based features are safely disabled.
+> For Vercel deployments, `vercel.json` includes SPA rewrites so deep routes resolve to `index.html`.
 
 ---
 
@@ -148,7 +155,7 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 | Styling | Tailwind CSS 4 |
 | Routing | React Router 7 |
 | Local DB | Dexie.js 4.3 (IndexedDB) + dexie-react-hooks |
-| Cloud | Supabase (PostgreSQL + Google OAuth) |
+| Cloud | Google OAuth + Google Drive AppData backup (Supabase optional) |
 | AI | Google Gemini API (`gemini-2.0-flash`) |
 | Search | Fuse.js 7.1 (fuzzy search) |
 | Virtual Scroll | @tanstack/react-virtual 3.13 |

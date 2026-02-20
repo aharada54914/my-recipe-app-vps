@@ -30,13 +30,25 @@ async function driveGet(token: string, url: string): Promise<Response> {
   return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 }
 
+async function assertDriveOk(res: Response, context: string): Promise<void> {
+  if (res.ok) return
+  let detail = ''
+  try {
+    detail = await res.text()
+  } catch {
+    detail = ''
+  }
+  const suffix = detail ? `: ${detail.slice(0, 200)}` : ''
+  throw new Error(`${context} failed (${res.status} ${res.statusText})${suffix}`)
+}
+
 async function findBackupFile(token: string): Promise<string | null> {
   const query = encodeURIComponent(`name='${BACKUP_FILENAME}' and trashed=false`)
   const res = await driveGet(
     token,
     `${DRIVE_FILES_URL}?spaces=appDataFolder&q=${query}&fields=files(id)`,
   )
-  if (!res.ok) return null
+  await assertDriveOk(res, 'Google Drive file search')
   const json = (await res.json()) as { files: { id: string }[] }
   return json.files?.[0]?.id ?? null
 }
@@ -73,7 +85,7 @@ export async function backupToGoogleDrive(token: string): Promise<void> {
 
   if (existingId) {
     // Update existing file content
-    await fetch(`${DRIVE_UPLOAD_URL}/${existingId}?uploadType=media`, {
+    const res = await fetch(`${DRIVE_UPLOAD_URL}/${existingId}?uploadType=media`, {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -81,6 +93,7 @@ export async function backupToGoogleDrive(token: string): Promise<void> {
       },
       body,
     })
+    await assertDriveOk(res, 'Google Drive backup update')
   } else {
     // Create new file with metadata + content (multipart)
     const metadata = JSON.stringify({
@@ -100,7 +113,7 @@ export async function backupToGoogleDrive(token: string): Promise<void> {
       `--${boundary}--`,
     ].join('\r\n')
 
-    await fetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart`, {
+    const res = await fetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -108,6 +121,7 @@ export async function backupToGoogleDrive(token: string): Promise<void> {
       },
       body: multipart,
     })
+    await assertDriveOk(res, 'Google Drive backup create')
   }
 }
 
@@ -123,7 +137,7 @@ export async function restoreFromGoogleDrive(token: string): Promise<boolean> {
     token,
     `${DRIVE_FILES_URL}/${fileId}?alt=media`,
   )
-  if (!res.ok) return false
+  await assertDriveOk(res, 'Google Drive backup download')
 
   let backup: BackupData
   try {
