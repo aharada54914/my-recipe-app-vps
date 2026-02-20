@@ -59,6 +59,15 @@ export function WeeklyMenuPage() {
   const stockItems = useLiveQuery(() => db.stock.filter(s => s.inStock).toArray(), [])
   const stockNames = useMemo(() => new Set((stockItems ?? []).map(s => s.name)), [stockItems])
 
+  const loadRecipes = useCallback(async (recipeIds: number[]) => {
+    const loaded = await db.recipes.bulkGet(recipeIds)
+    const map = new Map<number, Recipe>()
+    for (const r of loaded) {
+      if (r?.id != null) map.set(r.id, r)
+    }
+    setRecipes(map)
+  }, [])
+
   // Load existing menu from DB
   useEffect(() => {
     if (existingMenu) {
@@ -70,16 +79,7 @@ export function WeeklyMenuPage() {
       }
       loadRecipes(ids)
     }
-  }, [existingMenu])
-
-  const loadRecipes = useCallback(async (recipeIds: number[]) => {
-    const loaded = await db.recipes.bulkGet(recipeIds)
-    const map = new Map<number, Recipe>()
-    for (const r of loaded) {
-      if (r?.id != null) map.set(r.id, r)
-    }
-    setRecipes(map)
-  }, [])
+  }, [existingMenu, loadRecipes])
 
   // Generate new menu
   const handleGenerate = useCallback(async () => {

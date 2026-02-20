@@ -28,6 +28,32 @@ const SEASONAL_WEIGHTS: Record<SeasonalPriority, number> = {
   high: 3.0,
 }
 
+type CuisineGenre = 'japanese' | 'western' | 'chinese' | 'other'
+
+function guessGenre(recipe: Recipe): CuisineGenre {
+  const text = recipe.title + ' ' + recipe.ingredients.map(i => i.name).join(' ')
+
+  const jpKeywords = ['醤油', 'しょうゆ', '味噌', 'みそ', 'だし', 'みりん', '和風', '照り', '煮', '酒', 'かつお', '昆布', '梅', '大根おろし', '白だし', 'めんつゆ']
+  const westernKeywords = ['トマト', 'チーズ', 'オリーブ', 'パスタ', '洋風', 'グラタン', 'シチュー', 'バター', 'ワイン', 'コンソメ', 'ベーコン', 'パン粉', '牛乳']
+  const chineseKeywords = ['豆板醤', 'オイスター', '中華', '麻婆', 'ごま油', '鶏ガラスープ', 'オイスターソース', '甜麺醤', '八角', 'ラー油']
+
+  let jpScore = 0, wsScore = 0, cnScore = 0
+  for (const w of jpKeywords) if (text.includes(w)) jpScore++
+  for (const w of westernKeywords) if (text.includes(w)) wsScore++
+  for (const w of chineseKeywords) if (text.includes(w)) cnScore++
+
+  if (jpScore > wsScore && jpScore > cnScore) return 'japanese'
+  if (wsScore > jpScore && wsScore > cnScore) return 'western'
+  if (cnScore > jpScore && cnScore > wsScore) return 'chinese'
+  return 'other'
+}
+
+function isHeavy(recipe: Recipe): boolean {
+  const text = recipe.title + ' ' + recipe.ingredients.map(i => i.name).join(' ')
+  const heavyKeywords = ['豚', '牛', '鶏', '肉', '揚げ', 'マヨネーズ', 'チーズ', 'バラ', 'ひき肉', 'カルビ', 'ベーコン', 'ウインナー', 'ソーセージ']
+  return heavyKeywords.some(w => text.includes(w))
+}
+
 /**
  * Select 7 recipes for a week starting from weekStartDate.
  * Uses greedy selection with scoring to balance variety and stock usage.
@@ -206,6 +232,10 @@ export async function selectWeeklyMenu(
       let bestSide: Recipe | null = null
       let bestSideScore = -Infinity
 
+      const mainRecipe = eligible.find(r => r.id === item.recipeId)
+      const mainGenre = mainRecipe ? guessGenre(mainRecipe) : 'other'
+      const mainIsHeavy = mainRecipe ? isHeavy(mainRecipe) : false
+
       for (const { recipe, baseScore } of scoredSides) {
         if (usedSideIds.has(recipe.id!)) continue
         // Avoid same recipe as the main dish
@@ -217,6 +247,22 @@ export async function selectWeeklyMenu(
           .map(id => sideEligible.find(r => r.id === id)?.category ?? '')
           .filter(c => c === recipe.category).length
         if (subCatCount >= 3) score -= (subCatCount - 2) * 8
+
+        // Genre match bonus
+        const sideGenre = guessGenre(recipe)
+        if (mainGenre !== 'other' && sideGenre === mainGenre) {
+          score += 15 // Strong bonus for matching genre
+        }
+
+        // Balance match bonus/penalty
+        const sideIsHeavy = isHeavy(recipe)
+        if (mainIsHeavy && !sideIsHeavy) {
+          score += 10 // Bonus for light side when main is heavy
+        } else if (!mainIsHeavy && sideIsHeavy) {
+          score += 5  // Small bonus for heavy side when main is light
+        } else if (mainIsHeavy && sideIsHeavy) {
+          score -= 10 // Penalty for heavy + heavy
+        }
 
         if (score > bestSideScore) {
           bestSideScore = score
