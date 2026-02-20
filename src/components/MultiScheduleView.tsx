@@ -237,16 +237,18 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
                       {selectedRecipes.find(r => r.id === rs.recipeId)?.device === 'hotcook' && ' 🍲'}
                       {selectedRecipes.find(r => r.id === rs.recipeId)?.device === 'healsio' && ' ♨️'}
                     </div>
-                    <div className="relative h-9 rounded-lg bg-white/5">
+                    <div className="relative h-14 rounded-lg bg-white/5">
                       {rs.entries.map((entry, i) => {
                         const leftPct =
                           ((entry.start.getTime() - multiSchedule.overallStart.getTime()) / totalSpanMs) * 100
                         const widthPct =
                           ((entry.end.getTime() - entry.start.getTime()) / totalSpanMs) * 100
+                        const showText = widthPct > 5
+                        const showTime = widthPct > 15
                         return (
                           <div
                             key={i}
-                            className="absolute top-0 flex h-full items-center overflow-hidden rounded px-1.5 text-[10px] font-medium whitespace-nowrap"
+                            className="absolute top-0 flex h-full flex-col justify-center overflow-hidden rounded px-1.5"
                             style={{
                               left: `${leftPct}%`,
                               width: `${Math.max(widthPct, 3)}%`,
@@ -258,7 +260,16 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
                             }}
                             title={`${entry.name} ${format(entry.start, 'HH:mm')}→${format(entry.end, 'HH:mm')}`}
                           >
-                            {entry.name}
+                            {showText && (
+                              <span className="block break-all text-[9px] font-medium leading-tight">
+                                {entry.name}
+                              </span>
+                            )}
+                            {showTime && (
+                              <span className="block text-[8px] leading-tight opacity-70">
+                                {format(entry.start, 'HH:mm')}〜{format(entry.end, 'HH:mm')}
+                              </span>
+                            )}
                           </div>
                         )
                       })}
