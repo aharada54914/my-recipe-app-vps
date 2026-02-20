@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Outlet, useNavigate, useParams } from 'react-router-dom'
+import { GoogleOAuthProvider } from '@react-oauth/google'
 import { initDb } from './db/initDb'
 import { AuthProvider } from './contexts/AuthContext'
-import { SyncProvider } from './hooks/useSync'
+import { DriveBackupProvider } from './hooks/useGoogleDriveSync'
 import { PreferencesProvider } from './contexts/PreferencesContext'
 import { Header } from './components/Header'
 import { BottomNav } from './components/BottomNav'
@@ -16,6 +17,10 @@ import { HistoryPage } from './pages/HistoryPage'
 import { FavoritesPage } from './pages/FavoritesPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { WeeklyMenuPage } from './pages/WeeklyMenuPage'
+import { AskGeminiPage } from './pages/AskGeminiPage'
+import { ToastContainer } from './components/ToastContainer'
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 
 function AppLayout() {
   const navigate = useNavigate()
@@ -31,6 +36,7 @@ function AppLayout() {
         <Outlet />
       </main>
       <BottomNav />
+      <ToastContainer />
     </div>
   )
 }
@@ -96,10 +102,10 @@ function App() {
     )
   }
 
-  return (
+  const inner = (
     <AuthProvider>
       <BrowserRouter>
-        <SyncProvider>
+        <DriveBackupProvider>
           <PreferencesProvider>
             <Routes>
               <Route element={<AppLayout />}>
@@ -109,6 +115,7 @@ function App() {
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="favorites" element={<FavoritesPage />} />
                 <Route path="weekly-menu" element={<WeeklyMenuPage />} />
+                <Route path="gemini" element={<AskGeminiPage />} />
               </Route>
               <Route path="/recipe/:id" element={<RecipeDetailPage />} />
               <Route path="/ai-parse" element={<AiParsePage />} />
@@ -116,9 +123,20 @@ function App() {
               <Route path="/settings" element={<SettingsPageWrapper />} />
             </Routes>
           </PreferencesProvider>
-        </SyncProvider>
+        </DriveBackupProvider>
       </BrowserRouter>
     </AuthProvider>
+  )
+
+  if (!GOOGLE_CLIENT_ID) {
+    // No OAuth client ID — skip GoogleOAuthProvider (auth features disabled)
+    return inner
+  }
+
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      {inner}
+    </GoogleOAuthProvider>
   )
 }
 

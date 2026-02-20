@@ -90,7 +90,6 @@ export function WeeklyMenuPage() {
         status: 'draft',
         createdAt: menu?.createdAt ?? new Date(),
         updatedAt: new Date(),
-        supabaseId: menu?.supabaseId,
       }
 
       if (menu?.id != null) {

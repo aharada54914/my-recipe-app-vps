@@ -11,7 +11,6 @@ import { getLocalRecommendations } from '../utils/geminiRecommender'
 import { WeeklyMenuTimeline } from '../components/WeeklyMenuTimeline'
 import { CategoryGrid } from '../components/CategoryGrid'
 import { useAuth } from '../hooks/useAuth'
-import { supabase } from '../lib/supabase'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
@@ -112,8 +111,8 @@ export function HomePage() {
   const displayRecs = data.hasStock ? recommendations : []
   const recMatchRates = new Map(displayRecs.map(r => [r.recipe.id!, r.matchRate]))
 
-  // Show login banner when Supabase is configured and user is not logged in
-  const showLoginBanner = !!supabase && !authLoading && !user
+  // Show login banner when not logged in
+  const showLoginBanner = !authLoading && !user
 
   return (
     <div>
@@ -130,8 +129,8 @@ export function HomePage() {
       {showLoginBanner && (
         <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-bg-card px-4 py-3">
           <div>
-            <p className="text-sm font-medium">クラウド同期を有効にする</p>
-            <p className="text-xs text-text-secondary">どのデバイスでも同じデータを利用</p>
+            <p className="text-sm font-medium">Google Driveにバックアップ</p>
+            <p className="text-xs text-text-secondary">在庫・お気に入り・献立を自動保存</p>
           </div>
           <button
             onClick={signInWithGoogle}
