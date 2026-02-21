@@ -21,7 +21,7 @@ export function formatShoppingListForLine(
     if (missing.length === 0) return `📋 ${recipeTitle}\n全ての材料が揃っています！`
     const items = missing
         .map(ing => {
-            const qty = ing.quantity > 0 ? ` ${ing.quantity}${ing.unit}` : ''
+            const qty = typeof ing.quantity === 'number' && ing.quantity > 0 ? ` ${ing.quantity}${ing.unit}` : ''
             return `・${ing.name}${qty}`
         })
         .join('\n')

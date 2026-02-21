@@ -244,7 +244,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                         {missing.map(ing => (
                           <li key={ing.name} className="flex justify-between text-xs text-text-secondary">
                             <span>・{ing.name}</span>
-                            <span>{ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ''}</span>
+                            <span>{typeof ing.quantity === 'number' && ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ''}</span>
                           </li>
                         ))}
                       </ul>
@@ -348,7 +348,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                     {missing.map(ing => (
                       <li key={ing.name} className="flex justify-between text-xs text-text-secondary">
                         <span>・{ing.name}</span>
-                        <span>{ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ''}</span>
+                        <span>{typeof ing.quantity === 'number' && ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ''}</span>
                       </li>
                     ))}
                   </ul>

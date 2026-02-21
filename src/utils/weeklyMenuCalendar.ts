@@ -46,7 +46,7 @@ export async function registerWeeklyMenuToCalendar(
 
       // Build description with ingredients
       const ingredientList = recipe.ingredients
-        .map(ing => `・${ing.name} ${ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ing.unit}`)
+        .map(ing => `・${ing.name} ${typeof ing.quantity === 'number' && ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ing.unit}`)
         .join('\n')
 
       const description = [

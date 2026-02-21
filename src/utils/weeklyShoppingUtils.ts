@@ -37,7 +37,7 @@ export function aggregateIngredients(
           map.set(key, {
             name: ing.name,
             totalQuantity: '適量',
-            unit: '',
+            unit: '適量',
             ingredientCategory: ing.category,
             inStock: stockNames.has(ing.name),
           })
