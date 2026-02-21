@@ -5,12 +5,14 @@ import { useSearchParams } from 'react-router-dom'
 import { db } from '../db/db'
 import type { RecipeCategory, DeviceType } from '../db/db'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
-import { searchRecipes } from '../utils/searchUtils'
+import { searchRecipesWithScores } from '../utils/searchUtils'
 import { useDebounce } from '../hooks/useDebounce'
 import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { SearchBar } from './SearchBar'
 import { CategoryTags } from './CategoryTags'
 import { RecipeCard } from './RecipeCard'
+import { buildPreferenceProfile } from '../utils/preferenceSignals'
+import { computeKitchenAppPreferenceScore } from '../utils/preferenceRanker'
 
 const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', 'ご飯もの', 'デザート']
 const seasonalIngredients = getCurrentSeasonalIngredients()
@@ -80,19 +82,41 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         recipesQuery.toArray(),
         db.stock.filter(item => item.inStock).toArray(),
       ])
-      return { recipes, stockItems }
+
+      const [viewHistory, favorites, weeklyMenus, calendarEvents] = await Promise.all([
+        db.viewHistory.orderBy('viewedAt').reverse().limit(200).toArray(),
+        db.favorites.orderBy('addedAt').reverse().limit(200).toArray(),
+        db.weeklyMenus.orderBy('weekStartDate').reverse().limit(12).toArray(),
+        db.calendarEvents.toArray().then((events) =>
+          events
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, 200)
+        ),
+      ])
+
+      return { recipes, stockItems, viewHistory, favorites, weeklyMenus, calendarEvents }
     },
     [category, deviceFilter],
-    { recipes: [], stockItems: [] }
+    { recipes: [], stockItems: [], viewHistory: [], favorites: [], weeklyMenus: [], calendarEvents: [] }
   )
 
   const stockNames = useMemo(() => new Set(data.stockItems.map((s) => s.name)), [data.stockItems])
 
   // T-01 + T-22: Fuzzy search + filters wrapped in transition for smooth typing
   const withRates = useMemo(() => {
-    let filtered = deferredSearch
-      ? searchRecipes(data.recipes, deferredSearch)
-      : data.recipes
+    const profile = buildPreferenceProfile({
+      recipes: data.recipes,
+      viewHistory: data.viewHistory,
+      favorites: data.favorites,
+      weeklyMenus: data.weeklyMenus,
+      calendarEvents: data.calendarEvents,
+    })
+
+    const scored = deferredSearch
+      ? searchRecipesWithScores(data.recipes, deferredSearch)
+      : data.recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
+
+    let filtered = scored.map((entry) => entry.recipe)
 
     // JS-side filters (no DB index available for these)
     if (quickFilter) {
@@ -108,18 +132,39 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       )
     }
 
+    const scoreById = new Map(scored.map((entry) => [entry.recipe.id!, entry.queryScore]))
+
     return filtered
-      .map((r) => ({
-        recipe: r,
-        matchRate: calculateMatchRate(r.ingredients, stockNames),
-        isDeli: isHelsioDeli(r),
-      }))
-      .sort((a, b) => {
-        // Non-deli first, then deli; within each group sort by matchRate desc
-        if (a.isDeli !== b.isDeli) return a.isDeli ? 1 : -1
-        return b.matchRate - a.matchRate
+      .map((r) => {
+        const matchRate = calculateMatchRate(r.ingredients, stockNames)
+        const queryScore = scoreById.get(r.id!) ?? 0.5
+        const preferenceScore = computeKitchenAppPreferenceScore(r, profile)
+        const stockScore = (matchRate / 100) * 1.4
+        const deliPenalty = isHelsioDeli(r) ? 2.2 : 0
+        const finalScore = queryScore * 4.2 + preferenceScore + stockScore - deliPenalty
+
+        return {
+          recipe: r,
+          matchRate,
+          isDeli: isHelsioDeli(r),
+          finalScore,
+        }
       })
-  }, [data.recipes, deferredSearch, stockNames, quickFilter, seasonalFilter])
+      .sort((a, b) => {
+        if (a.isDeli !== b.isDeli) return a.isDeli ? 1 : -1
+        return b.finalScore - a.finalScore
+      })
+  }, [
+    data.recipes,
+    data.viewHistory,
+    data.favorites,
+    data.weeklyMenus,
+    data.calendarEvents,
+    deferredSearch,
+    stockNames,
+    quickFilter,
+    seasonalFilter,
+  ])
 
   // T-04: Virtual scrolling
   const virtualizer = useVirtualizer({

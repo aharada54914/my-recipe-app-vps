@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Lock, Unlock, RefreshCw, Calendar, ShoppingCart, CalendarClock, X, Search, Star, Share2, Download } from 'lucide-react'
+import { Lock, Unlock, RefreshCw, Calendar, ShoppingCart, CalendarClock, Clock3, UtensilsCrossed, X, Search, Star, Share2, Download } from 'lucide-react'
 import { format, addDays, parse, addMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Fuse from 'fuse.js'
@@ -407,12 +407,12 @@ export function WeeklyMenuPage() {
                 return (
                   <div
                     key={item.date}
-                    className={`rounded-2xl bg-bg-card p-3 ${isToday ? 'ring-1 ring-accent/40' : ''}`}
+                    className={`rounded-2xl bg-bg-card p-4 ${isToday ? 'ring-1 ring-accent/40' : ''}`}
                   >
                     {/* Day header */}
-                    <div className="mb-2 flex items-center justify-between">
+                    <div className="mb-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold ${isToday ? 'text-accent' : 'text-text-primary'}`}>
+                        <span className={`text-base font-bold ${isToday ? 'text-accent' : 'text-text-primary'}`}>
                           {format(date, 'M/d (E)', { locale: ja })}
                         </span>
                         {isToday && (
@@ -434,22 +434,28 @@ export function WeeklyMenuPage() {
                     {/* Time info row — tap to open Gantt modal */}
                     <button
                       onClick={() => setGanttDayIndex(i)}
-                      className="mb-2 flex w-full items-center justify-between rounded-xl bg-white/5 px-3 py-1.5 text-left transition-colors hover:bg-white/10"
+                      className="mb-3 flex w-full items-center justify-between rounded-xl bg-white/5 px-3.5 py-2.5 text-left transition-colors hover:bg-white/10"
                     >
-                      <div className="flex items-center gap-3 text-[11px] text-text-secondary">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
                         {cookStart && (
-                          <span>🕐 調理開始 <span className="font-bold text-text-primary">{format(cookStart, 'HH:mm')}</span></span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Clock3 className="h-4 w-4 shrink-0 text-text-secondary" />
+                            調理開始 <span className="font-bold text-text-primary">{format(cookStart, 'HH:mm')}</span>
+                          </span>
                         )}
-                        <span>🍽 いただきます <span className="font-bold text-accent">{format(desiredMealTime, 'HH:mm')}</span></span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <UtensilsCrossed className="h-4 w-4 shrink-0 text-accent" />
+                          いただきます <span className="font-bold text-accent">{format(desiredMealTime, 'HH:mm')}</span>
+                        </span>
                       </div>
-                      <CalendarClock className="h-3.5 w-3.5 shrink-0 text-text-secondary" />
+                      <CalendarClock className="h-4 w-4 shrink-0 text-text-secondary" />
                     </button>
 
                     {/* 2-tile grid: main | side */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       {/* Main dish */}
                       <div>
-                        <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-text-secondary">主菜</div>
+                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-text-secondary">主菜</div>
                         {mainRecipe ? (
                           <RecipeCard
                             recipe={mainRecipe}
@@ -466,7 +472,7 @@ export function WeeklyMenuPage() {
 
                       {/* Side dish */}
                       <div>
-                        <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-text-secondary">副菜・スープ</div>
+                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-text-secondary">副菜・スープ</div>
                         {sideRecipe ? (
                           <RecipeCard
                             recipe={sideRecipe}
@@ -484,7 +490,7 @@ export function WeeklyMenuPage() {
 
                     {/* Swap buttons */}
                     {!item.locked && (
-                      <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="mt-3 grid grid-cols-2 gap-2">
                         <button
                           onClick={() => handleOpenSwap(i, 'main')}
                           className="rounded-lg bg-white/5 py-1.5 text-[10px] text-text-secondary transition-colors hover:text-accent"

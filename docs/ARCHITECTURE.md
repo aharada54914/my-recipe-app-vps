@@ -1,7 +1,7 @@
 # Architecture Reference
 
 最終改訂: 2026-02-21
-対象バージョン: v1.6.5
+対象バージョン: v1.7.0
 
 Kitchen App の現行アーキテクチャ概要です。
 
@@ -66,6 +66,7 @@ DB: `RecipeDB`（Dexie schema version 8）
 2. 主菜 + 副菜/スープを週次保存
 3. 買い物リストは主菜・副菜を合わせて集約
 4. 共有リンク/共有コードの生成・読込
+5. 日次タイルは時刻情報アイコンとガント導線を大きめ表示で統一
 
 ---
 
@@ -94,7 +95,7 @@ DB: `RecipeDB`（Dexie schema version 8）
 
 ---
 
-## 8. URLインポート・AI提案（v1.6.5）
+## 8. URLインポート・AI提案（v1.7.0）
 
 - `api/recipe-extract.js`:
   - 対応ドメインallowlist検証
@@ -108,14 +109,27 @@ DB: `RecipeDB`（Dexie schema version 8）
 
 ---
 
-## 9. 非採用/廃止
+## 9. 検索ランク（v1.7.0）
+
+- `RecipeList` は Fuse一致だけでなく、好みシグナルを合成して並び替え
+- `preferenceSignals`:
+  - `viewHistory`
+  - `favorites`
+  - `weeklyMenus`
+  - `calendarEvents(meal)`
+- `preferenceRanker`:
+  - Kitchen App Preference Rank (KAPR) を計算
+
+---
+
+## 10. 非採用/廃止
 
 - Supabase同期層は削除済み（v1.5.0以前の履歴を除く）
 - 現在のクラウド連携は Google Drive バックアップ中心
 
 ---
 
-## 10. ビルド・配布
+## 11. ビルド・配布
 
 - `npm run build`
   - `scripts/prebuild-recipes.mjs`（CSV→JSON）

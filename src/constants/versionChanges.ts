@@ -7,6 +7,18 @@ export interface VersionChangeSection {
 
 export const VERSION_CHANGELOG: VersionChangeSection[] = [
   {
+    title: 'V1.7.0 と V1.6.5 の差分',
+    summary: '検索の並び順を好み学習対応に拡張し、週間献立タイルの視認性を改善。',
+    points: [
+      'Kitchen App Preference Rank を導入し、閲覧履歴・お気に入り・献立採用履歴を検索順へ反映',
+      '検索関連ロジックを拡張し、クエリ一致 + 好み + 在庫一致率の複合スコアで並び替え',
+      '週間献立タイルの調理開始/いただきます/ガント誘導アイコンを拡大し視認性を強化',
+      '日付ヘッダーと時刻行の余白・高さ・幅を再調整し、右側の空きが目立たないレイアウトへ改善',
+      'バージョン表記・関連ドキュメントを v1.7.0 に更新',
+    ],
+    refs: ['v1.7.0'],
+  },
+  {
     title: 'V1.6.5 と V1.6.0 の差分',
     summary: 'URL/Gemini取り込み後の編集体験を強化し、保存前に内容を確定できるよう改善。',
     points: [

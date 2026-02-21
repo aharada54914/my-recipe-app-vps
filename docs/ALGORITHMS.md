@@ -1,7 +1,7 @@
 # アルゴリズム仕様一覧
 
 最終改訂: 2026-02-21
-対象コードベース: `main` (v1.6.5)
+対象コードベース: `main` (v1.7.0)
 
 本ドキュメントは、Kitchen App の「判定・推定・選択・通知」ロジックをまとめた仕様書です。
 
@@ -81,12 +81,18 @@
 ## 6. 検索アルゴリズム
 
 対象: `src/utils/searchUtils.ts`
+補助: `src/utils/preferenceSignals.ts`, `src/utils/preferenceRanker.ts`
 
 - Fuse.js の重み付き検索
   - title: 2
   - ingredients.name: 1
 - 同義語展開後に結果マージ
 - 最良スコアで重複排除
+- Kitchen App Preference Rank (KAPR):
+  - `QueryScore`（検索一致）
+  - `PreferenceScore`（閲覧履歴/お気に入り/週間献立採用/カレンダーmeal）
+  - `StockScore`（在庫一致率）
+  を合成して最終並び順を決定
 
 ---
 

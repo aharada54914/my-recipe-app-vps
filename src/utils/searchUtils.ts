@@ -20,6 +20,11 @@ const fuseOptions: IFuseOptions<Recipe> = {
 let fuseInstance: Fuse<Recipe> | null = null
 let lastRecipes: Recipe[] | null = null
 
+export interface SearchScoredRecipe {
+    recipe: Recipe
+    queryScore: number
+}
+
 /**
  * Get or create a Fuse.js index (reuses if recipes haven't changed).
  */
@@ -37,7 +42,15 @@ function getFuseInstance(recipes: Recipe[]): Fuse<Recipe> {
  * Returns matching recipes sorted by relevance.
  */
 export function searchRecipes(recipes: Recipe[], query: string): Recipe[] {
-    if (!query.trim()) return recipes
+    return searchRecipesWithScores(recipes, query).map((item) => item.recipe)
+}
+
+/**
+ * Search recipes and return both recipe + normalized query relevance score.
+ * queryScore: 0..1 (higher is better).
+ */
+export function searchRecipesWithScores(recipes: Recipe[], query: string): SearchScoredRecipe[] {
+    if (!query.trim()) return recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
 
     const fuse = getFuseInstance(recipes)
 
@@ -59,8 +72,11 @@ export function searchRecipes(recipes: Recipe[], query: string): Recipe[] {
         }
     }
 
-    // Sort by best score (lower = better match)
+    // Sort by best score (lower = better match) and normalize to queryScore (higher = better)
     return [...resultMap.values()]
         .sort((a, b) => a.score - b.score)
-        .map((r) => r.recipe)
+        .map((r) => ({
+            recipe: r.recipe,
+            queryScore: Math.max(0, 1 - Math.min(1, r.score)),
+        }))
 }
