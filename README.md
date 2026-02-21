@@ -1,172 +1,93 @@
 # Kitchen App — Smart Recipe Manager PWA
 
-A Progressive Web App for Japanese home cooking with smart kitchen appliances (Hotcook / Healsio).
-Offline-first design with AI-powered weekly meal planning, ingredient stock management, and Google Calendar integration.
+最終改訂: 2026-02-21
+
+ホットクック / ヘルシオ向けのレシピ管理PWAです。  
+オフライン優先で動作し、Google Driveバックアップ、Gemini連携、週間献立自動生成に対応しています。
 
 ---
 
-## Table of Contents
+## 主な機能
 
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Environment Variables](#environment-variables)
-- [Page Structure](#page-structure)
-- [Documentation](#documentation)
-- [Tech Stack](#tech-stack)
-
----
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| Recipe Search | Full-text fuzzy search across ~1,700 recipes (Hotcook + Healsio) — works offline |
-| Stock Management | Register fridge ingredients and see each recipe's stock match rate |
-| AI Weekly Menu | Auto-generate a 7-day meal plan using Gemini API with diversity scoring |
-| Google Calendar | Register meals as calendar events, add a shopping list reminder |
-| Cloud Backup | Backup/restore user data via Google Drive AppData |
-| PWA | Install to home screen and use as a native app |
-| Favorites & History | Bookmark recipes and track recently viewed |
-| Personal Notes | Save cooking tips per recipe (e.g., "added less salt") |
-| Salt Calculator | Auto-calculate salt / soy sauce / miso amounts from total ingredient weight |
-| Cook Schedule | Gantt chart of cooking steps, calculated backward from target meal time |
-| AI Recipe Import | Paste any recipe URL — Gemini extracts ingredients and steps automatically |
-| Multi-Schedule | View overlapping Gantt timelines for multiple simultaneous recipes |
+- レシピ検索（約1,700件、あいまい検索対応）
+- 在庫管理と在庫一致率表示
+- 週間献立の自動生成（主菜+副菜/スープ）
+- 週間献立の共有（共有リンク / 共有コード）
+- 買い物リスト自動生成 + 追加編集UI
+- Google Calendar登録
+- Google Drive自動バックアップ / 復元
+- 通知機能（権限設定 + ローカル通知スケジューラ）
+- Gemini APIによるAIレシピ解析
+- iOS向けPWA最適化 + Liquid Glass UI
 
 ---
 
-## Quick Start
+## クイックスタート
 
-Node.js `22.12.0+` is recommended (see `.nvmrc`).
+Node.js `22.12.0+` 推奨（`.nvmrc` 参照）
 
 ```bash
-# Install dependencies
 npm install
-
-# Start dev server (http://localhost:5173)
 npm run dev
-
-# Production build (CSV → JSON pre-build → tsc type-check → Vite bundle)
-npm run build
-
-# Preview production build locally
-npm run preview
-
-# Lint
-npm run lint
-
-# Unit tests
-npm run test
 ```
 
-### What happens on first launch
+ビルド:
 
-1. Dexie.js initializes the IndexedDB database (`RecipeDB`, version 8)
-2. If the recipes table is empty, ~1,700 recipes are bulk-inserted from pre-built JSON files
-3. All features are immediately available — no internet required
+```bash
+npm run build
+npm run preview
+```
 
 ---
 
-## Environment Variables
+## 環境変数
 
-Copy `.env.example` to `.env` and fill in your values.
+`.env.example` をコピーして `.env` を作成:
 
 ```bash
 cp .env.example .env
 ```
 
 ```env
-
-# Google OAuth — optional, required for Google login + Drive backup + Calendar integration.
+# Google OAuth（Googleログイン/Drive/Calendar）
 VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
 
-# Gemini API — optional. Can also be entered in the Settings page.
+# Gemini API（任意。設定画面入力でも可）
 VITE_GEMINI_API_KEY=your-gemini-api-key
 ```
 
-> **Note:** The `.env` value takes priority over the key saved in the Settings page (localStorage).
-> The Gemini API key stored in localStorage is acceptable for personal use but should not be used in shared environments.
-> If `VITE_GOOGLE_CLIENT_ID` is not set, OAuth-based features are safely disabled.
-> For Vercel deployments, `vercel.json` includes SPA rewrites so deep routes resolve to `index.html`.
+補足:
+- `VITE_GOOGLE_CLIENT_ID` 未設定時はOAuth機能のみ無効化（アプリ自体は起動）
+- `VITE_GEMINI_API_KEY` は `.env` 値が設定画面保存値より優先
 
 ---
 
-## Page Structure
+## 主要ルート
 
-```
-/               Home
-                  Category grid, weekly menu preview
-                  Stock-based recommendations, seasonal picks
-
-/search         Recipe Search
-                  Fuzzy text search, device filter (Hotcook / Healsio / Manual)
-                  Category filter, stock match rate badge, sort by match rate
-
-/stock          Stock Manager
-                  Register ingredients with quantities
-                  Auto-sorted alphabetically (50音順), synonym-aware search
-
-/favorites      Favorites
-                  Recipes bookmarked with the star icon
-
-/history        View History
-                  Recently viewed recipes (up to 200)
-
-/weekly-menu    Weekly Menu
-                  AI-generated 7-day plan, lock individual days
-                  Aggregated shopping list, Google Calendar registration
-
-/recipe/:id     Recipe Detail
-                  Ingredients (scaling adjuster), cooking steps
-                  Salt calculator, cook schedule Gantt, personal notes
-                  Favorite toggle, missing-ingredient shopping list, calendar
-
-/ai-parse       AI Recipe Import
-                  Paste a URL → Gemini extracts recipe data → preview → save
-
-/multi-schedule Multi-Schedule View
-                  Select multiple recipes → view overlapping Gantt timelines
-
-/settings       Settings
-                  Google login, Gemini API key, sync, data export / import
-                  Calendar settings, meal plan settings, notification settings
-```
+- `/` ホーム
+- `/search` 検索
+- `/stock` 在庫管理
+- `/weekly-menu` 週間献立
+- `/favorites` お気に入り
+- `/history` 履歴
+- `/gemini` AI提案
+- `/settings/:tab` 設定タブ画面
 
 ---
 
-## Documentation
+## ドキュメント
 
-| File | Description |
-|------|-------------|
-| [docs/FEATURES.md](docs/FEATURES.md) | Detailed usage guide for every feature |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | DB schema, API specs, sync system, component map |
+- `docs/FEATURES.md` 機能詳細
+- `docs/SETUP.md` セットアップ・デプロイ
+- `docs/ALGORITHMS.md` アルゴリズム仕様
+- `docs/ARCHITECTURE.md` アーキテクチャ仕様
+- `SETUP_GUIDE.md` 個人向けやさしい設定ガイド
+- `SETUP_GUIDE_OKAZAKI.md` 個人向け（岡崎弁）設定ガイド
 
 ---
 
-## Tech Stack
+## バージョン
 
-| Category | Library / Tool |
-|----------|---------------|
-| Framework | React 19 + TypeScript (strict) + Vite 7 |
-| Styling | Tailwind CSS 4 |
-| Routing | React Router 7 |
-| Local DB | Dexie.js 4.3 (IndexedDB) + dexie-react-hooks |
-| AI | Google Gemini API (`gemini-2.0-flash`) |
-| Search | Fuse.js 7.1 (fuzzy search) |
-| Virtual Scroll | @tanstack/react-virtual 3.13 |
-| Icons | Lucide React |
-| Date Utils | date-fns 4.1 (ja locale) |
-| PWA | vite-plugin-pwa + Workbox |
-| Wake Lock | NoSleep.js (iOS fallback) |
-| Testing | Vitest 4.0 + JSDOM |
+現在: **v1.5.0**
 
-### Design System
-
-| Token | Value |
-|-------|-------|
-| Background | `#121214` (near-black dark) |
-| Card background | `#1a1a1c` (slightly lighter) |
-| Accent | `#F97316` (orange) |
-| Border radius | `rounded-xl` (12px) / `rounded-2xl` (16px) |
-| Font | `-apple-system, system-ui, sans-serif` |
-| Input min font-size | 16px (prevents iOS auto-zoom) |
+`設定 > バージョン情報` で、`V1以前→V1` と `V1→V1.5.0` の変更要約を確認できます。
