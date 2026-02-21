@@ -44,17 +44,6 @@ export const VERSION_CHANGELOG: VersionChangeSection[] = [
     refs: ['v1.6.0'],
   },
   {
-    title: 'V1.0 とそれ以前の差分',
-    summary: '基本機能の完成と、Google連携を前提にした安定運用ラインを確立。',
-    points: [
-      'レシピ検索・在庫管理・お気に入り・履歴・週間献立の主要フローを統合',
-      'AIレシピ取り込み、週間献立生成、買い物リスト、調理スケジュール表示を実装',
-      'Google OAuth / Google Driveバックアップ / Vercel起動安定化を実施',
-      '設定画面ナビゲーションとバージョン表示を整理して v1.0.0 をリリース',
-    ],
-    refs: ['4602e13', 'e340308', 'b07ab36', '7630c93', '73a9e2c'],
-  },
-  {
     title: 'V1.5.0 と V1.0 の差分',
     summary: 'UI刷新・共有機能・通知実装・旬判定強化で日常利用の体験を改善。',
     points: [
@@ -67,5 +56,16 @@ export const VERSION_CHANGELOG: VersionChangeSection[] = [
       'Supabase依存を削除し、Google Driveバックアップ中心の構成に整理',
     ],
     refs: ['851af3f', '6241fd8', '8a9557e'],
+  },
+  {
+    title: 'V1.0 とそれ以前の差分',
+    summary: '基本機能の完成と、Google連携を前提にした安定運用ラインを確立。',
+    points: [
+      'レシピ検索・在庫管理・お気に入り・履歴・週間献立の主要フローを統合',
+      'AIレシピ取り込み、週間献立生成、買い物リスト、調理スケジュール表示を実装',
+      'Google OAuth / Google Driveバックアップ / Vercel起動安定化を実施',
+      '設定画面ナビゲーションとバージョン表示を整理して v1.0.0 をリリース',
+    ],
+    refs: ['4602e13', 'e340308', 'b07ab36', '7630c93', '73a9e2c'],
   },
 ]

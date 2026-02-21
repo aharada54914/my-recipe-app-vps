@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Settings, Eye, EyeOff, Lock, Unlock, Wifi, WifiOff,
   Download, Upload, LogIn, LogOut, User, HardDriveUpload, RefreshCw,
-  Calendar, UtensilsCrossed, Bell, Database, Cloud, BookOpen, Info,
+  Calendar, UtensilsCrossed, Bell, Database, Cloud, BookOpen, Info, ChevronRight,
 } from 'lucide-react'
 import { exportData } from '../utils/dataExport'
 import { importData, type ImportMode } from '../utils/dataImport'
@@ -60,8 +60,12 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
 
   const { user, loading: authLoading, isOAuthAvailable, signInWithGoogle, signOut } = useAuth()
   const { isBackingUp, isRestoring, lastBackupAt, backupNow, error: backupError } = useGoogleDriveSync()
-  const pathTab = location.pathname.split('/')[2] as TabId | undefined
-  const activeTab: TabId = TABS.some((t) => t.id === pathTab) ? pathTab! : 'account'
+  const pathTab = location.pathname.split('/')[2]
+  const activeTab: TabId | null = TABS.some((t) => t.id === pathTab)
+    ? (pathTab as TabId)
+    : null
+  const isTabDetail = activeTab !== null
+  const activeTabMeta = activeTab ? TABS.find((t) => t.id === activeTab) : null
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) || ''
@@ -69,8 +73,8 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
   }, [])
 
   useEffect(() => {
-    if (!pathTab || !TABS.some((t) => t.id === pathTab)) {
-      navigate('/settings/account', { replace: true })
+    if (pathTab && !TABS.some((t) => t.id === pathTab)) {
+      navigate('/settings', { replace: true })
     }
   }, [navigate, pathTab])
 
@@ -142,44 +146,52 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const handleHeaderBack = () => {
+    if (isTabDetail) {
+      navigate('/settings')
+      return
+    }
+    onBack()
+  }
+
   return (
     <div className="min-h-dvh bg-bg-primary">
       <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]">
         <div className="flex items-center gap-3 px-4 pb-4">
           <button
-            onClick={onBack}
+            onClick={handleHeaderBack}
             className="rounded-xl bg-bg-card p-2 transition-colors hover:bg-bg-card-hover"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-accent" />
-            <h1 className="text-lg font-bold">設定</h1>
-          </div>
-        </div>
-
-        {/* Vertical section buttons */}
-        <div className="border-t border-b border-white/10 px-4 py-3">
-          <div className="flex flex-col gap-2">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => navigate(`/settings/${tab.id}`)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-accent/15 text-accent ring-1 ring-accent/40'
-                    : 'bg-bg-card text-text-secondary hover:text-text-primary'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            ))}
+            <h1 className="text-lg font-bold">{isTabDetail && activeTabMeta ? activeTabMeta.label : '設定'}</h1>
           </div>
         </div>
       </header>
 
       <main className="space-y-4 px-4 py-4 pb-8">
+        {!isTabDetail && (
+          <div className="rounded-2xl bg-bg-card p-4">
+            <h2 className="mb-3 text-sm font-bold text-text-secondary">設定項目を選択</h2>
+            <div className="space-y-2">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => navigate(`/settings/${tab.id}`)}
+                  className="flex w-full items-center justify-between rounded-xl bg-white/5 px-3 py-3 text-left text-sm font-medium text-text-primary transition-colors hover:bg-white/10"
+                >
+                  <span className="flex items-center gap-3">
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-text-secondary" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── アカウント ── */}
         {activeTab === 'account' && (
