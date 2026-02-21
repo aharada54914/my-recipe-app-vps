@@ -14,6 +14,7 @@ import { MealPlanSettings } from '../components/MealPlanSettings'
 import { NotificationSettings } from '../components/NotificationSettings'
 import { APP_VERSION } from '../constants/appVersion'
 import { VERSION_CHANGELOG } from '../constants/versionChanges'
+import { generateGeminiText } from '../lib/geminiClient'
 
 function formatTimeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -107,11 +108,8 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
       const key = apiKey.trim()
       if (!key) throw new Error('APIキーが空です')
 
-      const { GoogleGenerativeAI } = await import('@google/generative-ai')
-      const genAI = new GoogleGenerativeAI(key)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-      const result = await model.generateContent('hello')
-      if (result.response.text()) {
+      const text = await generateGeminiText('hello', key)
+      if (text) {
         setTestStatus('success')
       } else {
         throw new Error('レスポンスが空です')
@@ -146,7 +144,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
 
   return (
     <div className="min-h-dvh bg-bg-primary">
-      <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md pt-[calc(env(safe-area-inset-top,0px)+1.5rem)]">
+      <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]">
         <div className="flex items-center gap-3 px-4 pb-4">
           <button
             onClick={onBack}

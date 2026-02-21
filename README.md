@@ -17,7 +17,8 @@
 - Google Calendar登録
 - Google Drive自動バックアップ / 復元
 - 通知機能（権限設定 + ローカル通知スケジューラ）
-- Gemini APIによるAIレシピ解析
+- Gemini 3 FlashによるAIレシピ解析
+- 写真複数枚から食材抽出 -> 献立生成（再生成は文字データのみ送信）
 - iOS向けPWA最適化 + Liquid Glass UI
 
 ---
@@ -86,8 +87,25 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 
 ---
 
+## URLインポート対応サイト
+
+`/gemini -> インポート` タブ内にも同じ一覧を表示しています。
+
+- みんなのきょうの料理: `https://www.kyounoryouri.jp/`
+- Nadia（ナディア）: `https://oceans-nadia.com/`
+- 楽天レシピ: `https://recipe.rakuten.co.jp/`
+- macaroni（マカロニ）: `https://macaro-ni.jp/`
+- E・レシピ: `https://erecipe.woman.excite.co.jp/`
+- キッコーマン ホームクッキング: `https://www.kikkoman.co.jp/homecook/`
+- 味の素パーク: `https://park.ajinomoto.co.jp/`
+- フーディストノート: `https://foodistnote.recipe-blog.jp/`
+- リュウジのバズレシピ.com: `https://bazurecipe.com/`
+- つくおき: `https://cookien.com/`
+
+---
+
 ## バージョン
 
-現在: **v1.5.0**
+現在: **v1.6.0**
 
-`設定 > バージョン情報` で、`V1以前→V1` と `V1→V1.5.0` の変更要約を確認できます。
+`設定 > バージョン情報` で、`V1以前→V1`、`V1→V1.5.0`、`V1.5.0→V1.6.0` の変更要約を確認できます。

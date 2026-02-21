@@ -1,7 +1,7 @@
 # Architecture Reference
 
 最終改訂: 2026-02-21
-対象バージョン: v1.5.0
+対象バージョン: v1.6.0
 
 Kitchen App の現行アーキテクチャ概要です。
 
@@ -27,6 +27,7 @@ Kitchen App の現行アーキテクチャ概要です。
 - `src/db` Dexieスキーマ
 - `src/hooks` 認証・設定・同期補助
 - `src/lib` 外部APIクライアント
+- `api` Vercel Serverless Functions（URL抽出など）
 - `docs` 仕様書
 
 ---
@@ -93,14 +94,27 @@ DB: `RecipeDB`（Dexie schema version 8）
 
 ---
 
-## 8. 非採用/廃止
+## 8. URLインポート・AI提案（v1.6.0）
+
+- `api/recipe-extract.js`:
+  - 対応ドメインallowlist検証
+  - HTML/JSON-LD抽出
+- `src/utils/geminiParser.ts`:
+  - URL抽出結果をGeminiでRecipe互換JSONへ正規化
+- `src/pages/AskGeminiPage.tsx`:
+  - 写真 -> 食材文字 -> 献立生成の2段階フロー
+  - 再生成時は文字データのみ送信
+
+---
+
+## 9. 非採用/廃止
 
 - Supabase同期層は削除済み（v1.5.0以前の履歴を除く）
 - 現在のクラウド連携は Google Drive バックアップ中心
 
 ---
 
-## 9. ビルド・配布
+## 10. ビルド・配布
 
 - `npm run build`
   - `scripts/prebuild-recipes.mjs`（CSV→JSON）
@@ -108,4 +122,3 @@ DB: `RecipeDB`（Dexie schema version 8）
   - `vite build`
 - PWA: `vite-plugin-pwa`
 - `vercel.json` でSPAリライト
-

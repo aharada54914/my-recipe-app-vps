@@ -5,7 +5,7 @@
  * If API key is not available, returns null (caller falls back to local result).
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { extractJsonObjectText, generateGeminiText, resolveGeminiApiKey } from '../lib/geminiClient'
 
 interface MenuRecipeInfo {
   recipeId: number
@@ -36,13 +36,7 @@ const REFINE_PROMPT = `あなたは家庭料理の献立アドバイザーです
 `
 
 function getApiKey(): string | null {
-  const envKey = import.meta.env.VITE_GEMINI_API_KEY as string
-  if (envKey) return envKey
-
-  const storedKey = localStorage.getItem('gemini_api_key')
-  if (storedKey) return storedKey
-
-  return null
+  return resolveGeminiApiKey()
 }
 
 /**
@@ -58,9 +52,6 @@ export async function refineWeeklyMenu(
   if (!apiKey) return null
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
     const menuText = selectedRecipes.map(r =>
       `${r.date}: ${r.title} (${r.category}, ${r.device})`
     ).join('\n')
@@ -89,13 +80,8 @@ ${availableText}
 ${userPromptSection}
 ${seasonalSection}`
 
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return null
-
-    const parsed = JSON.parse(jsonMatch[0]) as { swaps: { date: string; newRecipeId: number }[] }
+    const text = await generateGeminiText(prompt, apiKey)
+    const parsed = JSON.parse(extractJsonObjectText(text)) as { swaps: { date: string; newRecipeId: number }[] }
 
     if (!parsed.swaps || parsed.swaps.length === 0) return null
 

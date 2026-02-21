@@ -13,7 +13,7 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
   const navigate = useNavigate()
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/15 bg-white/8 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] backdrop-blur-2xl">
+    <header className="sticky top-0 z-50 border-b border-white/15 bg-white/8 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] backdrop-blur-2xl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img

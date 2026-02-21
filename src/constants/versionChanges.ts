@@ -7,6 +7,19 @@ export interface VersionChangeSection {
 
 export const VERSION_CHANGELOG: VersionChangeSection[] = [
   {
+    title: 'V1.6.0 と V1.5.0 の差分',
+    summary: '上部UI密度とGemini系フローを再設計し、取り込み精度と運用コストを改善。',
+    points: [
+      '全ヘッダーのsafe-area上部余白を見直し、Dynamic Island付近の無駄な空きを圧縮',
+      'Gemini呼び出しを共通クライアント化し、モデルを Gemini 3 Flash 系へ統一',
+      '在庫提案を「写真 -> 食材文字リスト -> 献立生成」の2段階へ分離し、再生成時は文字データのみ再送信',
+      '複数写真を送信前に縮小・1枚コラージュ化する前処理を追加',
+      'URLインポート対応サイトを10ドメインへ拡張し、アプリ内に対応URL一覧を表示',
+      '生成レシピを既存DBと人数変更UIに互換な構造で保存できるよう補強',
+    ],
+    refs: ['v1.6.0'],
+  },
+  {
     title: 'V1.0 とそれ以前の差分',
     summary: '基本機能の完成と、Google連携を前提にした安定運用ラインを確立。',
     points: [

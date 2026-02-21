@@ -28,7 +28,7 @@ export function CategoryGrid() {
   const navigate = useNavigate()
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-4 gap-3">
       {categories.map(cat => (
         <button
           key={cat.filter}

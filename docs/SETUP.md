@@ -2,7 +2,7 @@
 
 最終改訂: 2026-02-21
 
-このドキュメントは、v1.5.0 時点のセットアップ手順です。
+このドキュメントは、v1.6.0 時点のセットアップ手順です。
 
 ---
 
@@ -56,7 +56,7 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 
 ## 5. Notification Setup (PWA)
 
-v1.5.0 から通知機能は実動作します。
+v1.5.0 以降、通知機能は実動作します。
 
 1. 設定 > 通知 を開く
 2. 「通知を許可」をタップ
@@ -99,3 +99,32 @@ node scripts/prebuild-recipes.mjs
 ```
 
 `npm run build` 時に自動実行されます。
+
+---
+
+## 9. Gemini 2段階フロー（在庫提案）
+
+`/gemini -> 在庫から提案` では以下の2段階で処理します。
+
+1. 写真複数枚を送信前に縮小して1枚に結合し、食材文字リストを抽出  
+2. 食材文字リストから献立JSON（DB互換）を生成
+
+再生成ボタンは 2. のみ実行するため、2回目以降は文字データのみ送信されます。  
+生成レシピは `baseServings` を含むため、アプリ内の人数変更UIと互換です。
+
+---
+
+## 10. URLインポート対応サイト
+
+以下のURLドメインのみサポートしています（アプリ内にも表示）。
+
+- https://www.kyounoryouri.jp/
+- https://oceans-nadia.com/
+- https://recipe.rakuten.co.jp/
+- https://macaro-ni.jp/
+- https://erecipe.woman.excite.co.jp/
+- https://www.kikkoman.co.jp/homecook/
+- https://park.ajinomoto.co.jp/
+- https://foodistnote.recipe-blog.jp/
+- https://bazurecipe.com/
+- https://cookien.com/
