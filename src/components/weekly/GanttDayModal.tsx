@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { parse, format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { CalendarClock, X } from 'lucide-react'
-import type { Recipe } from '../../db/db'
+import type { Recipe, RecipeSchedule } from '../../db/db'
+import type { DeviceConflict } from '../../utils/recipeUtils'
 import { calculateMultiRecipeSchedule } from '../../utils/recipeUtils'
 
 const LANE_COLORS = [
@@ -78,7 +79,7 @@ export function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, o
                             {schedule.conflicts.length > 0 && (
                                 <div className="mb-3 rounded-xl bg-yellow-500/10 px-3 py-2">
                                     <div className="text-xs font-bold text-yellow-400 mb-1">⚠️ デバイス競合あり</div>
-                                    {schedule.conflicts.map((c: any, ci: number) => (
+                                    {schedule.conflicts.map((c: DeviceConflict, ci: number) => (
                                         <div key={ci} className="text-[10px] text-yellow-300">
                                             {c.device === 'hotcook' ? '🍲' : '♨️'} {c.recipeTitle}: {c.shiftMinutes}分前倒し
                                         </div>
@@ -89,7 +90,7 @@ export function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, o
                             {/* Gantt lanes */}
                             <div className="overflow-x-auto pb-1">
                                 <div className="min-w-[320px] space-y-3">
-                                    {schedule.recipes.map((rs: any) => {
+                                    {schedule.recipes.map((rs: RecipeSchedule) => {
                                         const color = LANE_COLORS[rs.colorIndex % LANE_COLORS.length]
                                         return (
                                             <div key={rs.recipeId}>
@@ -97,7 +98,7 @@ export function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, o
                                                     {rs.recipeTitle}
                                                 </div>
                                                 <div className="relative h-14 rounded-lg bg-white/5">
-                                                    {rs.entries.map((entry: any, ei: number) => {
+                                                    {rs.entries.map((entry, ei: number) => {
                                                         const leftPct = ((entry.start.getTime() - schedule.overallStart.getTime()) / totalSpanMs) * 100
                                                         const widthPct = ((entry.end.getTime() - entry.start.getTime()) / totalSpanMs) * 100
                                                         const showText = widthPct > 5

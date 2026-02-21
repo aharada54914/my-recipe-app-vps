@@ -52,7 +52,18 @@ import { ParsedRecipeSchema } from '../db/zodSchemas'
 export function validateParsedRecipe(data: unknown): Omit<Recipe, 'id'> {
   const result = ParsedRecipeSchema.safeParse(data)
   if (!result.success) {
-    throw new Error(`Data validation failed: ${result.error.message}`)
+    const formattedIssues = result.error.issues
+      .map((issue) => {
+        const path = issue.path.reduce<string>((acc, segment) => {
+          const part = String(segment)
+          if (typeof segment === 'number') return `${acc}[${part}]`
+          return acc ? `${acc}.${part}` : part
+        }, '')
+        return path ? `${path}: ${issue.message}` : issue.message
+      })
+      .join('; ')
+
+    throw new Error(`Data validation failed: ${formattedIssues}`)
   }
 
   const parsed = result.data

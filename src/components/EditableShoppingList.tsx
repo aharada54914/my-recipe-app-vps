@@ -11,7 +11,7 @@ import { copyToClipboard } from '../utils/shoppingUtils'
 
 export interface ShoppingIngredient {
   name: string
-  totalQuantity: number
+  totalQuantity: number | string
   unit: string
   inStock: boolean
   ingredientCategory?: 'main' | 'sub'
@@ -26,7 +26,7 @@ interface Props {
 interface EditableItem {
   id: string
   name: string
-  quantity: number
+  quantity: number | string
   unit: string
   inStock: boolean
   ingredientCategory: 'main' | 'sub'
@@ -34,6 +34,7 @@ interface EditableItem {
 
 function formatQty(ing: ShoppingIngredient): string {
   if (ing.unit === '適量') return '適量'
+  if (typeof ing.totalQuantity !== 'number') return `${ing.totalQuantity}${ing.unit}`
   const qty = Math.round(ing.totalQuantity * 10) / 10
   return `${qty}${ing.unit}`
 }
@@ -61,7 +62,7 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
     return filtered.map((i) => ({
       id: `${i.name}__${i.unit}`,
       name: i.name,
-      quantity: i.totalQuantity,
+      quantity: typeof i.totalQuantity === 'number' ? i.totalQuantity : 0,
       unit: i.unit,
       inStock: i.inStock,
       ingredientCategory: i.ingredientCategory ?? 'main',
