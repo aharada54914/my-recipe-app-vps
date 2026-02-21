@@ -26,7 +26,7 @@ export async function buildIngredientIndex(): Promise<IngredientInfo[]> {
         counts = new Map()
         unitCounts.set(name, counts)
       }
-      const unit = ing.unit || '適量'
+      const unit = (ing.quantity === '適量' || ing.unit === '適量' || ing.unit === '') ? '適量' : ing.unit
       counts.set(unit, (counts.get(unit) || 0) + 1)
     }
   })

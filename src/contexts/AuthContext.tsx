@@ -1,4 +1,4 @@
-import { useState, useCallback, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, type ReactNode } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { AuthContext } from './authContextDef'
 import type { GoogleUser, AuthContextValue } from './authContextDef'
@@ -8,7 +8,7 @@ export type { GoogleUser, AuthContextValue }
 const USER_KEY = 'google_user'
 const TOKEN_KEY = 'google_access_token'
 const TOKEN_EXPIRY_KEY = 'google_token_expiry'
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
 const SCOPES = [
   'openid',
@@ -43,6 +43,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<GoogleUser | null>(() => loadStoredUser())
   const [loading, setLoading] = useState(false)
   const [providerToken, setProviderToken] = useState<string | null>(() => loadStoredToken())
+  // Use state for client ID to allow dynamic updates from settings
+  const [clientId, setClientId] = useState<string | undefined>(() => {
+    return (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || undefined
+  })
+
+  // Listen for local storage changes from other tabs/components
+  useEffect(() => {
+    const handleStorage = () => {
+      const stored = localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || undefined
+      if (stored !== clientId && !import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+        setClientId(stored)
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    // Also poll occasionally in case of same-window manual changes
+    const interval = setInterval(handleStorage, 1000)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      clearInterval(interval)
+    }
+  }, [clientId])
 
   const storeToken = useCallback((token: string, expiresIn: number) => {
     const expiry = new Date(Date.now() + expiresIn * 1000).toISOString()
@@ -53,8 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProviderToken(token)
   }, [])
 
-  if (!GOOGLE_CLIENT_ID) {
-    const signInWithGoogle = () => {}
+  if (!clientId) {
+    const signInWithGoogle = () => { }
 
     const signOut = () => {
       setUser(null)
@@ -111,6 +132,11 @@ function OAuthEnabledAuthProvider({
 }: OAuthEnabledAuthProviderProps) {
   const googleLogin = useGoogleLogin({
     scope: SCOPES,
+    // Note: Since useGoogleLogin does not take clientId directly here in all react-oauth/google versions (it takes it from GoogleOAuthProvider wrapper usually),
+    // we make sure to wrap the app with GoogleOAuthProvider properly in main.tsx or App.tsx using this exported ClientId if needed, 
+    // but the underlying googleLogin relies on the nearest context. 
+    // This file assumes the outer tree provides it correctly. We will pass it to AuthContext if we needed to initialize it manually.
+
     onSuccess: async (tokenResponse) => {
       storeToken(tokenResponse.access_token, tokenResponse.expires_in)
       try {

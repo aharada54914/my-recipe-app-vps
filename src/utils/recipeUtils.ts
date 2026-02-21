@@ -9,29 +9,32 @@ import { resolveIngredientName } from '../data/ingredientVariants'
  * - 大さじ/小さじ → fractions
  * - 適量 → return as-is
  */
-export function formatQuantityVibe(value: number, unit: string): string {
-  if (unit === '適量') return '適量'
+export function formatQuantityVibe(value: number | string, unit: string): string {
+  if (value === '適量' || unit === '適量') return '適量'
   if (value === 0) return `0${unit}`
+
+  const numValue = Number(value)
+  if (isNaN(numValue)) return String(value)
 
   // Weight / volume: round to nearest 1g
   if (unit === 'g' || unit === 'ml') {
-    const rounded = Math.round(value)
+    const rounded = Math.round(numValue)
     return `${rounded}${unit}`
   }
 
   // Tablespoon / teaspoon: use fractions
   if (unit === '大さじ' || unit === '小さじ') {
-    return formatSpoonFraction(value, unit)
+    return formatSpoonFraction(numValue, unit)
   }
 
   // Countable units: express with Japanese approximations
   if (['個', '本', '株', '片', '皿分'].includes(unit)) {
-    return formatCountable(value, unit)
+    return formatCountable(numValue, unit)
   }
 
   // Fallback
-  if (Number.isInteger(value)) return `${value}${unit}`
-  return `${Math.round(value * 10) / 10}${unit}`
+  if (Number.isInteger(numValue)) return `${numValue}${unit}`
+  return `${Math.round(numValue * 10) / 10}${unit}`
 }
 
 function formatSpoonFraction(value: number, unit: string): string {
@@ -99,7 +102,7 @@ export function adjustIngredients(
   const ratio = targetServings / baseServings
   return ingredients.map((ing) => ({
     ...ing,
-    quantity: ing.unit === '適量' ? ing.quantity : ing.quantity * ratio,
+    quantity: (ing.quantity === '適量' || ing.unit === '適量') ? ing.quantity : (ing.quantity as number) * ratio,
   }))
 }
 

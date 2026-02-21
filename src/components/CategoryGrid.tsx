@@ -14,14 +14,14 @@ interface CategoryItem {
 }
 
 const categories: CategoryItem[] = [
-  { label: '主菜', image: '/category/main.svg', filter: '主菜' },
-  { label: '副菜', image: '/category/side.svg', filter: '副菜' },
-  { label: 'スープ', image: '/category/soup.svg', filter: 'スープ' },
-  { label: 'ご飯もの', image: '/category/rice.svg', filter: 'ご飯もの' },
-  { label: 'デザート', image: '/category/dessert.svg', filter: 'デザート' },
-  { label: 'ホットクック', image: '/category/hotcook.svg', filter: 'device:hotcook' },
-  { label: 'ヘルシオ', image: '/category/healsio.svg', filter: 'device:healsio' },
-  { label: '時短', image: '/category/quick.svg', filter: 'quick' },
+  { label: '主菜', image: '/category/main.webp', filter: '主菜' },
+  { label: '副菜', image: '/category/side.webp', filter: '副菜' },
+  { label: 'スープ', image: '/category/soup.webp', filter: 'スープ' },
+  { label: '一品料理', image: '/category/one-dish.webp', filter: '一品料理' },
+  { label: 'スイーツ', image: '/category/sweets.webp', filter: 'スイーツ' },
+  { label: 'ホットクック', image: '/category/hotcook.webp', filter: 'device:hotcook' },
+  { label: 'ヘルシオ', image: '/category/healsio.webp', filter: 'device:healsio' },
+  { label: '時短', image: '/category/quick.webp', filter: 'quick' },
 ]
 
 export function CategoryGrid() {

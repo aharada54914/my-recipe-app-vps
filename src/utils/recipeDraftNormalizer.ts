@@ -2,7 +2,7 @@ import type { DeviceType, IngredientCategory, Recipe, RecipeCategory } from '../
 
 export interface RecipeDraftIngredient {
   name: string
-  quantity: number
+  quantity: number | string
   unit: string
   category: IngredientCategory
   optional?: boolean
@@ -29,7 +29,7 @@ export interface RecipeDraft {
 }
 
 const VALID_DEVICES: DeviceType[] = ['hotcook', 'healsio', 'manual']
-const VALID_CATEGORIES: RecipeCategory[] = ['主菜', '副菜', 'スープ', 'ご飯もの', 'デザート']
+const VALID_CATEGORIES: RecipeCategory[] = ['主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
 const VALID_INGREDIENT_CATEGORIES: IngredientCategory[] = ['main', 'sub']
 
 function generateRecipeNumber(): string {
@@ -43,10 +43,12 @@ function normalizeDuration(value: number): number {
   return Math.round(value)
 }
 
-function normalizeQuantity(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  if (value < 0) return 0
-  return value
+function normalizeQuantity(value: number | string): number | string {
+  if (value === '適量') return '適量'
+  const num = Number(value)
+  if (!Number.isFinite(num)) return 0
+  if (num < 0) return 0
+  return num
 }
 
 export function toRecipeDraft(recipe: Omit<Recipe, 'id'>): RecipeDraft {
@@ -85,7 +87,7 @@ export function normalizeRecipeDraft(draft: RecipeDraft): Omit<Recipe, 'id'> {
     .map((ing) => ({
       name: ing.name.trim(),
       quantity: normalizeQuantity(ing.quantity),
-      unit: ing.unit.trim() || '適量',
+      unit: ing.unit.trim(),
       category: VALID_INGREDIENT_CATEGORIES.includes(ing.category) ? ing.category : 'main',
       ...(ing.optional ? { optional: true } : {}),
     }))

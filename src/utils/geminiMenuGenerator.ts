@@ -17,12 +17,13 @@ ${ingredientNames.join('、')}
 - 日本の家庭にある基本調味料(塩、こしょう、醤油、みりん、酒、砂糖、味噌、酢、油、だし)は常備されているものとして扱ってよい
 
 必須ルール:
+- なるべくヘルシオやホットクックを活用して調理しやすい（放置できる、手間がかからない）レシピを優先的に提案してください
 - JSONのみを出力
 - 各レシピは次の形式を必ず満たす
 {
   "title": string,
   "device": "hotcook" | "healsio" | "manual",
-  "category": "主菜" | "副菜" | "スープ" | "ご飯もの" | "デザート",
+  "category": "主菜" | "副菜" | "スープ" | "一品料理" | "スイーツ",
   "baseServings": number,
   "totalWeightG": number,
   "ingredients": [

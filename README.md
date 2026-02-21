@@ -1,6 +1,6 @@
 # Kitchen App — Smart Recipe Manager PWA
 
-最終改訂: 2026-02-21
+最終改訂: 2026-02-22
 
 ホットクック / ヘルシオ向けのレシピ管理PWAです。  
 オフライン優先で動作し、Google Driveバックアップ、Gemini連携、週間献立自動生成に対応しています。
@@ -84,7 +84,7 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 - `docs/SETUP.md` セットアップ・デプロイ
 - `docs/ALGORITHMS.md` アルゴリズム仕様
 - `docs/ARCHITECTURE.md` アーキテクチャ仕様
-- `SETUP_GUIDE.md` 個人向けやさしい設定ガイド
+- `docs/SETTINGS_GUIDE.md` 個人向けやさしい設定ガイド (アプリ内から閲覧可能)
 - `SETUP_GUIDE_OKAZAKI.md` 個人向け（岡崎弁）設定ガイド
 
 ---
@@ -108,6 +108,6 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 
 ## バージョン
 
-現在: **v1.7.5**
+現在: **v1.8.0**
 
-`設定 > バージョン情報` で、`V1以前→V1`、`V1→V1.5.0`、`V1.5.0→V1.6.0`、`V1.6.0→V1.6.5`、`V1.6.5→V1.7.0`、`V1.7.0→V1.7.5` の変更要約を確認できます。
+`設定 > バージョン情報` で、これまでの変更要約（v1.8.0 への機能拡張等）を確認できます。

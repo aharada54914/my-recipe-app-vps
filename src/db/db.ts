@@ -5,12 +5,12 @@ import Dexie, { type Table } from 'dexie'
 export type DeviceType = 'hotcook' | 'healsio' | 'manual'
 export type IngredientCategory = 'main' | 'sub'
 export type SaltMode = 0.6 | 0.8 | 1.2
-export type RecipeCategory = 'すべて' | '主菜' | '副菜' | 'スープ' | 'ご飯もの' | 'デザート'
+export type RecipeCategory = 'すべて' | '主菜' | '副菜' | 'スープ' | '一品料理' | 'スイーツ'
 export type TabId = 'home' | 'menu' | 'gemini' | 'favorites' | 'history'
 
 export interface Ingredient {
   name: string
-  quantity: number
+  quantity: number | string
   unit: string
   category: IngredientCategory
   optional?: boolean
@@ -248,6 +248,27 @@ class RecipeDB extends Dexie {
       calendarEvents: '++id, recipeId, googleEventId',
       userPreferences: '++id',
       weeklyMenus: '++id, weekStartDate',
+    })
+    // v9: Category names migration
+    this.version(9).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+    }).upgrade(async tx => {
+      // Migrate existing recipes to use new category names
+      await tx.table('recipes').toCollection().modify(recipe => {
+        // We typecast since TypeScript check uses the current type
+        if ((recipe.category as any) === 'ご飯もの') {
+          recipe.category = '一品料理'
+        } else if ((recipe.category as any) === 'デザート') {
+          recipe.category = 'スイーツ'
+        }
+      })
     })
   }
 }

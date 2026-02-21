@@ -2,6 +2,44 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import type { Plugin } from 'vite'
+
+function apiMiddleware(): Plugin {
+  return {
+    name: 'api-middleware',
+    configureServer(server) {
+      server.middlewares.use(async (req: any, res: any, next) => {
+        if (req.url && req.url.startsWith('/api/recipe-extract')) {
+          try {
+            const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+            req.query = Object.fromEntries(urlObj.searchParams)
+
+            const handlerModule = await server.ssrLoadModule('./api/recipe-extract.js')
+            const handler = handlerModule.default
+
+            res.status = (code: number) => {
+              res.statusCode = code
+              return res
+            }
+            res.json = (data: any) => {
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify(data))
+            }
+
+            await handler(req, res)
+            return
+          } catch (e: any) {
+            console.error('API Error:', e)
+            res.statusCode = 500
+            res.end(JSON.stringify({ ok: false, error: e.message }))
+            return
+          }
+        }
+        next()
+      })
+    }
+  }
+}
 
 export default defineConfig({
   define: {
@@ -12,6 +50,7 @@ export default defineConfig({
     environment: 'jsdom',
   },
   plugins: [
+    apiMiddleware(),
     react(),
     tailwindcss(),
     VitePWA({

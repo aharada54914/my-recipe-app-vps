@@ -22,7 +22,7 @@ import { ToastContainer } from './components/ToastContainer'
 import { SplashScreen } from './components/SplashScreen'
 import { NotificationScheduler } from './components/NotificationScheduler'
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
 function AppLayout() {
   const navigate = useNavigate()
@@ -149,17 +149,19 @@ function App() {
     </AuthProvider>
   )
 
+  const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || undefined
+
   if (showSplash) {
     return <SplashScreen leaving={dbReady} />
   }
 
-  if (!GOOGLE_CLIENT_ID) {
+  if (!clientId) {
     // No OAuth client ID — skip GoogleOAuthProvider (auth features disabled)
     return inner
   }
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <GoogleOAuthProvider clientId={clientId}>
       {inner}
     </GoogleOAuthProvider>
   )

@@ -81,7 +81,7 @@ export function parseIngredientLine(line: string): Ingredient | null {
 
     // Parse quantity
     if (!rawQty || rawQty === '適量' || rawQty === '少々') {
-        return { name, quantity: 0, unit: '適量', category }
+        return { name, quantity: '適量', unit: '', category }
     }
 
     // Try to extract numeric quantity and unit
@@ -89,7 +89,7 @@ export function parseIngredientLine(line: string): Ingredient | null {
     return { name, quantity, unit, category }
 }
 
-function parseQuantityUnit(raw: string): { quantity: number; unit: string } {
+function parseQuantityUnit(raw: string): { quantity: number | string; unit: string } {
     // Handle fractional notation: "1/2個", "大さじ1/2"
     const spoonMatch = raw.match(/^(大さじ|小さじ)([\d/]+(?:\s*と\s*[\d/]+)?)$/)
     if (spoonMatch) {
@@ -111,7 +111,7 @@ function parseQuantityUnit(raw: string): { quantity: number; unit: string } {
         return { quantity: parseFloat(anyNum[1]), unit }
     }
 
-    return { quantity: 0, unit: '適量' }
+    return { quantity: '適量', unit: '' }
 }
 
 function parseFraction(s: string): number {
@@ -188,8 +188,8 @@ export function estimateCookingSteps(
 function guessCategory(title: string): RecipeCategory {
     const categoryMap: [string[], RecipeCategory][] = [
         [['スープ', 'みそ汁', '味噌汁', 'シチュー', 'ポタージュ', '汁'], 'スープ'],
-        [['ご飯', 'ピラフ', 'リゾット', 'チャーハン', 'おにぎり', 'パスタ', 'うどん', 'そば', 'ラーメン'], 'ご飯もの'],
-        [['ケーキ', 'クッキー', 'プリン', 'ゼリー', 'アイス', 'チョコ', 'マフィン', 'パン', 'ヨーグルト', 'デザート', 'ジャム', 'コンポート', 'あんこ', '甘酒', 'おしるこ', 'メレンゲ'], 'デザート'],
+        [['ご飯', 'ピラフ', 'リゾット', 'チャーハン', 'おにぎり', 'パスタ', 'うどん', 'そば', 'ラーメン'], '一品料理'],
+        [['ケーキ', 'クッキー', 'プリン', 'ゼリー', 'アイス', 'チョコ', 'マフィン', 'パン', 'ヨーグルト', 'スイーツ', 'ジャム', 'コンポート', 'あんこ', '甘酒', 'おしるこ', 'メレンゲ'], 'スイーツ'],
         [['サラダ', 'ナムル', 'きんぴら', '漬', 'マリネ', 'おひたし', '和え', 'ピクルス'], '副菜'],
     ]
 
@@ -368,6 +368,11 @@ function parseServings(servingsStr: string): number {
 function estimateTotalWeight(ingredients: Ingredient[]): number {
     let weight = 0
     for (const ing of ingredients) {
+        if (typeof ing.quantity !== 'number') {
+            // '適量' or other string quantity
+            continue
+        }
+
         if (ing.unit === 'g' || ing.unit === 'ml' || ing.unit === 'mL') {
             weight += ing.quantity
         } else if (ing.unit === '個' || ing.unit === '本' || ing.unit === '株') {
@@ -378,7 +383,7 @@ function estimateTotalWeight(ingredients: Ingredient[]): number {
             weight += ing.quantity * 15
         } else if (ing.unit === '小さじ') {
             weight += ing.quantity * 5
-        } else if (ing.unit === '適量') {
+        } else if (ing.quantity === '適量' || ing.unit === '適量') {
             // skip
         } else {
             weight += 50 // unknown unit fallback

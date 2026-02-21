@@ -2,7 +2,7 @@ import type { Recipe, RecipeCategory } from '../db/db'
 
 export type MealRole = 'main' | 'side'
 
-const MAIN_CATEGORIES: RecipeCategory[] = ['主菜', 'ご飯もの']
+const MAIN_CATEGORIES: RecipeCategory[] = ['主菜', '一品料理']
 const SIDE_CATEGORIES: RecipeCategory[] = ['副菜', 'スープ']
 
 const CATEGORIES_BY_ROLE: Record<MealRole, RecipeCategory[]> = {

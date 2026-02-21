@@ -9,7 +9,7 @@ import { formatQuantityVibe } from './recipeUtils'
 
 export interface AggregatedIngredient {
   name: string
-  totalQuantity: number
+  totalQuantity: number | string
   unit: string
   ingredientCategory: 'main' | 'sub'
   inStock: boolean
@@ -31,13 +31,13 @@ export function aggregateIngredients(
     for (const ing of recipe.ingredients) {
       const key = `${ing.name}__${ing.unit}`
 
-      if (ing.unit === '適量') {
+      if (ing.quantity === '適量' || ing.unit === '適量') {
         // Don't aggregate 適量 — just mark presence
         if (!map.has(key)) {
           map.set(key, {
             name: ing.name,
-            totalQuantity: 0,
-            unit: '適量',
+            totalQuantity: '適量',
+            unit: '',
             ingredientCategory: ing.category,
             inStock: stockNames.has(ing.name),
           })
@@ -47,7 +47,9 @@ export function aggregateIngredients(
 
       const existing = map.get(key)
       if (existing) {
-        existing.totalQuantity += ing.quantity
+        if (typeof existing.totalQuantity === 'number' && typeof ing.quantity === 'number') {
+          existing.totalQuantity += ing.quantity
+        }
       } else {
         map.set(key, {
           name: ing.name,
@@ -106,7 +108,7 @@ export function formatWeeklyShoppingList(
   if (mainItems.length > 0) {
     text += `【主材料】\n`
     for (const item of mainItems) {
-      const qty = item.unit === '適量'
+      const qty = item.totalQuantity === '適量' || item.unit === '適量'
         ? '適量'
         : formatQuantityVibe(item.totalQuantity, item.unit)
       text += `・${item.name} ${qty}\n`
@@ -116,7 +118,7 @@ export function formatWeeklyShoppingList(
   if (subItems.length > 0) {
     text += `【調味料・その他】\n`
     for (const item of subItems) {
-      const qty = item.unit === '適量'
+      const qty = item.totalQuantity === '適量' || item.unit === '適量'
         ? '適量'
         : formatQuantityVibe(item.totalQuantity, item.unit)
       text += `・${item.name} ${qty}\n`

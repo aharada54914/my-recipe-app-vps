@@ -1,9 +1,6 @@
-import { useState } from 'react'
 import { ArrowLeft, Sparkles, Save, RotateCcw } from 'lucide-react'
-import type { Recipe, ParseStatus } from '../db/db'
-import { db } from '../db/db'
-import { parseRecipeText, parseRecipeFromUrl } from '../utils/geminiParser'
 import { formatQuantityVibe } from '../utils/recipeUtils'
+import { useRecipeImport } from '../hooks/useRecipeImport'
 
 interface AiRecipeParserProps {
   onBack: () => void
@@ -16,51 +13,20 @@ const deviceLabels: Record<string, string> = {
 }
 
 export function AiRecipeParser({ onBack }: AiRecipeParserProps) {
-  const [inputText, setInputText] = useState('')
-  const [inputUrl, setInputUrl] = useState('')
-  const [status, setStatus] = useState<ParseStatus>('idle')
-  const [parsed, setParsed] = useState<Omit<Recipe, 'id'> | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    inputText,
+    setInputText,
+    inputUrl,
+    setInputUrl,
+    status,
+    parsed,
+    error,
+    canParse,
+    handleParse,
+    handleSave,
+    handleReset,
+  } = useRecipeImport()
 
-  const canParse = inputText.trim() || inputUrl.trim()
-
-  const handleParse = async () => {
-    setStatus('parsing')
-    setError(null)
-    try {
-      const result = inputUrl.trim()
-        ? await parseRecipeFromUrl(inputUrl.trim())
-        : await parseRecipeText(inputText)
-      setParsed(result)
-      setStatus('previewing')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '解析に失敗しました')
-      setStatus('error')
-    }
-  }
-
-  const handleSave = async () => {
-    if (!parsed) return
-
-    // Duplicate title check
-    const existing = await db.recipes.where('title').equals(parsed.title).first()
-    if (existing) {
-      const confirmed = window.confirm(
-        `「${parsed.title}」は既に登録されています。重複して保存しますか？`
-      )
-      if (!confirmed) return
-    }
-
-    setStatus('saving')
-    await db.recipes.add(parsed as Recipe)
-    onBack()
-  }
-
-  const handleReset = () => {
-    setParsed(null)
-    setError(null)
-    setStatus('idle')
-  }
 
   return (
     <div className="min-h-dvh bg-bg-primary">
@@ -219,7 +185,7 @@ export function AiRecipeParser({ onBack }: AiRecipeParserProps) {
                 やり直す
               </button>
               <button
-                onClick={handleSave}
+                onClick={() => handleSave(onBack)}
                 disabled={status === 'saving'}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-bold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
               >

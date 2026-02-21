@@ -1,7 +1,7 @@
 # Architecture Reference
 
-最終改訂: 2026-02-21
-対象バージョン: v1.7.5
+最終改訂: 2026-02-22
+対象バージョン: v1.8.0
 
 Kitchen App の現行アーキテクチャ概要です。
 
@@ -34,7 +34,7 @@ Kitchen App の現行アーキテクチャ概要です。
 
 ## 3. データ層
 
-DB: `RecipeDB`（Dexie schema version 8）
+DB: `RecipeDB`（Dexie schema version 9）
 
 主なテーブル:
 - `recipes`
@@ -101,7 +101,7 @@ DB: `RecipeDB`（Dexie schema version 8）
   - 対応ドメインallowlist検証
   - HTML/JSON-LD抽出
 - `src/utils/geminiParser.ts`:
-  - URL抽出結果をGeminiでRecipe互換JSONへ正規化
+  - URL抽出結果を Zodスキーマ (`ParsedRecipeSchema`) に通して Recipe互換JSONへ正規化
 - `src/pages/AskGeminiPage.tsx`:
   - 写真 -> 食材文字 -> 献立生成の2段階フロー
   - 再生成時は文字データのみ送信

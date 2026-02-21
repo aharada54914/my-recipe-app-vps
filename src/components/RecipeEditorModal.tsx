@@ -19,7 +19,7 @@ const DEVICE_OPTIONS: { value: RecipeDraft['device']; label: string }[] = [
   { value: 'healsio', label: 'ヘルシオ' },
 ]
 
-const CATEGORY_OPTIONS: RecipeDraft['category'][] = ['主菜', '副菜', 'スープ', 'ご飯もの', 'デザート']
+const CATEGORY_OPTIONS: RecipeDraft['category'][] = ['主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
 
 export function RecipeEditorModal({
   open,

@@ -14,7 +14,7 @@ import { RecipeCard } from './RecipeCard'
 import { buildPreferenceProfile } from '../utils/preferenceSignals'
 import { computeKitchenAppPreferenceScore } from '../utils/preferenceRanker'
 
-const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', 'ご飯もの', 'デザート']
+const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
 interface RecipeListProps {
@@ -191,8 +191,8 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   const activeFilterLabel = deviceFilter
     ? deviceFilter === 'hotcook' ? 'ホットクック' : 'ヘルシオ'
     : quickFilter ? '時短 (30分以内)'
-    : seasonalFilter ? '旬のレシピ'
-    : null
+      : seasonalFilter ? '旬のレシピ'
+        : null
 
   return (
     <>
