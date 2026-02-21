@@ -24,13 +24,13 @@ export function BottomNav() {
       <div className="flex justify-around py-2.5">
         {tabs.map(({ id, path, icon: Icon, label }) => {
           const isActive = location.pathname === path
-          const iconClass = id === 'gemini' ? 'h-8 w-8' : 'h-7 w-7'
+          const iconClass = 'h-7 w-7'
           return (
             <button
               key={id}
               onClick={() => navigate(path)}
               aria-label={label}
-              className={`flex min-h-[54px] min-w-[54px] items-center justify-center rounded-2xl px-3 py-2 transition-all duration-200 active:scale-95 ${
+              className={`flex min-h-[56px] min-w-[56px] items-center justify-center rounded-2xl px-3 py-2 transition-all duration-200 active:scale-95 ${
                 isActive
                   ? 'bg-accent/20 text-accent shadow-[0_8px_24px_rgba(249,115,22,0.25)]'
                   : 'text-text-secondary hover:bg-white/10 hover:text-accent'

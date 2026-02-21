@@ -9,20 +9,23 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Lock, Unlock, RefreshCw, ShoppingCart, CalendarClock, Clock3, UtensilsCrossed, X, Search, Star, Share2, Download } from 'lucide-react'
+import { Lock, Unlock, RefreshCw, ShoppingCart, Calendar, CalendarClock, Clock3, UtensilsCrossed, X, Search, Star, Share2, Download } from 'lucide-react'
 import { format, addDays, parse, addMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Fuse from 'fuse.js'
 import { db, type Recipe, type WeeklyMenu } from '../db/db'
 import { usePreferences } from '../hooks/usePreferences'
+import { useAuth } from '../hooks/useAuth'
 import { useDebounce } from '../hooks/useDebounce'
 import { RecipeCard } from '../components/RecipeCard'
 import { selectWeeklyMenu, getWeekStartDate } from '../utils/weeklyMenuSelector'
-import { aggregateIngredients, getMissingWeeklyIngredients } from '../utils/weeklyShoppingUtils'
+import { aggregateIngredients, getMissingWeeklyIngredients, formatWeeklyShoppingList } from '../utils/weeklyShoppingUtils'
+import { registerWeeklyMenuToCalendar, registerShoppingListToCalendar } from '../utils/weeklyMenuCalendar'
 import { calculateMatchRate, calculateMultiRecipeSchedule, isHelsioDeli } from '../utils/recipeUtils'
 import { EditableShoppingList } from '../components/EditableShoppingList'
 import { createWeeklyMenuShareCode, parseWeeklyMenuShareCode } from '../utils/weeklyMenuShare'
 import { getNotificationPermission, showLocalNotification } from '../utils/notifications'
+import { isRecipeAllowedForRole } from '../utils/mealRoleRules'
 
 const LANE_COLORS = [
   { bg: 'rgba(249,115,22,0.25)', border: '#F97316', text: '#F97316' },
@@ -33,6 +36,7 @@ export function WeeklyMenuPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { preferences } = usePreferences()
+  const { providerToken, signInWithGoogle, isOAuthAvailable } = useAuth()
 
   const [weekStart, setWeekStart] = useState(() => getWeekStartDate(new Date()))
   const weekStartStr = format(weekStart, 'yyyy-MM-dd')
@@ -46,6 +50,7 @@ export function WeeklyMenuPage() {
   const [menu, setMenu] = useState<WeeklyMenu | null>(null)
   const [recipes, setRecipes] = useState<Map<number, Recipe>>(new Map())
   const [generating, setGenerating] = useState(false)
+  const [registering, setRegistering] = useState(false)
   const [showShoppingList, setShowShoppingList] = useState(false)
   const [swapDayIndex, setSwapDayIndex] = useState<number | null>(null)
   const [swapType, setSwapType] = useState<'main' | 'side'>('main')
@@ -159,8 +164,10 @@ export function WeeklyMenuPage() {
       ])
 
       const favIds = new Set(favRecords.map(f => f.recipeId))
+      const role = type === 'main' ? 'main' : 'side'
       const candidates = allRecipes
-        .filter(r => r.id != null && !usedIds.has(r.id) && !isHelsioDeli(r))
+        .filter((r) => r.id != null && !usedIds.has(r.id) && !isHelsioDeli(r))
+        .filter((r) => isRecipeAllowedForRole(r, role))
         .map(r => ({ recipe: r, matchRate: calculateMatchRate(r.ingredients ?? [], stockNames) }))
         .sort((a, b) => b.matchRate - a.matchRate)
         .map(r => r.recipe)
@@ -182,6 +189,10 @@ export function WeeklyMenuPage() {
 
   const handleSelectSwap = useCallback(async (recipe: Recipe) => {
     if (!menu || swapDayIndex === null) return
+    if (!isRecipeAllowedForRole(recipe, swapType === 'main' ? 'main' : 'side')) {
+      alert('選択したレシピはこの枠に割り当てできません。')
+      return
+    }
     const newItems = [...menu.items]
     if (swapType === 'main') {
       newItems[swapDayIndex] = { ...newItems[swapDayIndex], recipeId: recipe.id! }
@@ -211,6 +222,44 @@ export function WeeklyMenuPage() {
     })
   }, [menu, recipes])
 
+  // Calendar registration
+  const handleRegisterCalendar = useCallback(async () => {
+    if (!menu) return
+    if (!isOAuthAvailable) {
+      alert('Google OAuthが未設定です。環境変数 VITE_GOOGLE_CLIENT_ID を設定してください。')
+      return
+    }
+    if (!providerToken) {
+      signInWithGoogle()
+      return
+    }
+
+    setRegistering(true)
+    try {
+      const mainRecipes = menu.items
+        .map((item) => recipes.get(item.recipeId))
+        .filter(Boolean) as Recipe[]
+
+      const result = await registerWeeklyMenuToCalendar(providerToken, menu, mainRecipes, preferences)
+
+      if (stockItems) {
+        const missing = getMissingWeeklyIngredients(selectedRecipes, stockItems)
+        if (missing.length > 0) {
+          const shoppingListText = formatWeeklyShoppingList(weekStartStr, missing)
+          await registerShoppingListToCalendar(providerToken, shoppingListText, weekStart, preferences)
+        }
+      }
+
+      if (result.errors.length > 0) {
+        alert(`カレンダー登録: ${result.registered}件成功 / ${result.errors.length}件失敗\n${result.errors.join('\n')}`)
+      } else {
+        alert(`カレンダー登録が完了しました（${result.registered}件）`)
+      }
+    } finally {
+      setRegistering(false)
+    }
+  }, [isOAuthAvailable, menu, preferences, providerToken, recipes, selectedRecipes, signInWithGoogle, stockItems, weekStart, weekStartStr])
+
   // Week navigation
   const adjustWeek = (delta: number) => {
     setWeekStart(prev => addDays(prev, delta * 7))
@@ -236,6 +285,7 @@ export function WeeklyMenuPage() {
     if (!menu) return ''
     return createWeeklyMenuShareCode(weekStartStr, menu.items)
   }, [menu, weekStartStr])
+  const isOverlayOpen = swapDayIndex !== null || ganttDayIndex !== null || shareOpen
 
   const applySharedMenu = useCallback(async (code: string) => {
     const shared = parseWeeklyMenuShareCode(code)
@@ -397,7 +447,7 @@ export function WeeklyMenuPage() {
                           {format(date, 'M/d (E)', { locale: ja })}
                         </span>
                         {isToday && (
-                          <span className="rounded-md bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                          <span className="rounded-md bg-accent/20 px-2 py-0.5 text-xs font-bold text-accent">
                             今日
                           </span>
                         )}
@@ -419,26 +469,26 @@ export function WeeklyMenuPage() {
                       onClick={() => setGanttDayIndex(i)}
                       className="mb-3 flex w-full items-center justify-between rounded-xl bg-white/5 px-3.5 py-2.5 text-left transition-colors hover:bg-white/10"
                     >
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+                      <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
                         {cookStart && (
                           <span className="inline-flex items-center gap-1.5">
-                            <Clock3 className="h-4 w-4 shrink-0 text-text-secondary" />
+                            <Clock3 className="h-5 w-5 shrink-0 text-text-secondary" />
                             調理開始 <span className="font-bold text-text-primary">{format(cookStart, 'HH:mm')}</span>
                           </span>
                         )}
                         <span className="inline-flex items-center gap-1.5">
-                          <UtensilsCrossed className="h-4 w-4 shrink-0 text-accent" />
+                          <UtensilsCrossed className="h-5 w-5 shrink-0 text-accent" />
                           いただきます <span className="font-bold text-accent">{format(desiredMealTime, 'HH:mm')}</span>
                         </span>
                       </div>
-                      <CalendarClock className="h-4 w-4 shrink-0 text-text-secondary" />
+                      <CalendarClock className="h-5 w-5 shrink-0 text-text-secondary" />
                     </button>
 
                     {/* 2-tile grid: main | side */}
                     <div className="grid grid-cols-2 gap-3">
                       {/* Main dish */}
                       <div>
-                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-text-secondary">主菜</div>
+                        <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-text-secondary">主菜</div>
                         {mainRecipe ? (
                           <RecipeCard
                             recipe={mainRecipe}
@@ -447,7 +497,7 @@ export function WeeklyMenuPage() {
                             variant="menu"
                           />
                         ) : (
-                          <div className="flex h-24 items-center justify-center rounded-xl bg-white/5 text-[10px] text-text-secondary">
+                          <div className="flex h-24 items-center justify-center rounded-xl bg-white/5 text-xs text-text-secondary">
                             レシピなし
                           </div>
                         )}
@@ -455,7 +505,7 @@ export function WeeklyMenuPage() {
 
                       {/* Side dish */}
                       <div>
-                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-text-secondary">副菜・スープ</div>
+                        <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-text-secondary">副菜・スープ</div>
                         {sideRecipe ? (
                           <RecipeCard
                             recipe={sideRecipe}
@@ -464,7 +514,7 @@ export function WeeklyMenuPage() {
                             variant="menu"
                           />
                         ) : (
-                          <div className="flex h-24 items-center justify-center rounded-xl bg-white/5 text-[10px] text-text-secondary">
+                          <div className="flex h-24 items-center justify-center rounded-xl bg-white/5 text-xs text-text-secondary">
                             副菜なし
                           </div>
                         )}
@@ -478,7 +528,7 @@ export function WeeklyMenuPage() {
                           type="button"
                           onClick={() => handleOpenSwap(i, 'main')}
                           disabled={swapLoading}
-                          className="rounded-lg bg-white/5 py-1.5 text-[10px] text-text-secondary transition-colors hover:text-accent disabled:opacity-50"
+                          className="rounded-lg bg-white/5 py-2 text-xs font-medium text-text-secondary transition-colors hover:text-accent disabled:opacity-50"
                         >
                           {swapLoading ? '読込中...' : '主菜を変更'}
                         </button>
@@ -486,7 +536,7 @@ export function WeeklyMenuPage() {
                           type="button"
                           onClick={() => handleOpenSwap(i, 'side')}
                           disabled={swapLoading}
-                          className="rounded-lg bg-white/5 py-1.5 text-[10px] text-text-secondary transition-colors hover:text-accent disabled:opacity-50"
+                          className="rounded-lg bg-white/5 py-2 text-xs font-medium text-text-secondary transition-colors hover:text-accent disabled:opacity-50"
                         >
                           {swapLoading ? '読込中...' : '副菜を変更'}
                         </button>
@@ -553,28 +603,39 @@ export function WeeklyMenuPage() {
       </div>
 
       {/* Bottom action bar — always visible in Weekly tab, above BottomNav */}
-      <div className="fixed left-0 right-0 z-50 border-t border-border bg-bg-primary/90 backdrop-blur-xl" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}>
-        <div className="grid grid-cols-2 gap-2 px-4 py-2">
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={generating}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-bg-card py-2.5 text-xs font-medium transition-colors hover:bg-bg-card-hover disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
-            再生成
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowShoppingList(prev => !prev)}
-            disabled={!menu}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-bg-card py-2.5 text-xs font-medium transition-colors hover:bg-bg-card-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            買い物リスト
-          </button>
+      {!isOverlayOpen && (
+        <div className="fixed left-0 right-0 z-40 border-t border-border bg-bg-primary/90 backdrop-blur-xl" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}>
+          <div className="grid grid-cols-3 gap-2 px-4 py-2">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={generating}
+              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-bg-card py-2.5 text-sm font-semibold transition-colors hover:bg-bg-card-hover disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
+              再生成
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowShoppingList(prev => !prev)}
+              disabled={!menu}
+              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-bg-card py-2.5 text-sm font-semibold transition-colors hover:bg-bg-card-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              買い物リスト
+            </button>
+            <button
+              type="button"
+              onClick={handleRegisterCalendar}
+              disabled={!menu || registering}
+              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-accent py-2.5 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Calendar className="h-4 w-4" />
+              {registering ? '登録中...' : providerToken ? 'カレンダー登録' : 'ログインして登録'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -614,7 +675,7 @@ function SwapModal({
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
         className="flex max-h-[75vh] w-full max-w-lg flex-col rounded-t-2xl bg-bg-primary"
         onClick={e => e.stopPropagation()}
@@ -742,11 +803,11 @@ function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, onClose 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+      className="fixed inset-0 z-[140] flex items-end justify-center bg-black/60"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-t-2xl bg-bg-primary p-4 pb-8"
+        className="flex max-h-[88dvh] w-full max-w-lg flex-col rounded-t-2xl bg-bg-primary p-4 pb-8"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal header */}
@@ -762,8 +823,9 @@ function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, onClose 
           </button>
         </div>
 
-        {schedule && totalSpanMs > 0 ? (
-          <>
+        <div className="overflow-y-auto pr-1">
+          {schedule && totalSpanMs > 0 ? (
+            <>
             {/* Time axis */}
             <div className="mb-3 flex justify-between text-[10px] text-text-secondary">
               <span>{format(schedule.overallStart, 'HH:mm')} 調理開始</span>
@@ -782,58 +844,61 @@ function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, onClose 
               </div>
             )}
 
-            {/* Gantt lanes */}
-            <div className="space-y-3">
-              {schedule.recipes.map((rs) => {
-                const color = LANE_COLORS[rs.colorIndex % LANE_COLORS.length]
-                return (
-                  <div key={rs.recipeId}>
-                    <div className="mb-1 text-xs font-medium" style={{ color: color.text }}>
-                      {rs.recipeTitle}
-                    </div>
-                    <div className="relative h-14 rounded-lg bg-white/5">
-                      {rs.entries.map((entry, ei) => {
-                        const leftPct = ((entry.start.getTime() - schedule.overallStart.getTime()) / totalSpanMs) * 100
-                        const widthPct = ((entry.end.getTime() - entry.start.getTime()) / totalSpanMs) * 100
-                        const showText = widthPct > 5
-                        const showTime = widthPct > 15
-                        return (
-                          <div
-                            key={ei}
-                            className="absolute top-0 flex h-full flex-col justify-center overflow-hidden rounded px-1.5"
-                            style={{
-                              left: `${leftPct}%`,
-                              width: `${Math.max(widthPct, 3)}%`,
-                              backgroundColor: color.bg,
-                              borderLeft: entry.isDeviceStep ? `2px solid ${color.border}` : undefined,
-                              color: color.text,
-                            }}
-                            title={`${entry.name} ${format(entry.start, 'HH:mm')}→${format(entry.end, 'HH:mm')}`}
-                          >
-                            {showText && (
-                              <span className="block break-all text-[9px] font-medium leading-tight">
-                                {entry.name}
-                              </span>
-                            )}
-                            {showTime && (
-                              <span className="block text-[8px] leading-tight opacity-70">
-                                {format(entry.start, 'HH:mm')}〜{format(entry.end, 'HH:mm')}
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        ) : (
-          <p className="py-6 text-center text-sm text-text-secondary">
-            調理ステップの情報がありません
-          </p>
-        )}
+              {/* Gantt lanes */}
+              <div className="overflow-x-auto pb-1">
+                <div className="min-w-[320px] space-y-3">
+                  {schedule.recipes.map((rs) => {
+                    const color = LANE_COLORS[rs.colorIndex % LANE_COLORS.length]
+                    return (
+                      <div key={rs.recipeId}>
+                        <div className="mb-1 text-xs font-medium" style={{ color: color.text }}>
+                          {rs.recipeTitle}
+                        </div>
+                        <div className="relative h-14 rounded-lg bg-white/5">
+                          {rs.entries.map((entry, ei) => {
+                            const leftPct = ((entry.start.getTime() - schedule.overallStart.getTime()) / totalSpanMs) * 100
+                            const widthPct = ((entry.end.getTime() - entry.start.getTime()) / totalSpanMs) * 100
+                            const showText = widthPct > 5
+                            const showTime = widthPct > 15
+                            return (
+                              <div
+                                key={ei}
+                                className="absolute top-0 flex h-full flex-col justify-center overflow-hidden rounded px-1.5"
+                                style={{
+                                  left: `${leftPct}%`,
+                                  width: `${Math.max(widthPct, 3)}%`,
+                                  backgroundColor: color.bg,
+                                  borderLeft: entry.isDeviceStep ? `2px solid ${color.border}` : undefined,
+                                  color: color.text,
+                                }}
+                                title={`${entry.name} ${format(entry.start, 'HH:mm')}→${format(entry.end, 'HH:mm')}`}
+                              >
+                                {showText && (
+                                  <span className="block break-all text-[9px] font-medium leading-tight">
+                                    {entry.name}
+                                  </span>
+                                )}
+                                {showTime && (
+                                  <span className="block text-[8px] leading-tight opacity-70">
+                                    {format(entry.start, 'HH:mm')}〜{format(entry.end, 'HH:mm')}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="py-6 text-center text-sm text-text-secondary">
+              調理ステップの情報がありません
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -859,7 +924,7 @@ function ShareMenuModal({
   onClose,
 }: ShareMenuModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
         className="w-full max-w-lg rounded-t-2xl bg-bg-primary p-4 pb-8"
         onClick={(e) => e.stopPropagation()}

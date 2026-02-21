@@ -23,7 +23,7 @@ function StockRow({
   onUpdateQuantity: (quantity: number) => void
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-bg-card px-4 py-3">
+    <div className="flex min-h-[52px] items-center gap-2 rounded-xl bg-bg-card px-4 py-3 ring-1 ring-white/10">
       <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
         {name}
       </span>
@@ -38,9 +38,9 @@ function StockRow({
           onUpdateQuantity(isNaN(val) ? 0 : val)
         }}
         placeholder="0"
-        className="w-16 rounded-lg bg-white/5 px-2 py-1.5 text-sm text-text-primary text-right outline-none"
+        className="w-16 rounded-lg bg-white/5 px-2 py-2 text-sm text-text-primary text-right outline-none"
       />
-      <span className="w-10 text-sm text-text-secondary">{unit}</span>
+      <span className="w-10 text-sm font-medium text-text-secondary">{unit}</span>
     </div>
   )
 }
@@ -100,24 +100,24 @@ export function StockManager() {
 
   return (
     <div>
-      <h2 className="mb-4 text-lg font-bold">在庫管理</h2>
+      <h2 className="mb-4 text-xl font-extrabold">在庫管理</h2>
 
       {/* Search bar */}
-      <div className="mb-6 relative">
+      <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="食材を検索..."
-          className="w-full rounded-xl bg-bg-card pl-10 pr-4 py-2 text-sm text-text-primary placeholder:text-text-secondary outline-none"
+          className="w-full rounded-xl bg-bg-card py-3 pl-10 pr-4 text-base text-text-primary placeholder:text-text-secondary outline-none ring-1 ring-white/10"
         />
       </div>
 
       {/* In-stock section */}
       {inStockItems.length > 0 && (
         <div className="mb-6">
-          <h3 className="mb-2 text-xs font-bold text-text-secondary">在庫あり ({inStockItems.length})</h3>
+          <h3 className="mb-2 text-sm font-bold text-text-secondary">在庫あり ({inStockItems.length})</h3>
           <div className="space-y-2">
             {inStockItems.map((item) => (
               <StockRow
@@ -135,7 +135,7 @@ export function StockManager() {
       {/* Search results section */}
       {searchResults.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-bold text-text-secondary">検索結果 ({searchResults.length})</h3>
+          <h3 className="mb-2 text-sm font-bold text-text-secondary">検索結果 ({searchResults.length})</h3>
           <div className="space-y-2">
             {searchResults.map((ing) => (
               <StockRow

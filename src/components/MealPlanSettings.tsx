@@ -17,16 +17,16 @@ export function MealPlanSettings() {
     <div className="rounded-2xl bg-bg-card p-4">
       <div className="mb-3 flex items-center gap-2">
         <UtensilsCrossed className="h-4 w-4 text-accent" />
-        <h4 className="text-sm font-bold text-text-secondary">献立設定</h4>
+        <h4 className="text-base font-bold text-text-secondary">献立設定</h4>
       </div>
 
       <div className="space-y-3">
         {/* Weekly menu generation timing */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-text-secondary">
             週間献立の自動生成
           </label>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select
               value={preferences.weeklyMenuGenerationDay}
               onChange={(e) => updatePreference('weeklyMenuGenerationDay', Number(e.target.value))}
@@ -43,7 +43,7 @@ export function MealPlanSettings() {
                 max={23}
                 value={preferences.weeklyMenuGenerationHour}
                 onChange={(e) => updatePreference('weeklyMenuGenerationHour', Number(e.target.value))}
-                className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
               />
               <span className="text-text-secondary">:</span>
               <input
@@ -53,7 +53,7 @@ export function MealPlanSettings() {
                 step={5}
                 value={String(preferences.weeklyMenuGenerationMinute).padStart(2, '0')}
                 onChange={(e) => updatePreference('weeklyMenuGenerationMinute', Number(e.target.value))}
-                className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
               />
             </div>
           </div>
@@ -61,7 +61,7 @@ export function MealPlanSettings() {
 
         {/* Shopping list time */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-text-secondary">
             買い物リスト登録時間
           </label>
           <div className="flex items-center gap-1">
@@ -71,7 +71,7 @@ export function MealPlanSettings() {
               max={23}
               value={preferences.shoppingListHour}
               onChange={(e) => updatePreference('shoppingListHour', Number(e.target.value))}
-              className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+              className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
             />
             <span className="text-text-secondary">:</span>
             <input
@@ -81,14 +81,14 @@ export function MealPlanSettings() {
               step={5}
               value={String(preferences.shoppingListMinute).padStart(2, '0')}
               onChange={(e) => updatePreference('shoppingListMinute', Number(e.target.value))}
-              className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+              className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
             />
           </div>
         </div>
 
         {/* Seasonal priority */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-text-secondary">
             旬の食材優先度
           </label>
           <div className="flex gap-2">
@@ -106,7 +106,7 @@ export function MealPlanSettings() {
               </button>
             ))}
           </div>
-          <p className="mt-1 text-[10px] text-text-secondary">
+          <p className="mt-1 text-xs text-text-secondary">
             {preferences.seasonalPriority === 'low' && '旬の食材をたまに入れます'}
             {preferences.seasonalPriority === 'medium' && '旬の食材を適度に入れます'}
             {preferences.seasonalPriority === 'high' && '旬の食材を積極的に入れます'}
@@ -115,7 +115,7 @@ export function MealPlanSettings() {
 
         {/* User prompt */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-text-secondary">
             献立リクエスト
           </label>
           <textarea
@@ -125,7 +125,7 @@ export function MealPlanSettings() {
             rows={2}
             className="w-full resize-none rounded-xl bg-white/5 px-4 py-3 text-base text-text-primary placeholder:text-text-secondary outline-none"
           />
-          <p className="mt-1 text-[10px] text-text-secondary">
+          <p className="mt-1 text-xs text-text-secondary">
             週間献立生成時にAIが考慮します
           </p>
         </div>

@@ -9,6 +9,7 @@ import { db, type Recipe, type WeeklyMenuItem, type SeasonalPriority } from '../
 import { calculateMatchRate, isHelsioDeli } from './recipeUtils'
 import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { format, addDays } from 'date-fns'
+import { filterRecipesByRole, isRecipeAllowedForRole, type MealRole } from './mealRoleRules'
 
 export interface MenuSelectionConfig {
   seasonalPriority: SeasonalPriority
@@ -94,9 +95,10 @@ export async function selectWeeklyMenu(
 
   // Filter eligible recipes (exclude ヘルシオデリ)
   const eligible = recipes.filter(r => !isHelsioDeli(r) && r.id != null)
+  const mainEligible = filterRecipesByRole(eligible, 'main')
 
   // Calculate base scores for each recipe
-  const scored: ScoredRecipe[] = eligible.map(recipe => {
+  const scored: ScoredRecipe[] = mainEligible.map(recipe => {
     let score = 0
 
     // Stock match rate (weight: 3.0)
@@ -149,19 +151,19 @@ export async function selectWeeklyMenu(
     // Check if this day is locked
     const lockedRecipeId = lockedMap.get(dateStr)
     if (lockedRecipeId != null) {
-      usedRecipeIds.add(lockedRecipeId)
-      const lockedRecipe = eligible.find(r => r.id === lockedRecipeId)
+      const lockedRecipe = mainEligible.find(r => r.id === lockedRecipeId)
       if (lockedRecipe) {
+        usedRecipeIds.add(lockedRecipeId)
         selectedCategories.push(lockedRecipe.category)
         selectedDevices.push(lockedRecipe.device)
+        result.push({
+          recipeId: lockedRecipeId,
+          date: dateStr,
+          mealType: 'dinner',
+          locked: true,
+        })
+        continue
       }
-      result.push({
-        recipeId: lockedRecipeId,
-        date: dateStr,
-        mealType: 'dinner',
-        locked: true,
-      })
-      continue
     }
 
     // Score candidates with diversity bonuses
@@ -208,7 +210,7 @@ export async function selectWeeklyMenu(
 
   // Second pass — select side dishes (副菜 or スープ) for each day
   const sideEligible = eligible.filter(
-    r => r.category === '副菜' || r.category === 'スープ'
+    r => isRecipeAllowedForRole(r, 'side')
   )
 
   if (sideEligible.length > 0) {
@@ -232,7 +234,7 @@ export async function selectWeeklyMenu(
       let bestSide: Recipe | null = null
       let bestSideScore = -Infinity
 
-      const mainRecipe = eligible.find(r => r.id === item.recipeId)
+      const mainRecipe = mainEligible.find(r => r.id === item.recipeId)
       const mainGenre = mainRecipe ? guessGenre(mainRecipe) : 'other'
       const mainIsHeavy = mainRecipe ? isHeavy(mainRecipe) : false
 
@@ -296,7 +298,8 @@ export function getWeekStartDate(date: Date): Date {
  */
 export async function getAlternativeRecipes(
   excludeIds: Set<number>,
-  limit = 10
+  limit = 10,
+  role: MealRole = 'main'
 ): Promise<Recipe[]> {
   const [recipes, stockItems] = await Promise.all([
     db.recipes.limit(200).toArray(),
@@ -307,6 +310,7 @@ export async function getAlternativeRecipes(
 
   return recipes
     .filter(r => !isHelsioDeli(r) && r.id != null && !excludeIds.has(r.id!))
+    .filter(r => isRecipeAllowedForRole(r, role))
     .map(r => ({
       recipe: r,
       matchRate: calculateMatchRate(r.ingredients, stockNames),

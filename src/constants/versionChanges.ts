@@ -7,6 +7,18 @@ export interface VersionChangeSection {
 
 export const VERSION_CHANGELOG: VersionChangeSection[] = [
   {
+    title: 'V1.7.5 と V1.7.0 の差分',
+    summary: 'UI情報設計を再整理し、検索母集団とGemini導線の視認性を強化。',
+    points: [
+      '検索一覧をカテゴリ/機器条件の全件取得へ見直し、保存直後のレシピが検索で埋もれないよう改善',
+      'Gemini画面を Step構造（入力→抽出→生成→保存）で再設計し、見出し・補助文・主操作の優先度を明確化',
+      '写真選択UIをカスタム化し、「未選択 / N枚選択中」の状態表示を明確化',
+      'ホーム・設定・在庫・週間献立・買い物リストの文字階層とタップ領域をUIガイドライン基準へ調整',
+      'バージョン表記を v1.7.5 に更新',
+    ],
+    refs: ['v1.7.5'],
+  },
+  {
     title: 'V1.7.0 と V1.6.5 の差分',
     summary: '検索の並び順を好み学習対応に拡張し、週間献立タイルの視認性を改善。',
     points: [

@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams } from 'react-router-dom'
 import { db } from '../db/db'
-import type { RecipeCategory, DeviceType } from '../db/db'
+import type { Recipe, RecipeCategory, DeviceType } from '../db/db'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { searchRecipesWithScores } from '../utils/searchUtils'
 import { useDebounce } from '../hooks/useDebounce'
@@ -64,24 +64,24 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     }
   }, [filterParam])
 
-  const PAGE_SIZE = 200
-
   // T-03: DB-side filtering with combined query (T-09)
   const data = useLiveQuery(
     async () => {
-      let recipesQuery
+      let fetchedRecipes: Recipe[] = []
       if (deviceFilter) {
-        recipesQuery = db.recipes.where('device').equals(deviceFilter).limit(PAGE_SIZE)
+        fetchedRecipes = await db.recipes.where('device').equals(deviceFilter).toArray()
       } else if (category !== 'すべて') {
-        recipesQuery = db.recipes.where('category').equals(category).limit(PAGE_SIZE)
+        fetchedRecipes = await db.recipes.where('category').equals(category).toArray()
       } else {
-        recipesQuery = db.recipes.limit(PAGE_SIZE)
+        fetchedRecipes = await db.recipes.toArray()
       }
 
       const [recipes, stockItems] = await Promise.all([
-        recipesQuery.toArray(),
+        Promise.resolve(fetchedRecipes),
         db.stock.filter(item => item.inStock).toArray(),
       ])
+
+      recipes.sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
 
       const [viewHistory, favorites, weeklyMenus, calendarEvents] = await Promise.all([
         db.viewHistory.orderBy('viewedAt').reverse().limit(200).toArray(),

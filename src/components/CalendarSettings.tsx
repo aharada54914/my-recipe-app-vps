@@ -42,9 +42,9 @@ export function CalendarSettings() {
       <div className="rounded-2xl bg-bg-card p-4">
         <div className="mb-3 flex items-center gap-2">
           <Calendar className="h-4 w-4 text-accent" />
-          <h4 className="text-sm font-bold text-text-secondary">カレンダー設定</h4>
+          <h4 className="text-base font-bold text-text-secondary">カレンダー設定</h4>
         </div>
-        <p className="text-xs text-text-secondary leading-relaxed">
+        <p className="text-sm text-text-secondary leading-relaxed">
           Googleカレンダーと連携するにはログインしてください。
         </p>
       </div>
@@ -55,7 +55,7 @@ export function CalendarSettings() {
     <div className="rounded-2xl bg-bg-card p-4">
       <div className="mb-3 flex items-center gap-2">
         <Calendar className="h-4 w-4 text-accent" />
-        <h4 className="text-sm font-bold text-text-secondary">カレンダー設定</h4>
+        <h4 className="text-base font-bold text-text-secondary">カレンダー設定</h4>
       </div>
 
       {loading ? (
@@ -68,7 +68,7 @@ export function CalendarSettings() {
         <div className="space-y-3">
           {/* Default calendar */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-text-secondary">
+            <label className="mb-1 block text-sm font-medium text-text-secondary">
               デフォルト登録先カレンダー
             </label>
             <select
@@ -87,7 +87,7 @@ export function CalendarSettings() {
 
           {/* Family calendar */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-text-secondary">
+            <label className="mb-1 block text-sm font-medium text-text-secondary">
               家族カレンダー
             </label>
             <select
@@ -102,17 +102,17 @@ export function CalendarSettings() {
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-[10px] text-text-secondary">
+            <p className="mt-1 text-xs text-text-secondary">
               家族の予定から献立を提案します
             </p>
           </div>
 
           {/* Meal time range */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-text-secondary">
+            <label className="mb-1 block text-sm font-medium text-text-secondary">
               献立の時間帯
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1">
                 <input
                   type="number"
@@ -120,7 +120,7 @@ export function CalendarSettings() {
                   max={23}
                   value={preferences.mealStartHour}
                   onChange={(e) => updatePreference('mealStartHour', Number(e.target.value))}
-                  className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                  className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
                 />
                 <span className="text-text-secondary">:</span>
                 <input
@@ -130,7 +130,7 @@ export function CalendarSettings() {
                   step={5}
                   value={String(preferences.mealStartMinute).padStart(2, '0')}
                   onChange={(e) => updatePreference('mealStartMinute', Number(e.target.value))}
-                  className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                  className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
                 />
               </div>
               <span className="text-text-secondary">〜</span>
@@ -141,7 +141,7 @@ export function CalendarSettings() {
                   max={23}
                   value={preferences.mealEndHour}
                   onChange={(e) => updatePreference('mealEndHour', Number(e.target.value))}
-                  className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                  className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
                 />
                 <span className="text-text-secondary">:</span>
                 <input
@@ -151,7 +151,7 @@ export function CalendarSettings() {
                   step={5}
                   value={String(preferences.mealEndMinute).padStart(2, '0')}
                   onChange={(e) => updatePreference('mealEndMinute', Number(e.target.value))}
-                  className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                  className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
                 />
               </div>
             </div>

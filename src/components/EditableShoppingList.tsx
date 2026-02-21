@@ -147,22 +147,22 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
   return (
     <div className="space-y-3">
       {/* Header actions */}
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-text-secondary">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm text-text-secondary">
           {checkedCount > 0 && `${checkedCount}/${missing.length}件 購入済み`}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {checkedCount > 0 && (
             <button
               onClick={clearAll}
-              className="text-xs text-text-secondary hover:text-accent"
+              className="text-sm text-text-secondary hover:text-accent"
             >
               チェックをリセット
             </button>
           )}
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 rounded-lg bg-bg-card-hover px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:text-accent"
+            className="flex min-h-[44px] items-center gap-1 rounded-lg bg-bg-card-hover px-3 py-2 text-sm font-semibold text-text-secondary transition-colors hover:text-accent"
           >
             {copied ? <CheckCheck className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
             {copied ? 'コピー済み' : 'LINEに送る'}
@@ -171,10 +171,10 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
       </div>
 
       <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
-        <span className="text-xs text-text-secondary">調味料も表示する</span>
+        <span className="text-sm text-text-secondary">調味料も表示する</span>
         <button
           onClick={() => setIncludeSeasonings((v) => !v)}
-          className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+          className={`min-h-[40px] rounded-lg px-3 py-1 text-sm font-semibold transition-colors ${
             includeSeasonings ? 'bg-accent text-white' : 'bg-white/10 text-text-secondary'
           }`}
         >
@@ -184,10 +184,10 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
 
       {/* Missing ingredients — interactive */}
       {missing.length === 0 ? (
-        <p className="text-xs text-green-400">全ての材料が揃っています！</p>
+        <p className="text-sm text-green-400">全ての材料が揃っています！</p>
       ) : (
         <div>
-          <div className="mb-1.5 text-xs font-medium text-accent">
+          <div className="mb-1.5 text-sm font-semibold text-accent">
             不足材料 ({missing.filter(i => !checked.has(i.name)).length}件)
           </div>
           <ul className="space-y-1">
@@ -213,23 +213,23 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
                         isChecked ? 'line-through text-text-secondary' : 'text-text-primary'
                       }`}
                     />
-                    <button onClick={() => removeItem(ing.id)} className="text-text-secondary hover:text-red-400">
+                    <button onClick={() => removeItem(ing.id)} className="min-h-[36px] min-w-[36px] text-text-secondary hover:text-red-400">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-[1fr_auto] gap-2 pl-6">
+                  <div className="grid grid-cols-1 gap-2 pl-6 sm:grid-cols-[minmax(0,1fr)_72px]">
                     <input
                       type="number"
                       step="0.5"
                       value={Number.isFinite(ing.quantity) ? ing.quantity : 0}
                       onChange={(e) => updateItem(ing.id, { quantity: Number(e.target.value) })}
-                      className="rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none"
+                      className="min-w-0 rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none"
                     />
                     <input
                       value={ing.unit}
                       onChange={(e) => updateItem(ing.id, { unit: e.target.value })}
-                      className="w-14 rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none"
+                      className="w-full rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none sm:w-auto"
                     />
                   </div>
                 </li>
@@ -240,13 +240,13 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
       )}
 
       <div className="rounded-xl bg-white/5 p-3">
-        <div className="mb-2 text-xs font-medium text-text-secondary">不足材料を追加</div>
-        <div className="grid grid-cols-[1.6fr_0.8fr_0.7fr_auto] gap-2">
+        <div className="mb-2 text-sm font-medium text-text-secondary">不足材料を追加</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto]">
           <input
             value={customName}
             onChange={(e) => setCustomName(e.target.value)}
             placeholder="食材名"
-            className="rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none"
+            className="col-span-2 min-w-0 rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none sm:col-span-1"
           />
           <input
             type="number"
@@ -254,17 +254,17 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
             value={customQty}
             onChange={(e) => setCustomQty(e.target.value)}
             placeholder="数量"
-            className="rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none"
+            className="min-w-0 rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none"
           />
           <input
             value={customUnit}
             onChange={(e) => setCustomUnit(e.target.value)}
             placeholder="単位"
-            className="rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none"
+            className="min-w-0 rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none"
           />
           <button
             onClick={addCustomItem}
-            className="flex items-center justify-center rounded-md bg-accent px-2 py-1.5 text-white"
+            className="col-span-2 flex min-h-[40px] items-center justify-center rounded-md bg-accent px-2 py-1.5 text-white sm:col-span-1"
             aria-label="追加"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -275,12 +275,12 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
       {/* In-stock items — non-interactive summary */}
       {inStockItems.length > 0 && (
         <div>
-          <div className="mb-1 text-xs font-medium text-text-secondary">在庫あり ({inStockItems.length}件)</div>
+          <div className="mb-1 text-sm font-medium text-text-secondary">在庫あり ({inStockItems.length}件)</div>
           <ul className="space-y-0.5">
             {inStockItems.map(ing => (
-              <li key={ing.id} className="flex justify-between px-2 text-xs text-text-secondary line-through opacity-40">
-                <span>・{ing.name}</span>
-                <span>{formatQty({
+              <li key={ing.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-2 text-xs text-text-secondary line-through opacity-40">
+                <span className="min-w-0 break-words">・{ing.name}</span>
+                <span className="shrink-0 whitespace-nowrap">{formatQty({
                   name: ing.name,
                   totalQuantity: ing.quantity,
                   unit: ing.unit,

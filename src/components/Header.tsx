@@ -14,21 +14,21 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/15 bg-white/8 px-4 pb-2 pt-[env(safe-area-inset-top,0px)] backdrop-blur-2xl">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 pt-1">
         <div className="flex items-center gap-2">
           <img
             src="/apple-touch-icon.png"
             alt="Kitchen App icon"
             className="h-8 w-8 rounded-lg object-cover"
           />
-          <h1 className="text-xl font-bold tracking-tight">Kitchen App</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">Kitchen App</h1>
         </div>
         <div className="flex items-center gap-2">
           {onMultiSchedule && (
             <button
               onClick={onMultiSchedule}
               aria-label="複数レシピスケジュール"
-              className="rounded-xl bg-white/10 p-2.5 transition-colors hover:bg-white/20"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white/10 p-2.5 transition-colors hover:bg-white/20"
             >
               <CalendarClock className="h-5 w-5 text-text-secondary" />
             </button>
@@ -37,7 +37,7 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
             <button
               onClick={onSearchToggle}
               aria-label="検索"
-              className="rounded-xl bg-white/10 p-2.5 transition-colors hover:bg-white/20"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white/10 p-2.5 transition-colors hover:bg-white/20"
             >
               <Search className="h-5 w-5 text-text-secondary" />
             </button>
@@ -62,7 +62,7 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
             <button
               onClick={onSettings}
               aria-label="設定"
-              className="rounded-xl bg-white/10 p-2.5 transition-colors hover:bg-white/20"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white/10 p-2.5 transition-colors hover:bg-white/20"
             >
               <Settings className="h-5 w-5 text-text-secondary" />
             </button>

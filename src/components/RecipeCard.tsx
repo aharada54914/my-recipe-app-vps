@@ -28,7 +28,7 @@ export const RecipeCard = memo(function RecipeCard({
     return (
       <button
         onClick={onClick}
-        className="w-full overflow-hidden rounded-xl bg-bg-card text-left transition-colors active:scale-[0.97] hover:bg-bg-card-hover"
+        className="min-h-[176px] w-full overflow-hidden rounded-xl bg-bg-card text-left transition-colors active:scale-[0.97] hover:bg-bg-card-hover"
       >
         <RecipeImage
           recipe={recipe}
@@ -36,20 +36,20 @@ export const RecipeCard = memo(function RecipeCard({
           className="w-full rounded-none rounded-t-xl"
         />
         <div className="p-2">
-          <span className="mb-1 inline-block rounded px-1 py-0.5 text-[9px] font-medium text-accent" style={{ backgroundColor: 'rgba(249,115,22,0.15)' }}>
+          <span className="mb-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium text-accent" style={{ backgroundColor: 'rgba(249,115,22,0.15)' }}>
             {deviceLabels[recipe.device]}
           </span>
-          <h3 className="mb-1.5 line-clamp-2 text-[11px] font-bold leading-snug">
+          <h3 className="mb-1.5 line-clamp-2 text-[13px] font-bold leading-snug">
             {recipe.title}
           </h3>
           <div className="flex items-center justify-between">
-            <span className="flex items-center gap-0.5 text-[10px] text-text-secondary">
-              <Clock className="h-2.5 w-2.5" />
+            <span className="flex items-center gap-1 text-[11px] text-text-secondary">
+              <Clock className="h-3 w-3" />
               {recipe.totalTimeMinutes}分
             </span>
             {matchRate !== undefined && (
               <span
-                className={`rounded px-1 py-0.5 text-[9px] font-bold ${matchRate >= 80
+                className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${matchRate >= 80
                     ? 'bg-green-500/20 text-green-400'
                     : matchRate >= 50
                       ? 'bg-yellow-500/20 text-yellow-400'
@@ -69,7 +69,7 @@ export const RecipeCard = memo(function RecipeCard({
     return (
       <button
         onClick={onClick}
-        className="recipe-card-grid w-full overflow-hidden rounded-2xl bg-bg-card text-left transition-colors active:scale-[0.97] hover:bg-bg-card-hover"
+        className="recipe-card-grid min-h-[220px] w-full overflow-hidden rounded-2xl bg-bg-card text-left transition-colors active:scale-[0.97] hover:bg-bg-card-hover"
       >
         {/* Image */}
         <RecipeImage
@@ -80,7 +80,7 @@ export const RecipeCard = memo(function RecipeCard({
         {/* Content */}
         <div className="p-3">
           <div className="mb-1 flex items-center gap-1.5">
-            <span className="inline-block rounded-md bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+            <span className="inline-block rounded-md bg-accent/20 px-2 py-0.5 text-[11px] font-medium text-accent">
               {deviceLabels[recipe.device]}
             </span>
           </div>
@@ -89,12 +89,12 @@ export const RecipeCard = memo(function RecipeCard({
           </h3>
           <div className="flex items-center gap-2 text-xs text-text-secondary">
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <Clock className="h-3.5 w-3.5" />
               {recipe.totalTimeMinutes}分
             </span>
             {matchRate !== undefined && (
               <span
-                className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${matchRate >= 80
+                className={`ml-auto rounded px-2 py-0.5 text-[11px] font-bold ${matchRate >= 80
                     ? 'bg-green-500/20 text-green-400'
                     : matchRate >= 50
                       ? 'bg-yellow-500/20 text-yellow-400'
@@ -114,15 +114,15 @@ export const RecipeCard = memo(function RecipeCard({
   return (
     <button
       onClick={onClick}
-      className="recipe-card flex w-full items-center gap-3 rounded-2xl bg-bg-card p-3 text-left transition-colors hover:bg-bg-card-hover"
+      className="recipe-card flex min-h-[88px] w-full items-center gap-3 rounded-2xl bg-bg-card p-3 text-left transition-colors hover:bg-bg-card-hover"
     >
       {/* Text content */}
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center gap-2">
-          <span className="inline-block rounded-md bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+          <span className="inline-block rounded-md bg-accent/20 px-2 py-0.5 text-[11px] font-medium text-accent">
             {deviceLabels[recipe.device]}
           </span>
-          <span className="text-[10px] text-text-secondary">
+          <span className="text-[11px] text-text-secondary">
             No.{recipe.recipeNumber}
           </span>
         </div>
@@ -134,8 +134,8 @@ export const RecipeCard = memo(function RecipeCard({
           </span>
           <span>{recipe.baseServings}人分</span>
           {matchRate !== undefined && (
-            <span
-              className={`ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-bold ${matchRate >= 80
+              <span
+              className={`ml-auto rounded-md px-2 py-0.5 text-[11px] font-bold ${matchRate >= 80
                   ? 'bg-green-500/20 text-green-400'
                   : matchRate >= 50
                     ? 'bg-yellow-500/20 text-yellow-400'

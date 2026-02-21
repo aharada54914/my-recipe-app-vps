@@ -1,7 +1,7 @@
 # Architecture Reference
 
 最終改訂: 2026-02-21
-対象バージョン: v1.7.0
+対象バージョン: v1.7.5
 
 Kitchen App の現行アーキテクチャ概要です。
 
@@ -95,7 +95,7 @@ DB: `RecipeDB`（Dexie schema version 8）
 
 ---
 
-## 8. URLインポート・AI提案（v1.7.0）
+## 8. URLインポート・AI提案（v1.7.5）
 
 - `api/recipe-extract.js`:
   - 対応ドメインallowlist検証
@@ -109,7 +109,7 @@ DB: `RecipeDB`（Dexie schema version 8）
 
 ---
 
-## 9. 検索ランク（v1.7.0）
+## 9. 検索ランク（v1.7.5）
 
 - `RecipeList` は Fuse一致だけでなく、好みシグナルを合成して並び替え
 - `preferenceSignals`:

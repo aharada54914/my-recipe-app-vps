@@ -160,35 +160,35 @@ export function RecipeEditorModal({
             </div>
             <div className="space-y-2">
               {draft.ingredients.map((ing, index) => (
-                <div key={`ing-${index}`} className="grid grid-cols-[1fr_72px_72px_80px_32px] items-center gap-2">
+                <div key={`ing-${index}`} className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_72px_72px_80px_32px]">
                   <input
                     value={ing.name}
                     placeholder="食材名"
                     onChange={(e) => updateIngredient(index, 'name', e.target.value)}
-                    className="rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                    className="col-span-2 min-w-0 rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent sm:col-span-1"
                   />
                   <input
                     type="number"
                     value={ing.quantity}
                     onChange={(e) => updateIngredient(index, 'quantity', Number(e.target.value))}
-                    className="rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                    className="min-w-0 rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
                   />
                   <input
                     value={ing.unit}
                     onChange={(e) => updateIngredient(index, 'unit', e.target.value)}
-                    className="rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                    className="min-w-0 rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
                   />
                   <select
                     value={ing.category}
                     onChange={(e) => updateIngredient(index, 'category', e.target.value as RecipeDraft['ingredients'][number]['category'])}
-                    className="rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                    className="min-w-0 rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
                   >
                     <option value="main">主材料</option>
                     <option value="sub">調味料</option>
                   </select>
                   <button
                     onClick={() => setDraft((prev) => prev ? { ...prev, ingredients: prev.ingredients.filter((_, i) => i !== index) } : prev)}
-                    className="rounded-lg bg-white/10 p-2 text-text-secondary hover:bg-red-500/20 hover:text-red-300"
+                    className="col-span-2 rounded-lg bg-white/10 p-2 text-text-secondary hover:bg-red-500/20 hover:text-red-300 sm:col-span-1"
                     aria-label="材料を削除"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -211,13 +211,13 @@ export function RecipeEditorModal({
             <div className="space-y-2">
               {draft.steps.map((step, index) => (
                 <div key={`step-${index}`} className="space-y-2 rounded-xl bg-white/5 p-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="w-6 text-center text-xs font-bold text-text-secondary">{index + 1}</span>
                     <input
                       value={step.name}
                       placeholder="手順"
                       onChange={(e) => updateStep(index, 'name', e.target.value)}
-                      className="flex-1 rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                      className="min-w-0 flex-1 rounded-lg bg-white/5 px-2 py-2 text-xs text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
                     />
                     <input
                       type="number"
@@ -235,7 +235,7 @@ export function RecipeEditorModal({
                       <Trash2 className="h-3 w-3" />
                     </button>
                   </div>
-                  <label className="flex items-center gap-2 pl-8 text-xs text-text-secondary">
+                  <label className="flex items-center gap-2 pl-0 text-xs text-text-secondary sm:pl-8">
                     <input
                       type="checkbox"
                       checked={!!step.isDeviceStep}

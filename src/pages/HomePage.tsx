@@ -84,7 +84,7 @@ export function HomePage() {
 
   const data = useLiveQuery(async () => {
     const [recipes, stockItems] = await Promise.all([
-      db.recipes.limit(200).toArray(),
+      db.recipes.toArray(),
       db.stock.filter(item => item.inStock).toArray(),
     ])
     const stockNames = new Set(stockItems.map((s) => s.name))
@@ -119,17 +119,17 @@ export function HomePage() {
       {/* Search bar — navigates to /search on tap */}
       <button
         onClick={() => navigate('/search')}
-        className="mt-4 mb-5 flex w-full items-center gap-3 rounded-2xl bg-bg-card px-4 py-3"
+        className="mt-4 mb-5 flex min-h-[48px] w-full items-center gap-3 rounded-2xl bg-bg-card px-4 py-3 ring-1 ring-white/10"
       >
         <Search className="h-5 w-5 text-text-secondary" />
-        <span className="text-sm text-text-secondary">レシピを検索...</span>
+        <span className="text-base text-text-secondary">レシピを検索...</span>
       </button>
 
       {/* Quick actions */}
       <div className="mb-5 flex gap-2">
         <button
           onClick={() => navigate('/stock')}
-          className="flex items-center gap-1.5 rounded-xl bg-bg-card px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:text-accent active:scale-95"
+          className="ui-btn ui-btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm font-semibold transition-colors hover:text-accent active:scale-95"
         >
           <Package className="h-4 w-4" />
           在庫管理
@@ -140,12 +140,12 @@ export function HomePage() {
       {showLoginBanner && (
         <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-bg-card px-4 py-3">
           <div>
-            <p className="text-sm font-medium">Google Driveにバックアップ</p>
-            <p className="text-xs text-text-secondary">在庫・お気に入り・献立を自動保存</p>
+            <p className="text-base font-semibold">Google Driveにバックアップ</p>
+            <p className="text-sm text-text-secondary">在庫・お気に入り・献立を自動保存</p>
           </div>
           <button
             onClick={signInWithGoogle}
-            className="min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white transition-transform active:scale-95"
+            className="ui-btn ui-btn-primary min-h-[44px] px-4 py-2 text-sm transition-transform active:scale-95"
           >
             ログイン
           </button>

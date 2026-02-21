@@ -15,6 +15,7 @@ import { NotificationSettings } from '../components/NotificationSettings'
 import { APP_VERSION } from '../constants/appVersion'
 import { VERSION_CHANGELOG } from '../constants/versionChanges'
 import { generateGeminiText } from '../lib/geminiClient'
+import { BottomNav } from '../components/BottomNav'
 
 function formatTimeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -166,21 +167,21 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
           </button>
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-accent" />
-            <h1 className="text-lg font-bold">{isTabDetail && activeTabMeta ? activeTabMeta.label : '設定'}</h1>
+            <h1 className="text-xl font-extrabold">{isTabDetail && activeTabMeta ? activeTabMeta.label : '設定'}</h1>
           </div>
         </div>
       </header>
 
-      <main className="space-y-4 px-4 py-4 pb-8">
+      <main className="space-y-4 px-4 py-4 pb-28">
         {!isTabDetail && (
           <div className="rounded-2xl bg-bg-card p-4">
-            <h2 className="mb-3 text-sm font-bold text-text-secondary">設定項目を選択</h2>
+            <h2 className="mb-3 text-base font-bold text-text-secondary">設定項目を選択</h2>
             <div className="space-y-2">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => navigate(`/settings/${tab.id}`)}
-                  className="flex w-full items-center justify-between rounded-xl bg-white/5 px-3 py-3 text-left text-sm font-medium text-text-primary transition-colors hover:bg-white/10"
+                  className="flex min-h-[48px] w-full items-center justify-between rounded-xl bg-white/5 px-3 py-3 text-left text-base font-semibold text-text-primary transition-colors hover:bg-white/10"
                 >
                   <span className="flex items-center gap-3">
                     {tab.icon}
@@ -262,7 +263,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               <div className="space-y-3">
                 <button
                   onClick={signInWithGoogle}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-bold text-white transition-colors hover:bg-accent-hover"
+                  className="ui-btn ui-btn-primary flex w-full items-center justify-center gap-2 transition-colors hover:bg-accent-hover"
                 >
                   <LogIn className="h-4 w-4" />
                   Googleでログイン
@@ -367,7 +368,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               <button
                 onClick={handleTest}
                 disabled={!apiKey.trim() || testStatus === 'testing'}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
+                className="ui-btn ui-btn-secondary mt-3 flex w-full items-center justify-center gap-2 text-sm font-semibold transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
               >
                 {testStatus === 'testing' ? (
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -408,7 +409,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               <button
                 onClick={handleExport}
                 disabled={exportStatus === 'exporting'}
-                className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
+                className="ui-btn ui-btn-secondary mb-3 flex w-full items-center justify-center gap-2 text-sm font-semibold transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
               >
                 <Download className="h-4 w-4" />
                 {exportStatus === 'exporting' ? 'エクスポート中...'
@@ -449,7 +450,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={importStatus === 'importing'}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
+                className="ui-btn ui-btn-secondary flex w-full items-center justify-center gap-2 text-sm font-semibold transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
               >
                 <Upload className="h-4 w-4" />
                 {importStatus === 'importing' ? 'インポート中...'
@@ -509,6 +510,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
           </div>
         )}
       </main>
+      <BottomNav />
     </div>
   )
 }
