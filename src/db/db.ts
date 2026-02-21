@@ -263,10 +263,11 @@ class RecipeDB extends Dexie {
       // Migrate existing recipes to use new category names
       await tx.table('recipes').toCollection().modify(recipe => {
         // We typecast since TypeScript check uses the current type
-        if ((recipe.category as any) === 'ご飯もの') {
-          recipe.category = '一品料理'
-        } else if ((recipe.category as any) === 'デザート') {
-          recipe.category = 'スイーツ'
+        const migratable = recipe as { category?: string }
+        if (migratable.category === 'ご飯もの') {
+          migratable.category = '一品料理'
+        } else if (migratable.category === 'デザート') {
+          migratable.category = 'スイーツ'
         }
       })
     })
