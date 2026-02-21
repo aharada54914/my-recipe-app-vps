@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Send, Sparkles, Package, Link, Loader2, Save, RotateCcw, ImagePlus, WandSparkles } from 'lucide-react'
+import { Send, Sparkles, Package, Link, Loader2, RotateCcw, ImagePlus, WandSparkles, FilePenLine } from 'lucide-react'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { parseRecipeFromUrl, parseRecipeText } from '../utils/geminiParser'
@@ -13,6 +13,7 @@ import { preprocessImagesToCollage } from '../utils/imagePreprocess'
 import { extractIngredientsFromPhotoCollage } from '../utils/geminiIngredientExtractor'
 import { generateRecipesFromIngredients } from '../utils/geminiMenuGenerator'
 import { SUPPORTED_RECIPE_SITES } from '../constants/supportedRecipeSites'
+import { RecipeEditorModal } from '../components/RecipeEditorModal'
 
 type TabId = 'import' | 'suggest' | 'chat'
 
@@ -51,90 +52,58 @@ function ImportTab() {
   const navigate = useNavigate()
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
-  const [status, setStatus] = useState<'idle' | 'parsing' | 'previewing' | 'error'>('idle')
-  const [isSaving, setIsSaving] = useState(false)
-  const [parsed, setParsed] = useState<Omit<Recipe, 'id'> | null>(null)
+  const [status, setStatus] = useState<'idle' | 'parsing' | 'error'>('idle')
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorSaving, setEditorSaving] = useState(false)
+  const [draftRecipe, setDraftRecipe] = useState<Omit<Recipe, 'id'> | null>(null)
+  const [editorSessionKey, setEditorSessionKey] = useState('import-editor-initial')
   const [error, setError] = useState<string | null>(null)
+  const [resultMessage, setResultMessage] = useState<string | null>(null)
 
   const canParse = url.trim() || text.trim()
 
   const handleParse = async () => {
     setStatus('parsing')
     setError(null)
+    setResultMessage(null)
     try {
       const result = url.trim()
         ? await parseRecipeFromUrl(url.trim())
         : await parseRecipeText(text)
-      setParsed(result)
-      setStatus('previewing')
+      setDraftRecipe(result)
+      setEditorSessionKey(`import-${result.title}-${Date.now()}`)
+      setEditorOpen(true)
+      setStatus('idle')
     } catch (e) {
       setError(e instanceof Error ? e.message : '解析に失敗しました')
       setStatus('error')
     }
   }
 
-  const handleSave = async () => {
-    if (!parsed) return
-    const existing = await db.recipes.where('title').equals(parsed.title).first()
+  const handleSaveEditedRecipe = async (recipe: Omit<Recipe, 'id'>) => {
+    const existing = await db.recipes.where('title').equals(recipe.title).first()
     if (existing) {
-      if (!window.confirm(`「${parsed.title}」は既に登録されています。重複して保存しますか？`)) return
+      if (!window.confirm(`「${recipe.title}」は既に登録されています。重複して保存しますか？`)) return
     }
-    setIsSaving(true)
-    await db.recipes.add(parsed as Recipe)
+    setEditorSaving(true)
+    await db.recipes.add(recipe as Recipe)
+    setEditorSaving(false)
+    setResultMessage(`「${recipe.title}」を保存しました。`)
     navigate('/search')
-  }
-
-  const handleReset = () => {
-    setParsed(null)
-    setError(null)
-    setUrl('')
-    setText('')
-    setStatus('idle')
-  }
-
-  if (status === 'previewing' && parsed) {
-    return (
-      <div className="space-y-4">
-        <div className="rounded-2xl bg-bg-card p-4">
-          <h3 className="mb-1 text-base font-bold">{parsed.title}</h3>
-          <p className="mb-3 text-xs text-text-secondary">{formatRecipeMeta(parsed)}</p>
-          <div className="mb-3">
-            <p className="mb-1 text-xs font-medium text-text-secondary">材料</p>
-            <div className="flex flex-wrap gap-1">
-              {parsed.ingredients.slice(0, 8).map((ing, i) => (
-                <span key={i} className="rounded-lg bg-white/5 px-2 py-0.5 text-xs text-text-secondary">
-                  {ing.name}
-                </span>
-              ))}
-              {parsed.ingredients.length > 8 && (
-                <span className="text-xs text-text-secondary">+{parsed.ingredients.length - 8}</span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleReset}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/5 py-3 text-sm font-medium text-text-secondary hover:bg-white/10"
-          >
-            <RotateCcw className="h-4 w-4" />
-            やり直す
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-3 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />
-            {isSaving ? '保存中...' : 'レシピを保存'}
-          </button>
-        </div>
-      </div>
-    )
   }
 
   return (
     <div className="space-y-4">
+      <RecipeEditorModal
+        key={editorSessionKey}
+        open={editorOpen}
+        title="URL/テキスト取り込み結果を編集"
+        initialRecipe={draftRecipe}
+        saving={editorSaving}
+        onClose={() => setEditorOpen(false)}
+        onSave={handleSaveEditedRecipe}
+      />
+
       <div className="rounded-2xl bg-bg-card p-4">
         <div className="mb-3 flex items-center gap-2">
           <Link className="h-4 w-4 text-accent" />
@@ -181,6 +150,9 @@ function ImportTab() {
       {error && (
         <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</p>
       )}
+      {resultMessage && (
+        <p className="rounded-xl bg-white/5 px-4 py-3 text-sm text-text-secondary">{resultMessage}</p>
+      )}
 
       {!getApiKey() && (
         <p className="rounded-xl bg-white/5 px-4 py-3 text-xs text-text-secondary">
@@ -216,6 +188,10 @@ function SuggestTab() {
   const [generating, setGenerating] = useState(false)
   const [generatedRecipes, setGeneratedRecipes] = useState<Omit<Recipe, 'id'>[]>([])
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorSaving, setEditorSaving] = useState(false)
+  const [editingRecipe, setEditingRecipe] = useState<Omit<Recipe, 'id'> | null>(null)
+  const [editorSessionKey, setEditorSessionKey] = useState('suggest-editor-initial')
 
   const data = useLiveQuery(async () => {
     const [stockItems, recs] = await Promise.all([
@@ -302,8 +278,9 @@ function SuggestTab() {
       const allowDuplicate = window.confirm(`「${recipe.title}」は既に登録されています。重複して保存しますか？`)
       if (!allowDuplicate) return
     }
-
+    setEditorSaving(true)
     await db.recipes.add(recipe as Recipe)
+    setEditorSaving(false)
     setStatusMessage(`「${recipe.title}」を保存しました。`)
   }
 
@@ -313,6 +290,16 @@ function SuggestTab() {
 
   return (
     <div className="space-y-4">
+      <RecipeEditorModal
+        key={editorSessionKey}
+        open={editorOpen}
+        title="生成された献立を編集"
+        initialRecipe={editingRecipe}
+        saving={editorSaving}
+        onClose={() => setEditorOpen(false)}
+        onSave={handleSaveGeneratedRecipe}
+      />
+
       <div className="rounded-2xl bg-bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -450,10 +437,15 @@ function SuggestTab() {
                   <p className="text-xs text-text-secondary">{formatRecipeMeta(recipe)}</p>
                 </div>
                 <button
-                  onClick={() => handleSaveGeneratedRecipe(recipe)}
-                  className="rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-accent-hover"
+                  onClick={() => {
+                    setEditingRecipe(recipe)
+                    setEditorSessionKey(`suggest-${recipe.title}-${Date.now()}`)
+                    setEditorOpen(true)
+                  }}
+                  className="flex items-center gap-1 rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-accent-hover"
                 >
-                  保存
+                  <FilePenLine className="h-3.5 w-3.5" />
+                  編集して保存
                 </button>
               </div>
 

@@ -1,7 +1,7 @@
 # Architecture Reference
 
 最終改訂: 2026-02-21
-対象バージョン: v1.6.0
+対象バージョン: v1.6.5
 
 Kitchen App の現行アーキテクチャ概要です。
 
@@ -94,7 +94,7 @@ DB: `RecipeDB`（Dexie schema version 8）
 
 ---
 
-## 8. URLインポート・AI提案（v1.6.0）
+## 8. URLインポート・AI提案（v1.6.5）
 
 - `api/recipe-extract.js`:
   - 対応ドメインallowlist検証
@@ -104,6 +104,7 @@ DB: `RecipeDB`（Dexie schema version 8）
 - `src/pages/AskGeminiPage.tsx`:
   - 写真 -> 食材文字 -> 献立生成の2段階フロー
   - 再生成時は文字データのみ送信
+  - `RecipeEditorModal` で編集後にDB保存
 
 ---
 

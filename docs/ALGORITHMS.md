@@ -1,7 +1,7 @@
 # アルゴリズム仕様一覧
 
 最終改訂: 2026-02-21
-対象コードベース: `main` (v1.6.0)
+対象コードベース: `main` (v1.6.5)
 
 本ドキュメントは、Kitchen App の「判定・推定・選択・通知」ロジックをまとめた仕様書です。
 
@@ -98,6 +98,7 @@
 - `src/utils/imagePreprocess.ts`
 - `src/utils/geminiIngredientExtractor.ts`
 - `src/utils/geminiMenuGenerator.ts`
+- `src/utils/recipeDraftNormalizer.ts`
 
 - URL/テキストからJSON構造を抽出
 - 型検証・補完でレシピデータ化
@@ -105,6 +106,7 @@
 - 在庫提案は2段階:
   - ① 複数画像を縮小・コラージュ化して食材文字リスト抽出
   - ② 食材文字リストからDB互換の献立JSON生成
+- 保存前にレシピドラフトを正規化し、材料/手順の必須項目・人数互換を検証
 
 ---
 

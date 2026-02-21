@@ -7,6 +7,18 @@ export interface VersionChangeSection {
 
 export const VERSION_CHANGELOG: VersionChangeSection[] = [
   {
+    title: 'V1.6.5 と V1.6.0 の差分',
+    summary: 'URL/Gemini取り込み後の編集体験を強化し、保存前に内容を確定できるよう改善。',
+    points: [
+      'URLインポート時に大型編集ウィンドウを表示し、保存前に食材名・分量・手順を編集可能化',
+      'Gemini献立生成結果を「編集して保存」フローへ統一し、DB追加前の調整を必須化',
+      'レシピドラフト正規化レイヤーを追加し、人数変更UI互換の構造を保存時に厳格保証',
+      '編集モーダルで材料/手順の追加・削除・時間再計算・カテゴリ/機器変更に対応',
+      'バージョン表記・関連ドキュメントを v1.6.5 に更新',
+    ],
+    refs: ['v1.6.5'],
+  },
+  {
     title: 'V1.6.0 と V1.5.0 の差分',
     summary: '上部UI密度とGemini系フローを再設計し、取り込み精度と運用コストを改善。',
     points: [
