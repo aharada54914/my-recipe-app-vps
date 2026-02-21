@@ -2,14 +2,14 @@
 
 @theme {
   /* Design tokens — actual values set via :root below */
-  --color-bg-primary: #121214;
-  --color-bg-card: rgba(255, 255, 255, 0.05);
-  --color-bg-card-hover: rgba(255, 255, 255, 0.08);
+  --color-bg-primary: #0e1118;
+  --color-bg-card: rgba(255, 255, 255, 0.09);
+  --color-bg-card-hover: rgba(255, 255, 255, 0.14);
   --color-accent: #F97316;
   --color-accent-hover: #EA580C;
-  --color-text-primary: rgba(255, 255, 255, 0.92);
-  --color-text-secondary: rgba(255, 255, 255, 0.55);
-  --color-border: rgba(255, 255, 255, 0.1);
+  --color-text-primary: rgba(255, 255, 255, 0.95);
+  --color-text-secondary: rgba(235, 243, 255, 0.66);
+  --color-border: rgba(202, 223, 255, 0.22);
 }
 
 /* Light mode: override theme tokens */
@@ -38,7 +38,10 @@
 
 body {
   margin: 0;
-  background-color: var(--color-bg-primary);
+  background:
+    radial-gradient(1200px 520px at 10% -10%, rgba(89, 192, 255, 0.12), transparent 68%),
+    radial-gradient(900px 520px at 85% 0%, rgba(249, 115, 22, 0.12), transparent 65%),
+    var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family: "Noto Sans JP", system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
   min-height: calc(var(--vh, 1vh) * 100);
@@ -51,6 +54,135 @@ body {
   padding-bottom: var(--sab);
   padding-left: var(--sal);
   padding-right: var(--sar);
+}
+
+#root {
+  min-height: calc(var(--vh, 1vh) * 100);
+}
+
+.liquid-background {
+  position: relative;
+}
+
+.liquid-background::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 30% at 12% 8%, rgba(255, 255, 255, 0.11), transparent 80%),
+    radial-gradient(45% 35% at 88% 4%, rgba(156, 222, 255, 0.08), transparent 78%),
+    radial-gradient(40% 30% at 78% 82%, rgba(255, 177, 120, 0.08), transparent 74%);
+}
+
+.route-enter {
+  animation: route-enter 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+@keyframes route-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(70% 40% at 50% 10%, rgba(102, 204, 255, 0.2), transparent 80%),
+    radial-gradient(70% 55% at 50% 110%, rgba(255, 164, 96, 0.14), transparent 80%),
+    #0b1018;
+  transition: opacity 520ms ease, transform 520ms ease;
+  z-index: 100;
+}
+
+.splash-screen.splash-leave {
+  opacity: 0;
+  transform: scale(1.02);
+}
+
+.splash-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.splash-lines {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  height: 88px;
+}
+
+.splash-line {
+  display: block;
+  width: 10px;
+  border-radius: 999px;
+  transform-origin: center bottom;
+  box-shadow: 0 0 18px rgba(249, 115, 22, 0.44);
+  background: linear-gradient(180deg, #FFAB5B 0%, #F97316 70%, #C5560F 100%);
+  animation: line-grow 900ms cubic-bezier(0.18, 1, 0.32, 1) forwards;
+}
+
+.splash-line-a {
+  height: 26px;
+  animation-delay: 80ms;
+}
+
+.splash-line-b {
+  height: 14px;
+  width: 8px;
+  animation-delay: 260ms;
+}
+
+.splash-line-c {
+  height: 32px;
+  width: 9px;
+  animation-delay: 420ms;
+}
+
+@keyframes line-grow {
+  from {
+    opacity: 0;
+    transform: scaleY(0.2) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(2.4) translateY(0);
+  }
+}
+
+.splash-title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #f4f8ff;
+  opacity: 0;
+  animation: title-rise 560ms cubic-bezier(0.22, 1, 0.36, 1) 800ms forwards;
+  text-shadow: 0 8px 24px rgba(7, 16, 31, 0.45);
+}
+
+@keyframes title-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* T-08: CSS Containment for RecipeCard (list mode) */

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Settings, Eye, EyeOff, Lock, Unlock, Wifi, WifiOff,
   Download, Upload, LogIn, LogOut, User, HardDriveUpload, RefreshCw,
-  Calendar, UtensilsCrossed, Bell, Database, Cloud,
+  Calendar, UtensilsCrossed, Bell, Database, Cloud, BookOpen, Info,
 } from 'lucide-react'
 import { exportData } from '../utils/dataExport'
 import { importData, type ImportMode } from '../utils/dataImport'
@@ -12,6 +13,7 @@ import { CalendarSettings } from '../components/CalendarSettings'
 import { MealPlanSettings } from '../components/MealPlanSettings'
 import { NotificationSettings } from '../components/NotificationSettings'
 import { APP_VERSION } from '../constants/appVersion'
+import { VERSION_CHANGELOG } from '../constants/versionChanges'
 
 function formatTimeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -29,7 +31,7 @@ interface SettingsPageProps {
 
 const STORAGE_KEY = 'gemini_api_key'
 
-type TabId = 'account' | 'calendar' | 'menu' | 'notify' | 'data'
+type TabId = 'account' | 'calendar' | 'menu' | 'notify' | 'data' | 'guide' | 'version'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'account', label: 'アカウント', icon: <User className="h-4 w-4" /> },
@@ -37,10 +39,13 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'menu', label: '献立', icon: <UtensilsCrossed className="h-4 w-4" /> },
   { id: 'notify', label: '通知', icon: <Bell className="h-4 w-4" /> },
   { id: 'data', label: 'データ', icon: <Database className="h-4 w-4" /> },
+  { id: 'guide', label: '使い方', icon: <BookOpen className="h-4 w-4" /> },
+  { id: 'version', label: 'バージョン', icon: <Info className="h-4 w-4" /> },
 ]
 
 export function SettingsPage({ onBack }: SettingsPageProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('account')
+  const navigate = useNavigate()
+  const location = useLocation()
   const [apiKey, setApiKey] = useState('')
   const [isLocked, setIsLocked] = useState(true)
   const [showKey, setShowKey] = useState(false)
@@ -54,11 +59,19 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
 
   const { user, loading: authLoading, isOAuthAvailable, signInWithGoogle, signOut } = useAuth()
   const { isBackingUp, isRestoring, lastBackupAt, backupNow, error: backupError } = useGoogleDriveSync()
+  const pathTab = location.pathname.split('/')[2] as TabId | undefined
+  const activeTab: TabId = TABS.some((t) => t.id === pathTab) ? pathTab! : 'account'
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) || ''
     setApiKey(stored)
   }, [])
+
+  useEffect(() => {
+    if (!pathTab || !TABS.some((t) => t.id === pathTab)) {
+      navigate('/settings/account', { replace: true })
+    }
+  }, [navigate, pathTab])
 
   const maskedKey = apiKey
     ? `${apiKey.slice(0, 6)}${'•'.repeat(Math.max(0, apiKey.length - 10))}${apiKey.slice(-4)}`
@@ -153,7 +166,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => navigate(`/settings/${tab.id}`)}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'bg-accent/15 text-accent ring-1 ring-accent/40'
@@ -446,10 +459,45 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
           </>
         )}
 
-        <div className="rounded-2xl bg-white/5 px-4 py-3">
-          <p className="text-xs text-text-secondary">アプリバージョン</p>
-          <p className="mt-1 font-mono text-sm text-text-primary">v{APP_VERSION}</p>
-        </div>
+        {activeTab === 'guide' && (
+          <div className="rounded-2xl bg-bg-card p-4">
+            <h4 className="mb-3 text-sm font-bold text-text-secondary">アプリの使い方</h4>
+            <ol className="space-y-2 text-sm text-text-primary">
+              <li>1. ホームでカテゴリからレシピを探す</li>
+              <li>2. 在庫管理で食材を登録して一致率を上げる</li>
+              <li>3. 週間献立で自動生成し、必要なら差し替える</li>
+              <li>4. Googleログイン後はDriveへ自動バックアップ</li>
+              <li>5. Geminiキー設定でAI取り込みを有効化</li>
+            </ol>
+          </div>
+        )}
+
+        {activeTab === 'version' && (
+          <div className="rounded-2xl bg-bg-card p-4">
+            <h4 className="mb-3 text-sm font-bold text-text-secondary">バージョン情報</h4>
+            <div className="rounded-xl bg-white/5 px-4 py-3">
+              <p className="text-xs text-text-secondary">アプリバージョン</p>
+              <p className="mt-1 font-mono text-sm text-text-primary">v{APP_VERSION}</p>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {VERSION_CHANGELOG.map((section) => (
+                <div key={section.title} className="rounded-xl bg-white/5 p-3">
+                  <p className="text-xs font-bold text-accent">{section.title}</p>
+                  <p className="mt-1 text-xs text-text-secondary">{section.summary}</p>
+                  <ul className="mt-2 space-y-1 text-xs text-text-primary">
+                    {section.points.map((point) => (
+                      <li key={point}>・{point}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-text-secondary">
+                    参照コミット: {section.refs.join(', ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )

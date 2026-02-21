@@ -8,8 +8,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useNavigate } from 'react-router-dom'
-import { Lock, Unlock, RefreshCw, Calendar, ShoppingCart, CalendarClock, X, Search, Star } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { Lock, Unlock, RefreshCw, Calendar, ShoppingCart, CalendarClock, X, Search, Star, Share2, Download } from 'lucide-react'
 import { format, addDays, parse, addMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Fuse from 'fuse.js'
@@ -23,6 +23,8 @@ import { aggregateIngredients, getMissingWeeklyIngredients, formatWeeklyShopping
 import { registerWeeklyMenuToCalendar, registerShoppingListToCalendar } from '../utils/weeklyMenuCalendar'
 import { calculateMatchRate, calculateMultiRecipeSchedule, isHelsioDeli } from '../utils/recipeUtils'
 import { EditableShoppingList } from '../components/EditableShoppingList'
+import { createWeeklyMenuShareCode, parseWeeklyMenuShareCode } from '../utils/weeklyMenuShare'
+import { getNotificationPermission, showLocalNotification } from '../utils/notifications'
 
 const LANE_COLORS = [
   { bg: 'rgba(249,115,22,0.25)', border: '#F97316', text: '#F97316' },
@@ -31,6 +33,7 @@ const LANE_COLORS = [
 
 export function WeeklyMenuPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { preferences } = usePreferences()
   const { providerToken } = useAuth()
 
@@ -55,6 +58,8 @@ export function WeeklyMenuPage() {
   const [swapSearchQuery, setSwapSearchQuery] = useState('')
   const debouncedSwapSearch = useDebounce(swapSearchQuery, 250)
   const [ganttDayIndex, setGanttDayIndex] = useState<number | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareCodeInput, setShareCodeInput] = useState('')
 
   const stockItems = useLiveQuery(() => db.stock.filter(s => s.inStock).toArray(), [])
   const stockNames = useMemo(() => new Set((stockItems ?? []).map(s => s.name)), [stockItems])
@@ -114,6 +119,14 @@ export function WeeklyMenuPage() {
         if (item.sideRecipeId != null) ids.push(item.sideRecipeId)
       }
       await loadRecipes(ids)
+
+      if (preferences.notifyWeeklyMenuDone && getNotificationPermission() === 'granted') {
+        await showLocalNotification({
+          title: '週間献立を作成しました',
+          body: `${format(weekStart, 'M/d')}開始の献立を更新しました。`,
+          tag: `weekly_menu_${weekStartStr}`,
+        })
+      }
     } finally {
       setGenerating(false)
     }
@@ -179,20 +192,34 @@ export function WeeklyMenuPage() {
     }
   }, [menu, swapDayIndex, swapType])
 
+  const selectedRecipes = useMemo(() => {
+    if (!menu) return [] as Recipe[]
+    return menu.items.flatMap((item) => {
+      const out: Recipe[] = []
+      const main = recipes.get(item.recipeId)
+      if (main) out.push(main)
+      if (item.sideRecipeId != null) {
+        const side = recipes.get(item.sideRecipeId)
+        if (side) out.push(side)
+      }
+      return out
+    })
+  }, [menu, recipes])
+
   // Calendar registration
   const handleRegisterCalendar = useCallback(async () => {
     if (!menu || !providerToken) return
     setRegistering(true)
     try {
-      const recipeList = menu.items.map(i => recipes.get(i.recipeId)).filter(Boolean) as Recipe[]
-      const result = await registerWeeklyMenuToCalendar(providerToken, menu, recipeList, preferences)
+      const mainRecipeList = menu.items.map(i => recipes.get(i.recipeId)).filter(Boolean) as Recipe[]
+      const result = await registerWeeklyMenuToCalendar(providerToken, menu, mainRecipeList, preferences)
 
       if (result.errors.length > 0) {
         alert(`${result.registered}件登録、${result.errors.length}件エラー:\n${result.errors.join('\n')}`)
       }
 
       if (stockItems) {
-        const missing = getMissingWeeklyIngredients(recipeList, stockItems)
+        const missing = getMissingWeeklyIngredients(selectedRecipes, stockItems)
         if (missing.length > 0) {
           const text = formatWeeklyShoppingList(weekStartStr, missing)
           await registerShoppingListToCalendar(providerToken, text, weekStart, preferences)
@@ -201,7 +228,7 @@ export function WeeklyMenuPage() {
     } finally {
       setRegistering(false)
     }
-  }, [menu, providerToken, recipes, preferences, stockItems, weekStart, weekStartStr])
+  }, [menu, providerToken, recipes, preferences, selectedRecipes, stockItems, weekStart, weekStartStr])
 
   // Week navigation
   const adjustWeek = (delta: number) => {
@@ -224,12 +251,111 @@ export function WeeklyMenuPage() {
 
   const weekEndStr = format(addDays(weekStart, 6), 'M/d')
   const weekStartDisplay = format(weekStart, 'M/d')
+  const shareCode = useMemo(() => {
+    if (!menu) return ''
+    return createWeeklyMenuShareCode(weekStartStr, menu.items)
+  }, [menu, weekStartStr])
+
+  const applySharedMenu = useCallback(async (code: string) => {
+    const shared = parseWeeklyMenuShareCode(code)
+    const existing = await db.weeklyMenus.where('weekStartDate').equals(shared.weekStartDate).first()
+
+    const nextMenu: WeeklyMenu = {
+      id: existing?.id,
+      weekStartDate: shared.weekStartDate,
+      items: shared.items,
+      status: 'draft',
+      createdAt: existing?.createdAt ?? new Date(),
+      updatedAt: new Date(),
+    }
+
+    if (existing?.id != null) {
+      await db.weeklyMenus.update(existing.id, {
+        items: shared.items,
+        status: 'draft',
+        updatedAt: new Date(),
+      })
+    } else {
+      const id = await db.weeklyMenus.add(nextMenu)
+      nextMenu.id = id
+    }
+
+    const importedWeek = new Date(`${shared.weekStartDate}T00:00:00`)
+    setWeekStart(importedWeek)
+    setMenu(nextMenu)
+    const ids: number[] = []
+    for (const item of shared.items) {
+      ids.push(item.recipeId)
+      if (item.sideRecipeId != null) ids.push(item.sideRecipeId)
+    }
+    await loadRecipes(ids)
+  }, [loadRecipes])
+
+  useEffect(() => {
+    const code = new URLSearchParams(location.search).get('shared')
+    if (!code) return
+
+    applySharedMenu(code)
+      .then(() => {
+        alert('共有された週間献立を読み込みました')
+      })
+      .catch((err) => {
+        alert(`共有コードの読み込みに失敗しました: ${err instanceof Error ? err.message : '不明なエラー'}`)
+      })
+      .finally(() => {
+        navigate('/weekly-menu', { replace: true })
+      })
+  }, [location.search, applySharedMenu, navigate])
+
+  const handleShareLink = useCallback(async () => {
+    if (!menu) return
+    const url = `${window.location.origin}/weekly-menu?shared=${encodeURIComponent(shareCode)}`
+
+    if (navigator.share) {
+      await navigator.share({
+        title: `Kitchen App 週間献立 ${weekStartDisplay}〜${weekEndStr}`,
+        text: '週間献立を共有します',
+        url,
+      })
+      return
+    }
+
+    await navigator.clipboard.writeText(url)
+    alert('共有リンクをコピーしました')
+  }, [menu, shareCode, weekEndStr, weekStartDisplay])
+
+  const handleImportFromCode = useCallback(async () => {
+    if (!shareCodeInput.trim()) return
+    try {
+      await applySharedMenu(shareCodeInput)
+      setShareOpen(false)
+      setShareCodeInput('')
+      alert('共有コードから週間献立を読み込みました')
+    } catch (err) {
+      alert(`共有コードが不正です: ${err instanceof Error ? err.message : '不明なエラー'}`)
+    }
+  }, [shareCodeInput, applySharedMenu])
+
+  useEffect(() => {
+    if (!showShoppingList) return
+    if (!stockItems || !preferences.notifyShoppingListDone) return
+    if (getNotificationPermission() !== 'granted') return
+
+    const missing = getMissingWeeklyIngredients(selectedRecipes, stockItems)
+    if (missing.length === 0) return
+
+    showLocalNotification({
+      title: '買い物リストを確認しましょう',
+      body: `${missing.length}件の不足食材があります。`,
+      tag: `shopping_${weekStartStr}`,
+    })
+  }, [showShoppingList, stockItems, preferences.notifyShoppingListDone, selectedRecipes, weekStartStr])
 
   return (
     <div>
       <h2 className="pt-4 pb-3 text-lg font-bold">週間献立</h2>
 
-      <div className="space-y-4 pb-24">
+      <div className={`space-y-4 ${menu ? 'pb-44' : 'pb-24'}`}>
         {/* Week navigation */}
         <div className="flex items-center justify-center gap-3">
           <button
@@ -384,10 +510,7 @@ export function WeeklyMenuPage() {
                 <h4 className="mb-3 text-sm font-bold text-text-secondary">買い物リスト</h4>
                 <EditableShoppingList
                   weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
-                  ingredients={aggregateIngredients(
-                    menu.items.map(i => recipes.get(i.recipeId)).filter(Boolean) as Recipe[],
-                    stockItems as never[]
-                  )}
+                  ingredients={aggregateIngredients(selectedRecipes, stockItems as never[])}
                   storageKey={`shopping_checked_${weekStartStr}`}
                 />
               </div>
@@ -422,12 +545,24 @@ export function WeeklyMenuPage() {
             onClose={() => setGanttDayIndex(null)}
           />
         )}
+
+        {shareOpen && menu && (
+          <ShareMenuModal
+            weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
+            shareCode={shareCode}
+            importCode={shareCodeInput}
+            onImportCodeChange={setShareCodeInput}
+            onShare={handleShareLink}
+            onImport={handleImportFromCode}
+            onClose={() => setShareOpen(false)}
+          />
+        )}
       </div>
 
       {/* Bottom action bar — positioned above BottomNav */}
       {menu && (
-        <div className="fixed bottom-[56px] left-0 right-0 border-t border-border bg-bg-primary/95 backdrop-blur-lg">
-          <div className="flex gap-2 px-4 py-2">
+        <div className="fixed left-0 right-0 z-40 border-t border-border bg-bg-primary/90 backdrop-blur-xl" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}>
+          <div className="grid grid-cols-2 gap-2 px-4 py-2 sm:grid-cols-4">
             <button
               onClick={handleGenerate}
               disabled={generating}
@@ -442,6 +577,13 @@ export function WeeklyMenuPage() {
             >
               <ShoppingCart className="h-4 w-4" />
               買い物
+            </button>
+            <button
+              onClick={() => setShareOpen(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-bg-card py-2.5 text-xs font-medium transition-colors hover:bg-bg-card-hover"
+            >
+              <Share2 className="h-4 w-4" />
+              共有
             </button>
             {providerToken && (
               <button
@@ -715,3 +857,74 @@ function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, onClose 
   )
 }
 
+interface ShareMenuModalProps {
+  weekLabel: string
+  shareCode: string
+  importCode: string
+  onImportCodeChange: (value: string) => void
+  onShare: () => Promise<void>
+  onImport: () => Promise<void>
+  onClose: () => void
+}
+
+function ShareMenuModal({
+  weekLabel,
+  shareCode,
+  importCode,
+  onImportCodeChange,
+  onShare,
+  onImport,
+  onClose,
+}: ShareMenuModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-t-2xl bg-bg-primary p-4 pb-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-bold">週間献立を共有</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-text-secondary hover:text-accent">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mb-3 text-xs text-text-secondary">
+          {weekLabel} の献立をリンクまたは共有コードで送信できます。
+        </p>
+
+        <button
+          onClick={onShare}
+          className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm font-bold text-white"
+        >
+          <Share2 className="h-4 w-4" />
+          共有リンクを作成
+        </button>
+
+        <div className="mb-2 flex items-center gap-2 text-xs font-bold text-text-secondary">
+          <Download className="h-4 w-4" />
+          共有コード
+        </div>
+        <textarea
+          readOnly
+          value={shareCode}
+          className="mb-4 min-h-20 w-full rounded-xl bg-white/5 p-3 text-[11px] text-text-secondary outline-none"
+        />
+
+        <div className="mb-2 text-xs font-bold text-text-secondary">受信コードを読み込み</div>
+        <textarea
+          value={importCode}
+          onChange={(e) => onImportCodeChange(e.target.value)}
+          className="mb-3 min-h-20 w-full rounded-xl bg-white/5 p-3 text-[11px] text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent/50"
+          placeholder="共有コードを貼り付け"
+        />
+        <button
+          onClick={onImport}
+          className="w-full rounded-xl bg-white/10 py-2.5 text-sm font-bold text-text-primary transition-colors hover:bg-white/20"
+        >
+          コードを読み込む
+        </button>
+      </div>
+    </div>
+  )
+}

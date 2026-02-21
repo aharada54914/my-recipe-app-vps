@@ -13,7 +13,7 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
   const navigate = useNavigate()
 
   return (
-    <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)]">
+    <header className="sticky top-0 z-50 border-b border-white/15 bg-white/8 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] backdrop-blur-2xl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img
@@ -28,7 +28,7 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
             <button
               onClick={onMultiSchedule}
               aria-label="複数レシピスケジュール"
-              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+              className="rounded-xl bg-white/10 p-3 transition-colors hover:bg-white/20"
             >
               <CalendarClock className="h-5 w-5 text-text-secondary" />
             </button>
@@ -37,7 +37,7 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
             <button
               onClick={onSearchToggle}
               aria-label="検索"
-              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+              className="rounded-xl bg-white/10 p-3 transition-colors hover:bg-white/20"
             >
               <Search className="h-5 w-5 text-text-secondary" />
             </button>
@@ -62,7 +62,7 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
             <button
               onClick={onSettings}
               aria-label="設定"
-              className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+              className="rounded-xl bg-white/10 p-3 transition-colors hover:bg-white/20"
             >
               <Settings className="h-5 w-5 text-text-secondary" />
             </button>

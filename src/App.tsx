@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Outlet, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { initDb } from './db/initDb'
 import { AuthProvider } from './contexts/AuthContext'
@@ -19,20 +19,25 @@ import { SettingsPage } from './pages/SettingsPage'
 import { WeeklyMenuPage } from './pages/WeeklyMenuPage'
 import { AskGeminiPage } from './pages/AskGeminiPage'
 import { ToastContainer } from './components/ToastContainer'
+import { SplashScreen } from './components/SplashScreen'
+import { NotificationScheduler } from './components/NotificationScheduler'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 
 function AppLayout() {
   const navigate = useNavigate()
+  const location = useLocation()
 
   return (
-    <div className="min-h-dvh bg-bg-primary">
+    <div className="min-h-dvh bg-bg-primary liquid-background">
       <Header
         onMultiSchedule={() => navigate('/multi-schedule')}
         onSettings={() => navigate('/settings')}
       />
       <main className="px-4 pb-24">
-        <Outlet />
+        <div key={location.pathname} className="route-enter">
+          <Outlet />
+        </div>
       </main>
       <BottomNav />
       <ToastContainer />
@@ -51,32 +56,54 @@ function RecipeDetailPage() {
 
   if (!id) return null
 
-  return <RecipeDetail recipeId={Number(id)} onBack={() => navigate(-1)} />
+  return (
+    <div className="route-enter px-4 pb-24 pt-4">
+      <RecipeDetail recipeId={Number(id)} onBack={() => navigate(-1)} />
+    </div>
+  )
 }
 
 function AiParsePage() {
   const navigate = useNavigate()
 
-  return <AiRecipeParser onBack={() => navigate(-1)} />
+  return (
+    <div className="route-enter px-4 pb-24 pt-4">
+      <AiRecipeParser onBack={() => navigate(-1)} />
+    </div>
+  )
 }
 
 function MultiSchedulePage() {
   const navigate = useNavigate()
 
-  return <MultiScheduleView onBack={() => navigate(-1)} />
+  return (
+    <div className="route-enter px-4 pb-24 pt-4">
+      <MultiScheduleView onBack={() => navigate(-1)} />
+    </div>
+  )
 }
 
 function SettingsPageWrapper() {
   const navigate = useNavigate()
 
-  return <SettingsPage onBack={() => navigate(-1)} />
+  return (
+    <div className="route-enter">
+      <SettingsPage onBack={() => navigate(-1)} />
+    </div>
+  )
 }
 
 function App() {
-  const [ready, setReady] = useState(false)
+  const [dbReady, setDbReady] = useState(false)
+  const [splashDone, setSplashDone] = useState(false)
 
   useEffect(() => {
-    initDb().then(() => setReady(true))
+    initDb().then(() => setDbReady(true))
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSplashDone(true), 2100)
+    return () => window.clearTimeout(timer)
   }, [])
 
   // iOS 100vh fix — compute actual viewport height and set --vh CSS variable
@@ -93,19 +120,14 @@ function App() {
     }
   }, [])
 
-  if (!ready) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-bg-primary">
-        <div className="text-text-secondary">読み込み中...</div>
-      </div>
-    )
-  }
+  const showSplash = !splashDone || !dbReady
 
   const inner = (
     <AuthProvider>
       <BrowserRouter>
         <DriveBackupProvider>
           <PreferencesProvider>
+            <NotificationScheduler />
             <Routes>
               <Route element={<AppLayout />}>
                 <Route index element={<HomePage />} />
@@ -119,13 +141,17 @@ function App() {
               <Route path="/recipe/:id" element={<RecipeDetailPage />} />
               <Route path="/ai-parse" element={<AiParsePage />} />
               <Route path="/multi-schedule" element={<MultiSchedulePage />} />
-              <Route path="/settings" element={<SettingsPageWrapper />} />
+              <Route path="/settings/*" element={<SettingsPageWrapper />} />
             </Routes>
           </PreferencesProvider>
         </DriveBackupProvider>
       </BrowserRouter>
     </AuthProvider>
   )
+
+  if (showSplash) {
+    return <SplashScreen leaving={dbReady} />
+  }
 
   if (!GOOGLE_CLIENT_ID) {
     // No OAuth client ID — skip GoogleOAuthProvider (auth features disabled)

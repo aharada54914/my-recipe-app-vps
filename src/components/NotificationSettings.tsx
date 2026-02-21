@@ -1,5 +1,11 @@
 import { Bell } from 'lucide-react'
+import { useState } from 'react'
 import { usePreferences } from '../hooks/usePreferences'
+import {
+  getNotificationPermission,
+  isNotificationSupported,
+  requestNotificationPermission,
+} from '../utils/notifications'
 
 function ToggleButton({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -20,8 +26,14 @@ function ToggleButton({ enabled, onChange }: { enabled: boolean; onChange: (v: b
 
 export function NotificationSettings() {
   const { preferences, updatePreference } = usePreferences()
+  const [permission, setPermission] = useState<NotificationPermission>(() => getNotificationPermission())
 
   const cookingDisabled = !preferences.cookingNotifyEnabled
+
+  const handleRequestPermission = async () => {
+    const next = await requestNotificationPermission()
+    setPermission(next)
+  }
 
   return (
     <div className="rounded-2xl bg-bg-card p-4">
@@ -31,6 +43,27 @@ export function NotificationSettings() {
       </div>
 
       <div className="space-y-4">
+        <div className="rounded-xl bg-white/5 px-3 py-2.5">
+          <div className="mb-1 text-xs font-medium text-text-secondary">ブラウザ通知権限</div>
+          {!isNotificationSupported() ? (
+            <p className="text-xs text-red-400">この環境は通知APIに未対応です。</p>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-text-primary">
+                状態: {permission === 'granted' ? '許可済み' : permission === 'denied' ? '拒否' : '未許可'}
+              </p>
+              {permission !== 'granted' && (
+                <button
+                  onClick={handleRequestPermission}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white"
+                >
+                  通知を許可
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Cooking start notification */}
         <div>
           <div className="flex items-center justify-between">

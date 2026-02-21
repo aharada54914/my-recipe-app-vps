@@ -5,8 +5,8 @@
  * Checked items are moved to the bottom with a strikethrough style.
  */
 
-import { useState, useCallback, useEffect } from 'react'
-import { Check, Copy, CheckCheck } from 'lucide-react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { Check, Copy, CheckCheck, Plus, Trash2 } from 'lucide-react'
 import { copyToClipboard } from '../utils/shoppingUtils'
 
 export interface ShoppingIngredient {
@@ -14,12 +14,22 @@ export interface ShoppingIngredient {
   totalQuantity: number
   unit: string
   inStock: boolean
+  ingredientCategory?: 'main' | 'sub'
 }
 
 interface Props {
   weekLabel: string
   ingredients: ShoppingIngredient[]
   storageKey?: string
+}
+
+interface EditableItem {
+  id: string
+  name: string
+  quantity: number
+  unit: string
+  inStock: boolean
+  ingredientCategory: 'main' | 'sub'
 }
 
 function formatQty(ing: ShoppingIngredient): string {
@@ -38,6 +48,31 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
     }
   })
   const [copied, setCopied] = useState(false)
+  const [includeSeasonings, setIncludeSeasonings] = useState(false)
+  const [customName, setCustomName] = useState('')
+  const [customQty, setCustomQty] = useState('')
+  const [customUnit, setCustomUnit] = useState('個')
+
+  const sourceItems = useMemo<EditableItem[]>(() => {
+    const filtered = includeSeasonings
+      ? ingredients
+      : ingredients.filter((i) => (i.ingredientCategory ?? 'main') === 'main')
+
+    return filtered.map((i) => ({
+      id: `${i.name}__${i.unit}`,
+      name: i.name,
+      quantity: i.totalQuantity,
+      unit: i.unit,
+      inStock: i.inStock,
+      ingredientCategory: i.ingredientCategory ?? 'main',
+    }))
+  }, [ingredients, includeSeasonings])
+
+  const [items, setItems] = useState<EditableItem[]>([])
+
+  useEffect(() => {
+    setItems(sourceItems)
+  }, [sourceItems])
 
   // Persist checked state
   useEffect(() => {
@@ -57,8 +92,8 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
 
   const clearAll = useCallback(() => setChecked(new Set()), [])
 
-  const missing = ingredients.filter(i => !i.inStock)
-  const inStockItems = ingredients.filter(i => i.inStock)
+  const missing = items.filter(i => !i.inStock)
+  const inStockItems = items.filter(i => i.inStock)
 
   // Sort: unchecked first, checked last
   const sortedMissing = [
@@ -68,7 +103,13 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
 
   const handleCopy = async () => {
     const unchecked = missing.filter(i => !checked.has(i.name))
-    const lines = [`【買い物リスト】${weekLabel}`, ...unchecked.map(i => `・${i.name} ${formatQty(i)}`)]
+    const lines = [`【買い物リスト】${weekLabel}`, ...unchecked.map(i => `・${i.name} ${formatQty({
+      name: i.name,
+      totalQuantity: i.quantity,
+      unit: i.unit,
+      inStock: i.inStock,
+      ingredientCategory: i.ingredientCategory,
+    })}`)]
     const ok = await copyToClipboard(lines.join('\n'))
     if (ok) {
       setCopied(true)
@@ -77,6 +118,31 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
   }
 
   const checkedCount = missing.filter(i => checked.has(i.name)).length
+
+  const updateItem = useCallback((id: string, patch: Partial<EditableItem>) => {
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+  }, [])
+
+  const removeItem = useCallback((id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id))
+  }, [])
+
+  const addCustomItem = useCallback(() => {
+    const name = customName.trim()
+    if (!name) return
+    const quantity = Number(customQty || '0')
+    const next: EditableItem = {
+      id: `custom_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      name,
+      quantity: Number.isFinite(quantity) ? quantity : 0,
+      unit: customUnit.trim() || '個',
+      inStock: false,
+      ingredientCategory: 'main',
+    }
+    setItems((prev) => [...prev, next])
+    setCustomName('')
+    setCustomQty('')
+  }, [customName, customQty, customUnit])
 
   return (
     <div className="space-y-3">
@@ -104,6 +170,18 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
         </div>
       </div>
 
+      <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
+        <span className="text-xs text-text-secondary">調味料も表示する</span>
+        <button
+          onClick={() => setIncludeSeasonings((v) => !v)}
+          className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+            includeSeasonings ? 'bg-accent text-white' : 'bg-white/10 text-text-secondary'
+          }`}
+        >
+          {includeSeasonings ? 'ON' : 'OFF'}
+        </button>
+      </div>
+
       {/* Missing ingredients — interactive */}
       {missing.length === 0 ? (
         <p className="text-xs text-green-400">全ての材料が揃っています！</p>
@@ -116,25 +194,44 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
             {sortedMissing.map(ing => {
               const isChecked = checked.has(ing.name)
               return (
-                <li key={ing.name}>
-                  <button
-                    onClick={() => toggle(ing.name)}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
+                <li key={ing.id} className={`rounded-lg px-2 py-2 transition-colors ${
                       isChecked ? 'bg-white/3 opacity-40' : 'bg-white/5 hover:bg-white/10'
-                    }`}
-                  >
-                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                      isChecked ? 'border-green-400 bg-green-400/20' : 'border-white/20'
                     }`}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <button
+                      onClick={() => toggle(ing.name)}
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                        isChecked ? 'border-green-400 bg-green-400/20' : 'border-white/20'
+                      }`}
+                    >
                       {isChecked && <Check className="h-2.5 w-2.5 text-green-400" />}
-                    </div>
-                    <span className={`flex-1 text-xs ${isChecked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
-                      {ing.name}
-                    </span>
-                    <span className={`text-xs ${isChecked ? 'text-text-secondary' : 'text-text-secondary'}`}>
-                      {formatQty(ing)}
-                    </span>
-                  </button>
+                    </button>
+                    <input
+                      value={ing.name}
+                      onChange={(e) => updateItem(ing.id, { name: e.target.value })}
+                      className={`min-w-0 flex-1 bg-transparent text-xs outline-none ${
+                        isChecked ? 'line-through text-text-secondary' : 'text-text-primary'
+                      }`}
+                    />
+                    <button onClick={() => removeItem(ing.id)} className="text-text-secondary hover:text-red-400">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-[1fr_auto] gap-2 pl-6">
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={Number.isFinite(ing.quantity) ? ing.quantity : 0}
+                      onChange={(e) => updateItem(ing.id, { quantity: Number(e.target.value) })}
+                      className="rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none"
+                    />
+                    <input
+                      value={ing.unit}
+                      onChange={(e) => updateItem(ing.id, { unit: e.target.value })}
+                      className="w-14 rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none"
+                    />
+                  </div>
                 </li>
               )
             })}
@@ -142,15 +239,54 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
         </div>
       )}
 
+      <div className="rounded-xl bg-white/5 p-3">
+        <div className="mb-2 text-xs font-medium text-text-secondary">不足材料を追加</div>
+        <div className="grid grid-cols-[1.6fr_0.8fr_0.7fr_auto] gap-2">
+          <input
+            value={customName}
+            onChange={(e) => setCustomName(e.target.value)}
+            placeholder="食材名"
+            className="rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none"
+          />
+          <input
+            type="number"
+            step="0.5"
+            value={customQty}
+            onChange={(e) => setCustomQty(e.target.value)}
+            placeholder="数量"
+            className="rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none"
+          />
+          <input
+            value={customUnit}
+            onChange={(e) => setCustomUnit(e.target.value)}
+            placeholder="単位"
+            className="rounded-md bg-white/10 px-2 py-1.5 text-xs text-text-primary outline-none"
+          />
+          <button
+            onClick={addCustomItem}
+            className="flex items-center justify-center rounded-md bg-accent px-2 py-1.5 text-white"
+            aria-label="追加"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
       {/* In-stock items — non-interactive summary */}
       {inStockItems.length > 0 && (
         <div>
           <div className="mb-1 text-xs font-medium text-text-secondary">在庫あり ({inStockItems.length}件)</div>
           <ul className="space-y-0.5">
             {inStockItems.map(ing => (
-              <li key={ing.name} className="flex justify-between px-2 text-xs text-text-secondary line-through opacity-40">
+              <li key={ing.id} className="flex justify-between px-2 text-xs text-text-secondary line-through opacity-40">
                 <span>・{ing.name}</span>
-                <span>{formatQty(ing)}</span>
+                <span>{formatQty({
+                  name: ing.name,
+                  totalQuantity: ing.quantity,
+                  unit: ing.unit,
+                  inStock: ing.inStock,
+                  ingredientCategory: ing.ingredientCategory,
+                })}</span>
               </li>
             ))}
           </ul>
