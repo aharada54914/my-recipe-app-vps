@@ -167,6 +167,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   ])
 
   // T-04: Virtual scrolling
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: withRates.length,
     getScrollElement: () => parentRef.current,

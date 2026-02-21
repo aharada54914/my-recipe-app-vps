@@ -3,12 +3,19 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import type { Plugin } from 'vite'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+
+type ApiRequest = IncomingMessage & { query?: Record<string, string> }
+type ApiResponse = ServerResponse<IncomingMessage> & {
+  status?: (code: number) => ApiResponse
+  json?: (data: unknown) => void
+}
 
 function apiMiddleware(): Plugin {
   return {
     name: 'api-middleware',
     configureServer(server) {
-      server.middlewares.use(async (req: any, res: any, next) => {
+      server.middlewares.use(async (req: ApiRequest, res: ApiResponse, next) => {
         if (req.url && req.url.startsWith('/api/recipe-extract')) {
           try {
             const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
@@ -21,17 +28,18 @@ function apiMiddleware(): Plugin {
               res.statusCode = code
               return res
             }
-            res.json = (data: any) => {
+            res.json = (data: unknown) => {
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify(data))
             }
 
             await handler(req, res)
             return
-          } catch (e: any) {
+          } catch (e: unknown) {
             console.error('API Error:', e)
+            const message = e instanceof Error ? e.message : String(e)
             res.statusCode = 500
-            res.end(JSON.stringify({ ok: false, error: e.message }))
+            res.end(JSON.stringify({ ok: false, error: message }))
             return
           }
         }
