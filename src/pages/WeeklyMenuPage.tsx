@@ -9,9 +9,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Lock, Unlock, RefreshCw, ShoppingCart, Calendar, CalendarClock, Clock3, UtensilsCrossed } from 'lucide-react'
+import { Lock, Unlock, RefreshCw, ShoppingCart, Calendar, CalendarClock, Clock3, UtensilsCrossed, X, Search, Star, Share2, Download } from 'lucide-react'
 import { format, addDays, parse, addMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import Fuse from 'fuse.js'
 import { db, type Recipe, type WeeklyMenu } from '../db/db'
 import { usePreferences } from '../hooks/usePreferences'
 import { useAuth } from '../hooks/useAuth'
@@ -25,9 +26,11 @@ import { EditableShoppingList } from '../components/EditableShoppingList'
 import { createWeeklyMenuShareCode, parseWeeklyMenuShareCode } from '../utils/weeklyMenuShare'
 import { getNotificationPermission, showLocalNotification } from '../utils/notifications'
 import { isRecipeAllowedForRole } from '../utils/mealRoleRules'
-import { SwapModal } from '../components/weekly/SwapModal'
-import { GanttDayModal } from '../components/weekly/GanttDayModal'
-import { ShareMenuModal } from '../components/weekly/ShareMenuModal'
+
+const LANE_COLORS = [
+  { bg: 'rgba(249,115,22,0.25)', border: '#F97316', text: '#F97316' },
+  { bg: 'rgba(59,130,246,0.25)', border: '#3B82F6', text: '#60A5FA' },
+]
 
 export function WeeklyMenuPage() {
   const navigate = useNavigate()
@@ -633,6 +636,342 @@ export function WeeklyMenuPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// --- Swap modal with search + favorites ---
+
+interface SwapModalProps {
+  swapType: 'main' | 'side'
+  candidates: Recipe[]
+  favorites: Recipe[]
+  searchQuery: string
+  debouncedSearch: string
+  stockNames: Set<string>
+  onSearchChange: (q: string) => void
+  onSelect: (recipe: Recipe) => void
+  onClose: () => void
+}
+
+function SwapModal({
+  swapType, candidates, favorites, searchQuery, debouncedSearch,
+  stockNames, onSearchChange, onSelect, onClose,
+}: SwapModalProps) {
+  const fuse = useMemo(
+    () => new Fuse(candidates, { keys: ['title'], threshold: 0.4 }),
+    [candidates]
+  )
+
+  const filtered = useMemo(() => {
+    if (!debouncedSearch.trim()) return null
+    return fuse.search(debouncedSearch).map(r => r.item).slice(0, 20)
+  }, [fuse, debouncedSearch])
+
+  const showSearch = !!filtered
+  const topAlternatives = useMemo(
+    () => candidates.slice(0, 10),
+    [candidates]
+  )
+
+  return (
+    <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="flex max-h-[75vh] w-full max-w-lg flex-col rounded-t-2xl bg-bg-primary"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          <h3 className="text-sm font-bold">
+            {swapType === 'main' ? '主菜' : '副菜・スープ'}を変更
+          </h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-text-secondary hover:text-accent">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Search bar */}
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-2 rounded-xl bg-bg-card px-3 py-2.5">
+            <Search className="h-4 w-4 shrink-0 text-text-secondary" />
+            <input
+              autoFocus
+              type="search"
+              value={searchQuery}
+              onChange={e => onSearchChange(e.target.value)}
+              placeholder="レシピを検索..."
+              className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-secondary outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
+          {showSearch ? (
+            /* Search results */
+            filtered!.length > 0 ? (
+              <div className="space-y-2">
+                {filtered!.map(recipe => (
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                    onClick={() => onSelect(recipe)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-sm text-text-secondary">該当するレシピがありません</p>
+            )
+          ) : (
+            <>
+              {/* Favorites section */}
+              {favorites.length > 0 && (
+                <div>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <Star className="h-3.5 w-3.5 text-accent" />
+                    <h4 className="text-xs font-bold text-text-secondary">お気に入り</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {favorites.slice(0, 5).map(recipe => (
+                      <RecipeCard
+                        key={recipe.id}
+                        recipe={recipe}
+                        matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                        onClick={() => onSelect(recipe)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stock-based recommendations */}
+              <div>
+                <div className="mb-2 text-xs font-bold text-text-secondary">在庫でつくれるレシピ</div>
+                <div className="space-y-2">
+                  {topAlternatives.map(recipe => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                      onClick={() => onSelect(recipe)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Gantt chart modal for a single day ---
+
+interface GanttDayModalProps {
+  item: { recipeId: number; sideRecipeId?: number; date: string }
+  mainRecipe: Recipe | undefined
+  sideRecipe: Recipe | undefined
+  desiredMealTime: Date
+  onClose: () => void
+}
+
+function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, onClose }: GanttDayModalProps) {
+  const recipeInputs = useMemo(() => {
+    const list: { recipeId: number; title: string; steps: Recipe['steps']; device: Recipe['device'] }[] = []
+    if (mainRecipe) list.push({ recipeId: mainRecipe.id!, title: mainRecipe.title, steps: mainRecipe.steps, device: mainRecipe.device })
+    if (sideRecipe) list.push({ recipeId: sideRecipe.id!, title: sideRecipe.title, steps: sideRecipe.steps, device: sideRecipe.device })
+    return list
+  }, [mainRecipe, sideRecipe])
+
+  const schedule = useMemo(() => {
+    if (recipeInputs.length === 0) return null
+    try {
+      return calculateMultiRecipeSchedule(desiredMealTime, recipeInputs)
+    } catch (error) {
+      console.error('Failed to calculate gantt schedule', error)
+      return null
+    }
+  }, [recipeInputs, desiredMealTime])
+
+  const totalSpanMs = schedule
+    ? desiredMealTime.getTime() - schedule.overallStart.getTime()
+    : 0
+
+  const date = parse(item.date, 'yyyy-MM-dd', new Date())
+
+  return (
+    <div
+      className="fixed inset-0 z-[140] flex items-end justify-center bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[88dvh] w-full max-w-lg flex-col rounded-t-2xl bg-bg-primary p-4 pb-8"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 text-accent" />
+            <span className="text-sm font-bold">
+              {format(date, 'M/d (E)', { locale: ja })} の調理スケジュール
+            </span>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-text-secondary hover:text-accent">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto pr-1">
+          {schedule && totalSpanMs > 0 ? (
+            <>
+            {/* Time axis */}
+            <div className="mb-3 flex justify-between text-[10px] text-text-secondary">
+              <span>{format(schedule.overallStart, 'HH:mm')} 調理開始</span>
+              <span className="font-bold text-accent">{format(desiredMealTime, 'HH:mm')} いただきます</span>
+            </div>
+
+            {/* Conflict warnings */}
+            {schedule.conflicts.length > 0 && (
+              <div className="mb-3 rounded-xl bg-yellow-500/10 px-3 py-2">
+                <div className="text-xs font-bold text-yellow-400 mb-1">⚠️ デバイス競合あり</div>
+                {schedule.conflicts.map((c, ci) => (
+                  <div key={ci} className="text-[10px] text-yellow-300">
+                    {c.device === 'hotcook' ? '🍲' : '♨️'} {c.recipeTitle}: {c.shiftMinutes}分前倒し
+                  </div>
+                ))}
+              </div>
+            )}
+
+              {/* Gantt lanes */}
+              <div className="overflow-x-auto pb-1">
+                <div className="min-w-[320px] space-y-3">
+                  {schedule.recipes.map((rs) => {
+                    const color = LANE_COLORS[rs.colorIndex % LANE_COLORS.length]
+                    return (
+                      <div key={rs.recipeId}>
+                        <div className="mb-1 text-xs font-medium" style={{ color: color.text }}>
+                          {rs.recipeTitle}
+                        </div>
+                        <div className="relative h-14 rounded-lg bg-white/5">
+                          {rs.entries.map((entry, ei) => {
+                            const leftPct = ((entry.start.getTime() - schedule.overallStart.getTime()) / totalSpanMs) * 100
+                            const widthPct = ((entry.end.getTime() - entry.start.getTime()) / totalSpanMs) * 100
+                            const showText = widthPct > 5
+                            const showTime = widthPct > 15
+                            return (
+                              <div
+                                key={ei}
+                                className="absolute top-0 flex h-full flex-col justify-center overflow-hidden rounded px-1.5"
+                                style={{
+                                  left: `${leftPct}%`,
+                                  width: `${Math.max(widthPct, 3)}%`,
+                                  backgroundColor: color.bg,
+                                  borderLeft: entry.isDeviceStep ? `2px solid ${color.border}` : undefined,
+                                  color: color.text,
+                                }}
+                                title={`${entry.name} ${format(entry.start, 'HH:mm')}→${format(entry.end, 'HH:mm')}`}
+                              >
+                                {showText && (
+                                  <span className="block break-all text-[9px] font-medium leading-tight">
+                                    {entry.name}
+                                  </span>
+                                )}
+                                {showTime && (
+                                  <span className="block text-[8px] leading-tight opacity-70">
+                                    {format(entry.start, 'HH:mm')}〜{format(entry.end, 'HH:mm')}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="py-6 text-center text-sm text-text-secondary">
+              調理ステップの情報がありません
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface ShareMenuModalProps {
+  weekLabel: string
+  shareCode: string
+  importCode: string
+  onImportCodeChange: (value: string) => void
+  onShare: () => Promise<void>
+  onImport: () => Promise<void>
+  onClose: () => void
+}
+
+function ShareMenuModal({
+  weekLabel,
+  shareCode,
+  importCode,
+  onImportCodeChange,
+  onShare,
+  onImport,
+  onClose,
+}: ShareMenuModalProps) {
+  return (
+    <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-t-2xl bg-bg-primary p-4 pb-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-bold">週間献立を共有</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-text-secondary hover:text-accent">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mb-3 text-xs text-text-secondary">
+          {weekLabel} の献立をリンクまたは共有コードで送信できます。
+        </p>
+
+        <button
+          onClick={onShare}
+          className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm font-bold text-white"
+        >
+          <Share2 className="h-4 w-4" />
+          共有リンクを作成
+        </button>
+
+        <div className="mb-2 flex items-center gap-2 text-xs font-bold text-text-secondary">
+          <Download className="h-4 w-4" />
+          共有コード
+        </div>
+        <textarea
+          readOnly
+          value={shareCode}
+          className="mb-4 min-h-20 w-full rounded-xl bg-white/5 p-3 text-[11px] text-text-secondary outline-none"
+        />
+
+        <div className="mb-2 text-xs font-bold text-text-secondary">受信コードを読み込み</div>
+        <textarea
+          value={importCode}
+          onChange={(e) => onImportCodeChange(e.target.value)}
+          className="mb-3 min-h-20 w-full rounded-xl bg-white/5 p-3 text-[11px] text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent/50"
+          placeholder="共有コードを貼り付け"
+        />
+        <button
+          onClick={onImport}
+          className="w-full rounded-xl bg-white/10 py-2.5 text-sm font-bold text-text-primary transition-colors hover:bg-white/20"
+        >
+          コードを読み込む
+        </button>
+      </div>
     </div>
   )
 }
