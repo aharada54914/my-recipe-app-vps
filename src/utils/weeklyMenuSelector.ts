@@ -10,6 +10,7 @@ import { calculateMatchRate, isHelsioDeli } from './recipeUtils'
 import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { format, addDays } from 'date-fns'
 import { filterRecipesByRole, isRecipeAllowedForRole, type MealRole } from './mealRoleRules'
+import { SEASONAL_WEIGHT } from '../constants/recipeConstants'
 
 export interface MenuSelectionConfig {
   seasonalPriority: SeasonalPriority
@@ -30,9 +31,9 @@ interface SelectionContext {
 }
 
 const SEASONAL_WEIGHTS: Record<SeasonalPriority, number> = {
-  low: 0.5,
-  medium: 1.5,
-  high: 3.0,
+  low: SEASONAL_WEIGHT.OFF,
+  medium: SEASONAL_WEIGHT.NORMAL,
+  high: SEASONAL_WEIGHT.PEAK,
 }
 
 const TARGET_DAYS = 7

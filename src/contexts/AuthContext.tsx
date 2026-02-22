@@ -32,7 +32,8 @@ function loadStoredToken(): string | null {
 
 function loadStoredUser(): GoogleUser | null {
   try {
-    const stored = localStorage.getItem(USER_KEY)
+    // H3: Use sessionStorage for user info (clears on tab close, more secure)
+    const stored = sessionStorage.getItem(USER_KEY)
     return stored ? (JSON.parse(stored) as GoogleUser) : null
   } catch {
     return null
@@ -81,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       setProviderToken(null)
       try {
-        localStorage.removeItem(USER_KEY)
+        sessionStorage.removeItem(USER_KEY)
         sessionStorage.removeItem(TOKEN_KEY)
         sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
       } catch { /* ignore */ }
@@ -146,7 +147,7 @@ function OAuthEnabledAuthProvider({
         if (res.ok) {
           const userInfo = (await res.json()) as GoogleUser
           setUser(userInfo)
-          localStorage.setItem(USER_KEY, JSON.stringify(userInfo))
+          sessionStorage.setItem(USER_KEY, JSON.stringify(userInfo))
         }
       } catch { /* ignore fetch errors */ }
       setLoading(false)
@@ -165,7 +166,7 @@ function OAuthEnabledAuthProvider({
     setUser(null)
     setProviderToken(null)
     try {
-      localStorage.removeItem(USER_KEY)
+      sessionStorage.removeItem(USER_KEY)
       sessionStorage.removeItem(TOKEN_KEY)
       sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
     } catch { /* ignore */ }

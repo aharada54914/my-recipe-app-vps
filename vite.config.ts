@@ -53,6 +53,20 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
+          'vendor-dexie':  ['dexie', 'dexie-react-hooks'],
+          'vendor-ui':     ['lucide-react', 'fuse.js', '@tanstack/react-virtual'],
+          'vendor-google': ['@google/generative-ai', '@react-oauth/google'],
+          'data-hotcook':  ['./src/data/recipes-hotcook.json'],
+          'data-healsio':  ['./src/data/recipes-healsio.json'],
+        },
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',

@@ -1,6 +1,7 @@
 import { subMinutes } from 'date-fns'
 import type { Ingredient, SaltMode, SaltResult, CookingStep, ScheduleEntry, RecipeSchedule, DeviceType, Recipe } from '../db/db'
 import { resolveIngredientName } from '../data/ingredientVariants'
+import { SOY_SAUCE_SALT_RATIO, SOY_SAUCE_DENSITY, MISO_SALT_RATIO } from '../constants/recipeConstants'
 
 /**
  * Format a quantity with Japanese vibes:
@@ -114,8 +115,8 @@ export function adjustIngredients(
  */
 export function calculateSalt(totalWeightG: number, mode: SaltMode): SaltResult {
   const saltG = Math.round((totalWeightG * mode) / 100 * 10) / 10
-  const soySauceMl = Math.round((saltG / 0.16 / 1.17) * 10) / 10
-  const misoG = Math.round((saltG / 0.12) * 10) / 10
+  const soySauceMl = Math.round((saltG / SOY_SAUCE_SALT_RATIO / SOY_SAUCE_DENSITY) * 10) / 10
+  const misoG = Math.round((saltG / MISO_SALT_RATIO) * 10) / 10
   return { saltG, soySauceMl, misoG }
 }
 

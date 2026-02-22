@@ -5,6 +5,7 @@ import {
   calculateSalt,
   calculateSchedule,
   calculateMatchRate,
+  calculateMultiRecipeSchedule,
 } from '../recipeUtils'
 import type { Ingredient, CookingStep, SaltMode } from '../../db/db'
 
@@ -158,5 +159,88 @@ describe('calculateMatchRate', () => {
     const stock = new Set(['肉', '玉ねぎ'])
 
     expect(calculateMatchRate(ingredients, stock)).toBe(100)
+  })
+})
+
+describe('calculateMultiRecipeSchedule', () => {
+  const TARGET = new Date('2024-12-25T18:00:00')
+
+  it('empty array returns empty recipes and targetTime as overallStart', () => {
+    const result = calculateMultiRecipeSchedule(TARGET, [])
+    expect(result.recipes).toHaveLength(0)
+    expect(result.conflicts).toHaveLength(0)
+    expect(result.targetTime).toBe(TARGET)
+    expect(result.overallStart.getTime()).toBe(TARGET.getTime())
+  })
+
+  it('single recipe: last step ends exactly at targetTime', () => {
+    const steps: CookingStep[] = [
+      { name: '下ごしらえ', durationMinutes: 10 },
+      { name: '加熱', durationMinutes: 30, isDeviceStep: true },
+      { name: '盛り付け', durationMinutes: 5 },
+    ]
+    const result = calculateMultiRecipeSchedule(TARGET, [
+      { recipeId: 1, title: 'スープ', steps, device: 'hotcook' },
+    ])
+
+    expect(result.recipes).toHaveLength(1)
+    const entries = result.recipes[0].entries
+    const lastEntry = entries[entries.length - 1]
+    expect(lastEntry.end.getTime()).toBe(TARGET.getTime())
+    expect(result.conflicts).toHaveLength(0)
+  })
+
+  it('multiple non-conflicting recipes: each last step ends at targetTime', () => {
+    const stepsA: CookingStep[] = [
+      { name: '準備', durationMinutes: 15 },
+      { name: '加熱', durationMinutes: 20 },
+    ]
+    const stepsB: CookingStep[] = [
+      { name: '切る', durationMinutes: 10 },
+      { name: '炒める', durationMinutes: 10 },
+    ]
+    const result = calculateMultiRecipeSchedule(TARGET, [
+      { recipeId: 1, title: 'レシピA', steps: stepsA, device: 'manual' },
+      { recipeId: 2, title: 'レシピB', steps: stepsB, device: 'manual' },
+    ])
+
+    expect(result.recipes).toHaveLength(2)
+    for (const rs of result.recipes) {
+      const last = rs.entries[rs.entries.length - 1]
+      expect(last.end.getTime()).toBe(TARGET.getTime())
+    }
+    expect(result.conflicts).toHaveLength(0)
+  })
+
+  it('two hotcook recipes conflict: second recipe is shifted earlier', () => {
+    const deviceStep: CookingStep[] = [
+      { name: '加熱', durationMinutes: 30, isDeviceStep: true },
+    ]
+    const result = calculateMultiRecipeSchedule(TARGET, [
+      { recipeId: 1, title: 'レシピA', steps: deviceStep, device: 'hotcook' },
+      { recipeId: 2, title: 'レシピB', steps: deviceStep, device: 'hotcook' },
+    ])
+
+    expect(result.recipes).toHaveLength(2)
+    // At least one conflict should be detected for the shifted recipe
+    expect(result.conflicts.length).toBeGreaterThan(0)
+
+    // Shifted recipe's last step must end at or before targetTime
+    for (const rs of result.recipes) {
+      const last = rs.entries[rs.entries.length - 1]
+      expect(last.end.getTime()).toBeLessThanOrEqual(TARGET.getTime())
+    }
+  })
+
+  it('overallStart is the earliest start across all recipe entries', () => {
+    const stepsA: CookingStep[] = [{ name: '長い調理', durationMinutes: 60 }]
+    const stepsB: CookingStep[] = [{ name: '短い調理', durationMinutes: 10 }]
+    const result = calculateMultiRecipeSchedule(TARGET, [
+      { recipeId: 1, title: '長いA', steps: stepsA, device: 'manual' },
+      { recipeId: 2, title: '短いB', steps: stepsB, device: 'manual' },
+    ])
+
+    const expectedEarliestMs = TARGET.getTime() - 60 * 60000
+    expect(result.overallStart.getTime()).toBe(expectedEarliestMs)
   })
 })

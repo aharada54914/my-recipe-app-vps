@@ -7,6 +7,20 @@ export interface VersionChangeSection {
 
 export const VERSION_CHANGELOG: VersionChangeSection[] = [
   {
+    title: 'V1.9.0 と V1.8.0 の差分',
+    summary: 'モバイルChrome画面ブラック修正、コード品質向上リファクタリング、テスト拡充を実施。',
+    points: [
+      'モバイルChromeでモーダル表示時に画面が黒くなる不具合を createPortal 化で修正',
+      'Vite manualChunks によりバンドルを vendor-react / vendor-dexie / data-hotcook / data-healsio 等に分割し、初回ロードを最適化',
+      'RecipeDetail の useLiveQuery を Promise.all で統合、viewHistory 書き込みを upsert に改善',
+      'Googleユーザー情報の保存先を sessionStorage に統一し、セキュリティを強化',
+      '巨大化していた AskGeminiPage（666行）と SettingsPage（633行）をタブコンポーネント群に分割してメンテナンス性を向上',
+      'マジックナンバーを recipeConstants.ts に集約、useRecipeImport の window.confirm をコールバック化してテスト容易性を改善',
+      'calculateMultiRecipeSchedule の単体テストを追加（空配列・単一・複数・競合・overallStart 5ケース）',
+    ],
+    refs: ['aa96b39', 'v1.9.0'],
+  },
+  {
     title: 'V1.8.0 と V1.7.5 の差分',
     summary: 'アプリの品質改善・型安全性の向上と、使い方のヘルプドキュメント拡充を実施。',
     points: [

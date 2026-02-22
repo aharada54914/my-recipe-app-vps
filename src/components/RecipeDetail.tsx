@@ -25,10 +25,17 @@ interface RecipeDetailProps {
 }
 
 export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
-  const recipe = useLiveQuery(() => db.recipes.get(recipeId), [recipeId])
-  const isFav = useLiveQuery(() => db.favorites.where('recipeId').equals(recipeId).count(), [recipeId])
-  const stockItems = useLiveQuery(() => db.stock.toArray(), [])
-  const existingNote = useLiveQuery(() => db.userNotes.where('recipeId').equals(recipeId).first(), [recipeId])
+  // C3: Consolidated single useLiveQuery with Promise.all (reduces redundant DB scans)
+  const queryResult = useLiveQuery(
+    () => Promise.all([
+      db.recipes.get(recipeId),
+      db.favorites.where('recipeId').equals(recipeId).count(),
+      db.stock.toArray(),
+      db.userNotes.where('recipeId').equals(recipeId).first(),
+    ]),
+    [recipeId]
+  )
+  const [recipe, isFav, stockItems, existingNote] = queryResult ?? [undefined, 0, [], undefined]
 
   const [servings, setServings] = useState<number | null>(null)
   // T-13: User notes state
@@ -43,9 +50,15 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   // T-11: Keep screen on during recipe viewing
   useWakeLock()
 
-  // Record view history
+  // C2: Record view history — upsert to avoid duplicate accumulation
   useEffect(() => {
-    db.viewHistory.add({ recipeId, viewedAt: new Date() })
+    db.viewHistory.where('recipeId').equals(recipeId).first().then(existing => {
+      if (existing) {
+        db.viewHistory.update(existing.id!, { viewedAt: new Date() })
+      } else {
+        db.viewHistory.add({ recipeId, viewedAt: new Date() })
+      }
+    })
   }, [recipeId])
 
   // T-13: Save note handler (must be before early return — Rules of Hooks)
