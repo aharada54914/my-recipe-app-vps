@@ -4,8 +4,9 @@ import { format, addMinutes } from 'date-fns'
 import { ArrowLeft, CalendarClock, Search, X } from 'lucide-react'
 import Fuse from 'fuse.js'
 import { db } from '../db/db'
-import type { Recipe } from '../db/db'
+import type { Recipe, RecipeSchedule, ScheduleEntry } from '../db/db'
 import { calculateMultiRecipeSchedule } from '../utils/recipeUtils'
+import type { DeviceConflict, MultiRecipeSchedule } from '../utils/recipeUtils'
 import { useDebounce } from '../hooks/useDebounce'
 
 const LANE_COLORS = [
@@ -93,7 +94,7 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
     setTargetTime((prev) => addMinutes(prev, delta))
   }
 
-  const multiSchedule = useMemo(() => {
+  const multiRecipeSchedule: MultiRecipeSchedule | null = useMemo(() => {
     if (selectedRecipes.length === 0) return null
     return calculateMultiRecipeSchedule(
       targetTime,
@@ -103,8 +104,8 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
 
   if (!recipeSummaries) return null
 
-  const totalSpanMs = multiSchedule
-    ? targetTime.getTime() - multiSchedule.overallStart.getTime()
+  const totalSpanMs = multiRecipeSchedule
+    ? targetTime.getTime() - multiRecipeSchedule.overallStart.getTime()
     : 0
 
   return (
@@ -210,21 +211,21 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
         </div>
 
         {/* Gantt chart */}
-        {multiSchedule && totalSpanMs > 0 && (
+        {multiRecipeSchedule && totalSpanMs > 0 && (
           <div className="rounded-2xl bg-bg-card p-4">
             {/* Time axis labels */}
             <div className="mb-3 flex justify-between text-[10px] text-text-secondary">
-              <span>{format(multiSchedule.overallStart, 'HH:mm')}</span>
+              <span>{format(multiRecipeSchedule.overallStart, 'HH:mm')}</span>
               <span className="font-bold text-accent">
                 {format(targetTime, 'HH:mm')} いただきます
               </span>
             </div>
 
             {/* Device conflict warnings */}
-            {multiSchedule.conflicts.length > 0 && (
+            {multiRecipeSchedule.conflicts.length > 0 && (
               <div className="mb-3 rounded-xl bg-yellow-500/10 px-3 py-2">
                 <div className="text-xs font-bold text-yellow-400 mb-1">⚠️ デバイス競合あり</div>
-                {multiSchedule.conflicts.map((c, i) => (
+                {multiRecipeSchedule.conflicts.map((c: DeviceConflict, i: number) => (
                   <div key={i} className="text-[10px] text-yellow-300">
                     {c.device === 'hotcook' ? '🍲' : '♨️'} {c.recipeTitle}: {c.shiftMinutes}分前倒し
                   </div>
@@ -234,7 +235,7 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
 
             {/* Lanes */}
             <div className="space-y-3">
-              {multiSchedule.recipes.map((rs) => {
+              {multiRecipeSchedule.recipes.map((rs: RecipeSchedule) => {
                 const color = LANE_COLORS[rs.colorIndex % LANE_COLORS.length]
                 return (
                   <div key={rs.recipeId}>
@@ -247,9 +248,9 @@ export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
                       {selectedRecipes.find(r => r.id === rs.recipeId)?.device === 'healsio' && ' ♨️'}
                     </div>
                     <div className="relative h-14 rounded-lg bg-white/5">
-                      {rs.entries.map((entry, i) => {
+                      {rs.entries.map((entry: ScheduleEntry, i: number) => {
                         const leftPct =
-                          ((entry.start.getTime() - multiSchedule.overallStart.getTime()) / totalSpanMs) * 100
+                          ((entry.start.getTime() - multiRecipeSchedule.overallStart.getTime()) / totalSpanMs) * 100
                         const widthPct =
                           ((entry.end.getTime() - entry.start.getTime()) / totalSpanMs) * 100
                         const showText = widthPct > 5

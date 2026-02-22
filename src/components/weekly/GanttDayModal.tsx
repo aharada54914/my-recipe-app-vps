@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { parse, format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { CalendarClock, X } from 'lucide-react'
-import type { Recipe, RecipeSchedule } from '../../db/db'
-import type { DeviceConflict } from '../../utils/recipeUtils'
+import type { Recipe, RecipeSchedule, ScheduleEntry } from '../../db/db'
+import type { DeviceConflict, MultiRecipeSchedule } from '../../utils/recipeUtils'
 import { calculateMultiRecipeSchedule } from '../../utils/recipeUtils'
 
 const LANE_COLORS = [
@@ -28,7 +28,7 @@ export function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, o
         return list
     }, [mainRecipe, sideRecipe])
 
-    const schedule = useMemo(() => {
+    const schedule: MultiRecipeSchedule | null = useMemo(() => {
         if (recipeInputs.length === 0) return null
         try {
             return calculateMultiRecipeSchedule(desiredMealTime, recipeInputs)
@@ -98,7 +98,7 @@ export function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, o
                                                     {rs.recipeTitle}
                                                 </div>
                                                 <div className="relative h-14 rounded-lg bg-white/5">
-                                                    {rs.entries.map((entry, ei: number) => {
+                                                    {rs.entries.map((entry: ScheduleEntry, ei: number) => {
                                                         const leftPct = ((entry.start.getTime() - schedule.overallStart.getTime()) / totalSpanMs) * 100
                                                         const widthPct = ((entry.end.getTime() - entry.start.getTime()) / totalSpanMs) * 100
                                                         const showText = widthPct > 5

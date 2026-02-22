@@ -4,7 +4,7 @@
 
 ## 📚 関連ドキュメント
 
-- **RECIPE_FEATURES_PLAN.md**: 不足機能の詳細分析レポート
+- **docs/plans/RECIPE_FEATURES_PLAN.md**: 不足機能の詳細分析レポート
 - **このファイル**: すぐに実装を始められるクイックスタートガイド
 
 ---
@@ -283,7 +283,7 @@ export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'
   const structuredData = await extractStructuredData(url)
   if (structuredData) {
     // 構造化データからRecipeを生成
-    // （実装は RECIPE_FEATURES_PLAN.md 参照）
+    // （実装は docs/plans/RECIPE_FEATURES_PLAN.md 参照）
   }
   
   // 2. フォールバック: HTMLからテキスト抽出
@@ -348,9 +348,9 @@ export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'
 
 ## 📚 参考資料
 
-- **RECIPE_FEATURES_PLAN.md**: 詳細な機能分析と実装計画
+- **docs/plans/RECIPE_FEATURES_PLAN.md**: 詳細な機能分析と実装計画
 - **CLAUDE.md**: プロジェクト全体のガイドライン
-- **PLAN.md**: 既存のバグ修正とリファクタリング計画
+- **docs/plans/PLAN.md**: 既存のバグ修正とリファクタリング計画
 
 ---
 
