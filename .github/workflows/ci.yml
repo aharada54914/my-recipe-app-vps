@@ -20,13 +20,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            env -u npm_config_http_proxy npm ci
-          else
-            echo "package-lock.json not found; generating lockfile via npm install"
-            env -u npm_config_http_proxy npm install --package-lock
-          fi
+        run: env -u npm_config_http_proxy npm ci
 
       - name: Lint
         run: env -u npm_config_http_proxy npm run lint
