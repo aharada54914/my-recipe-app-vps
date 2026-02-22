@@ -1,9 +1,15 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock Dexie db and seasonal data before importing the module under test
+const { mockRecipesToArray } = vi.hoisted(() => ({
+  mockRecipesToArray: vi.fn<() => Promise<import('../../db/db').Recipe[]>>(),
+}))
+
 vi.mock('../../db/db', () => ({
   db: {
-    recipes: { count: vi.fn(), offset: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) },
+    recipes: {
+      toArray: mockRecipesToArray,
+      limit: vi.fn(() => ({ toArray: vi.fn(() => []) })),
+    },
     stock: { filter: vi.fn(() => ({ toArray: vi.fn(() => []) })) },
     weeklyMenus: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
     viewHistory: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
@@ -14,33 +20,46 @@ vi.mock('../../data/seasonalIngredients', () => ({
   getCurrentSeasonalIngredients: vi.fn(() => []),
 }))
 
-import { getWeekStartDate } from '../weeklyMenuSelector'
+import { getWeekStartDate, selectWeeklyMenu } from '../weeklyMenuSelector'
+import type { Recipe } from '../../db/db'
+
+function makeRecipe(id: number, device: Recipe['device'], category: Recipe['category'] = '主菜'): Recipe {
+  return {
+    id,
+    title: `${device}-${id}`,
+    recipeNumber: `R-${id}`,
+    device,
+    category,
+    baseServings: 2,
+    totalWeightG: 500,
+    ingredients: [{ name: '玉ねぎ', quantity: 1, unit: '個', category: 'main' }],
+    steps: [{ name: '調理', durationMinutes: 10 }],
+    totalTimeMinutes: 10,
+  }
+}
 
 describe('getWeekStartDate', () => {
   it('returns the Sunday of the current week for a Sunday', () => {
-    // 2026-01-04 is a Sunday
     const sunday = new Date('2026-01-04T12:00:00')
     const result = getWeekStartDate(sunday)
-    expect(result.getDay()).toBe(0) // Sunday
+    expect(result.getDay()).toBe(0)
     expect(result.getFullYear()).toBe(2026)
     expect(result.getMonth()).toBe(0)
     expect(result.getDate()).toBe(4)
   })
 
   it('returns the preceding Sunday for a midweek date', () => {
-    // 2026-01-07 is a Wednesday
     const wednesday = new Date('2026-01-07T10:00:00')
     const result = getWeekStartDate(wednesday)
-    expect(result.getDay()).toBe(0) // Sunday
-    expect(result.getDate()).toBe(4) // 2026-01-04
+    expect(result.getDay()).toBe(0)
+    expect(result.getDate()).toBe(4)
   })
 
   it('returns the preceding Sunday for a Saturday', () => {
-    // 2026-01-10 is a Saturday
     const saturday = new Date('2026-01-10T23:00:00')
     const result = getWeekStartDate(saturday)
     expect(result.getDay()).toBe(0)
-    expect(result.getDate()).toBe(4) // 2026-01-04
+    expect(result.getDate()).toBe(4)
   })
 
   it('sets time to midnight', () => {
@@ -57,5 +76,35 @@ describe('getWeekStartDate', () => {
     const original = date.getTime()
     getWeekStartDate(date)
     expect(date.getTime()).toBe(original)
+  })
+})
+
+describe('selectWeeklyMenu device balance', () => {
+  beforeEach(() => {
+    mockRecipesToArray.mockReset()
+  })
+
+  it('keeps hotcook in the weekly main dishes even when healsio candidates are dominant', async () => {
+    const mains: Recipe[] = [
+      ...Array.from({ length: 3 }, (_, i) => makeRecipe(i + 1, 'hotcook')),
+      ...Array.from({ length: 18 }, (_, i) => makeRecipe(i + 101, 'healsio')),
+    ]
+    const sides: Recipe[] = Array.from({ length: 8 }, (_, i) => makeRecipe(i + 201, 'healsio', '副菜'))
+
+    mockRecipesToArray.mockResolvedValue([...mains, ...sides])
+
+    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    })
+
+    const selectedMainIds = menu.map((item) => item.recipeId)
+    const selectedMains = mains.filter((recipe) => selectedMainIds.includes(recipe.id!))
+    const hotcookCount = selectedMains.filter((recipe) => recipe.device === 'hotcook').length
+
+    expect(menu).toHaveLength(7)
+    expect(hotcookCount).toBeGreaterThan(0)
   })
 })
