@@ -1,4 +1,5 @@
 import type { CalendarEventRecord, DeviceType, Favorite, Recipe, RecipeCategory, ViewHistory, WeeklyMenu } from '../db/db'
+import { VIEW_HISTORY_HALF_LIFE_DAYS, FAVORITE_HALF_LIFE_DAYS, CALENDAR_EVENT_HALF_LIFE_DAYS } from '../constants/recipeConstants'
 
 export interface PreferenceSignalsInput {
   recipes: Recipe[]
@@ -60,7 +61,7 @@ export function buildPreferenceProfile(input: PreferenceSignalsInput): Preferenc
   for (const entry of input.viewHistory) {
     const recipe = recipeById.get(entry.recipeId)
     if (!recipe) continue
-    const weight = 1.2 * decayWeight(daysAgo(new Date(entry.viewedAt), now), 21)
+    const weight = 1.2 * decayWeight(daysAgo(new Date(entry.viewedAt), now), VIEW_HISTORY_HALF_LIFE_DAYS)
     addMapValue(recipeAffinity, entry.recipeId, weight)
     contributeRecipeContext(recipe, weight * 0.55, categoryAffinity, deviceAffinity, ingredientAffinity)
   }
@@ -68,7 +69,7 @@ export function buildPreferenceProfile(input: PreferenceSignalsInput): Preferenc
   for (const fav of input.favorites) {
     const recipe = recipeById.get(fav.recipeId)
     if (!recipe) continue
-    const weight = 4.5 * decayWeight(daysAgo(new Date(fav.addedAt), now), 45)
+    const weight = 4.5 * decayWeight(daysAgo(new Date(fav.addedAt), now), FAVORITE_HALF_LIFE_DAYS)
     addMapValue(recipeAffinity, fav.recipeId, weight)
     contributeRecipeContext(recipe, weight * 0.8, categoryAffinity, deviceAffinity, ingredientAffinity)
   }
@@ -95,7 +96,7 @@ export function buildPreferenceProfile(input: PreferenceSignalsInput): Preferenc
     if (event.eventType !== 'meal') continue
     const recipe = recipeById.get(event.recipeId)
     if (!recipe) continue
-    const weight = 2.4 * decayWeight(daysAgo(new Date(event.createdAt), now), 30)
+    const weight = 2.4 * decayWeight(daysAgo(new Date(event.createdAt), now), CALENDAR_EVENT_HALF_LIFE_DAYS)
     addMapValue(recipeAffinity, event.recipeId, weight)
     contributeRecipeContext(recipe, weight * 0.6, categoryAffinity, deviceAffinity, ingredientAffinity)
   }

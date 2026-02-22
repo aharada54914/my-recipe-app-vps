@@ -3,7 +3,13 @@ import type { Recipe, ParseStatus } from '../db/db'
 import { db } from '../db/db'
 import { parseRecipeText, parseRecipeFromUrl } from '../utils/geminiParser'
 
-export function useRecipeImport() {
+export interface UseRecipeImportOptions {
+    /** Called when a duplicate title is detected. Should resolve to true to confirm overwrite, false to cancel.
+     *  Defaults to window.confirm when not provided (preserves existing behaviour). */
+    onDuplicateFound?: (title: string) => Promise<boolean>
+}
+
+export function useRecipeImport(options?: UseRecipeImportOptions) {
     const [inputText, setInputText] = useState('')
     const [inputUrl, setInputUrl] = useState('')
     const [status, setStatus] = useState<ParseStatus>('idle')
@@ -32,9 +38,10 @@ export function useRecipeImport() {
 
         const existing = await db.recipes.where('title').equals(parsed.title).first()
         if (existing) {
-            const confirmed = window.confirm(
-                `「${parsed.title}」は既に登録されています。重複して保存しますか？`
-            )
+            // M2: Delegate confirmation to caller when possible (enables testability)
+            const confirmed = options?.onDuplicateFound
+                ? await options.onDuplicateFound(parsed.title)
+                : window.confirm(`「${parsed.title}」は既に登録されています。重複して保存しますか？`)
             if (!confirmed) return
         }
 

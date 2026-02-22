@@ -1,5 +1,6 @@
 import type { Recipe, Ingredient, CookingStep, DeviceType, RecipeCategory } from '../db/db'
 import { db } from '../db/db'
+import { INGREDIENT_UNIT_WEIGHT_G, UNKNOWN_UNIT_FALLBACK_WEIGHT_G } from '../constants/recipeConstants'
 
 // --- RFC4180 CSV Parser (multiline-safe) ---
 
@@ -372,18 +373,11 @@ function estimateTotalWeight(ingredients: Ingredient[]): number {
 
         if (ing.unit === 'g' || ing.unit === 'ml' || ing.unit === 'mL') {
             weight += ing.quantity
-        } else if (ing.unit === '個' || ing.unit === '本' || ing.unit === '株') {
-            weight += ing.quantity * 150 // rough estimate per piece
-        } else if (ing.unit === '片') {
-            weight += ing.quantity * 10
-        } else if (ing.unit === '大さじ') {
-            weight += ing.quantity * 15
-        } else if (ing.unit === '小さじ') {
-            weight += ing.quantity * 5
         } else if (ing.unit === '適量') {
             // skip
         } else {
-            weight += 50 // unknown unit fallback
+            const unitWeight = INGREDIENT_UNIT_WEIGHT_G[ing.unit] ?? UNKNOWN_UNIT_FALLBACK_WEIGHT_G
+            weight += ing.quantity * unitWeight
         }
     }
     return Math.max(200, Math.round(weight / 50) * 50) // round to nearest 50g, min 200g

@@ -1,0 +1,103 @@
+import { useState, useRef } from 'react'
+import { Download, Upload } from 'lucide-react'
+import { exportData } from '../../utils/dataExport'
+import { importData, type ImportMode } from '../../utils/dataImport'
+
+export function DataTab() {
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'done' | 'error'>('idle')
+  const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'done' | 'error'>('idle')
+  const [importMessage, setImportMessage] = useState('')
+  const [importMode, setImportMode] = useState<ImportMode>('overwrite')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleExport = async () => {
+    setExportStatus('exporting')
+    try {
+      await exportData()
+      setExportStatus('done')
+    } catch {
+      setExportStatus('error')
+    }
+    setTimeout(() => setExportStatus('idle'), 3000)
+  }
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportStatus('importing')
+    const result = await importData(file, importMode)
+    setImportMessage(result.message)
+    setImportStatus(result.success ? 'done' : 'error')
+    setTimeout(() => setImportStatus('idle'), 3000)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  return (
+    <>
+      <div className="rounded-2xl bg-bg-card p-4">
+        <h4 className="mb-3 text-sm font-bold text-text-secondary">データ管理</h4>
+
+        <button
+          onClick={handleExport}
+          disabled={exportStatus === 'exporting'}
+          className="ui-btn ui-btn-secondary mb-3 flex w-full items-center justify-center gap-2 text-sm font-semibold transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
+        >
+          <Download className="h-4 w-4" />
+          {exportStatus === 'exporting' ? 'エクスポート中...'
+            : exportStatus === 'done' ? 'ダウンロード完了'
+              : exportStatus === 'error' ? 'エクスポート失敗'
+                : 'データをエクスポート'
+          }
+        </button>
+
+        <div className="mb-3 flex gap-2">
+          <button
+            onClick={() => setImportMode('overwrite')}
+            className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${importMode === 'overwrite'
+              ? 'bg-accent text-white'
+              : 'bg-white/5 text-text-secondary hover:bg-white/10'
+              }`}
+          >
+            上書き
+          </button>
+          <button
+            onClick={() => setImportMode('merge')}
+            className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${importMode === 'merge'
+              ? 'bg-accent text-white'
+              : 'bg-white/5 text-text-secondary hover:bg-white/10'
+              }`}
+          >
+            マージ
+          </button>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleImport}
+          className="hidden"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={importStatus === 'importing'}
+          className="ui-btn ui-btn-secondary flex w-full items-center justify-center gap-2 text-sm font-semibold transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
+        >
+          <Upload className="h-4 w-4" />
+          {importStatus === 'importing' ? 'インポート中...'
+            : importStatus === 'done' ? importMessage
+              : importStatus === 'error' ? importMessage
+                : 'データをインポート'
+          }
+        </button>
+      </div>
+
+      <div className="rounded-2xl bg-white/5 px-4 py-3">
+        <p className="text-xs text-text-secondary leading-relaxed">
+          「データをエクスポート」することで、レシピ・在庫・お気に入り・メモ・履歴などの全データをJSONファイルとしてお手元に保存できます。<br />
+          インポートの際は、「上書き」を選ぶと現在のデータをすべて置き換え、「マージ」を選ぶと現在のデータに不足分を追加（合成）します。
+        </p>
+      </div>
+    </>
+  )
+}
