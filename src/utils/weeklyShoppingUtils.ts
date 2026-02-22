@@ -15,6 +15,49 @@ export interface AggregatedIngredient {
   inStock: boolean
 }
 
+const STORE_SECTION_ORDER = [
+  '野菜・きのこ',
+  '果物',
+  '肉・ハム',
+  '魚介',
+  '豆腐・納豆・卵',
+  '乳製品',
+  '米・パン・麺',
+  '冷凍食品',
+  '調味料・乾物・缶詰',
+  '飲料・その他',
+] as const
+
+type StoreSection = typeof STORE_SECTION_ORDER[number]
+
+const STORE_SECTION_RULES: Array<{ section: StoreSection, keywords: string[] }> = [
+  { section: '野菜・きのこ', keywords: ['ねぎ', '玉ねぎ', 'キャベツ', '白菜', '大根', '人参', 'にんじん', 'じゃがいも', 'なす', 'トマト', 'きゅうり', 'ピーマン', 'ブロッコリー', 'ほうれん草', 'レタス', 'もやし', 'しめじ', 'えのき', 'きのこ'] },
+  { section: '果物', keywords: ['りんご', 'バナナ', 'みかん', 'レモン', 'いちご', 'キウイ', '果物'] },
+  { section: '肉・ハム', keywords: ['牛', '豚', '鶏', 'ひき肉', 'ベーコン', 'ハム', 'ソーセージ'] },
+  { section: '魚介', keywords: ['鮭', 'さば', 'いわし', 'まぐろ', 'かつお', 'えび', 'いか', 'たこ', '貝', 'しらす', '魚'] },
+  { section: '豆腐・納豆・卵', keywords: ['豆腐', '厚揚げ', '油揚げ', '納豆', '卵', 'たまご', 'がんも'] },
+  { section: '乳製品', keywords: ['牛乳', 'チーズ', 'バター', 'ヨーグルト', '生クリーム'] },
+  { section: '米・パン・麺', keywords: ['米', 'ごはん', 'パン', '食パン', 'うどん', 'そば', 'パスタ', '麺', '小麦粉', '片栗粉'] },
+  { section: '冷凍食品', keywords: ['冷凍'] },
+  { section: '調味料・乾物・缶詰', keywords: ['塩', '砂糖', '醤油', 'しょうゆ', 'みりん', '酒', '酢', '味噌', 'みそ', 'だし', 'コンソメ', 'オイスター', 'ごま油', 'サラダ油', 'オリーブオイル', '胡椒', 'こしょう', 'カレー粉', '海苔', 'のり', '乾燥', '缶'] },
+]
+
+function classifyStoreSection(name: string): StoreSection {
+  for (const rule of STORE_SECTION_RULES) {
+    if (rule.keywords.some((keyword) => name.includes(keyword))) {
+      return rule.section
+    }
+  }
+  return '飲料・その他'
+}
+
+function formatItemLine(item: AggregatedIngredient): string {
+  const qty = item.totalQuantity === '適量' || item.unit === '適量'
+    ? '適量'
+    : formatQuantityVibe(item.totalQuantity, item.unit)
+  return `・${item.name} ${qty}`
+}
+
 function normalizeServings(value: number | undefined, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return Math.min(10, Math.max(1, Math.round(value)))
@@ -168,6 +211,40 @@ export function formatWeeklyShoppingList(
         ? '適量'
         : formatQuantityVibe(item.totalQuantity, item.unit)
       text += `・${item.name} ${qty}\n`
+    }
+  }
+
+  return text.trimEnd()
+}
+
+/**
+ * Format shopping list by common supermarket sections for Google Calendar registration.
+ */
+export function formatWeeklyShoppingListByStoreSection(
+  weekStart: string,
+  ingredients: AggregatedIngredient[]
+): string {
+  const missing = ingredients.filter((ing) => !ing.inStock)
+  if (missing.length === 0) {
+    return `${weekStart}〜 の週間献立\n全ての材料が揃っています！`
+  }
+
+  const grouped = new Map<StoreSection, AggregatedIngredient[]>()
+  for (const item of missing) {
+    const section = classifyStoreSection(item.name)
+    const list = grouped.get(section) ?? []
+    list.push(item)
+    grouped.set(section, list)
+  }
+
+  let text = `${weekStart}〜 買い物リスト（売場順）\n─────────────\n`
+  for (const section of STORE_SECTION_ORDER) {
+    const items = grouped.get(section)
+    if (!items || items.length === 0) continue
+
+    text += `【${section}】\n`
+    for (const item of items.sort((a, b) => a.name.localeCompare(b.name, 'ja'))) {
+      text += `${formatItemLine(item)}\n`
     }
   }
 

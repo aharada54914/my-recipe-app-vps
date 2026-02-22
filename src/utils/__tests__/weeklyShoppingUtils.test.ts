@@ -4,6 +4,7 @@ import {
   buildWeeklyMenuRecipesWithServings,
   filterBySeasoningOption,
   formatWeeklyShoppingList,
+  formatWeeklyShoppingListByStoreSection,
   getMissingWeeklyIngredients,
 } from '../weeklyShoppingUtils'
 import type { Recipe, StockItem, WeeklyMenu } from '../../db/db'
@@ -206,5 +207,34 @@ describe('filterBySeasoningOption', () => {
 
   it('keeps both main and sub ingredients when seasoning toggle is ON', () => {
     expect(filterBySeasoningOption(list, true)).toHaveLength(2)
+  })
+})
+
+
+describe('formatWeeklyShoppingListByStoreSection', () => {
+  it('groups ingredients by common supermarket sections', () => {
+    const items = [
+      { name: '玉ねぎ', totalQuantity: 1, unit: '個', ingredientCategory: 'main' as const, inStock: false },
+      { name: '豚肉', totalQuantity: 200, unit: 'g', ingredientCategory: 'main' as const, inStock: false },
+      { name: '醤油', totalQuantity: 2, unit: '大さじ', ingredientCategory: 'sub' as const, inStock: false },
+    ]
+
+    const result = formatWeeklyShoppingListByStoreSection('2026-01-06', items)
+
+    expect(result).toContain('買い物リスト（売場順）')
+    expect(result).toContain('【野菜・きのこ】')
+    expect(result).toContain('【肉・ハム】')
+    expect(result).toContain('【調味料・乾物・缶詰】')
+  })
+
+  it('falls back to その他 section for unknown ingredients', () => {
+    const items = [
+      { name: '炭酸水', totalQuantity: 1, unit: '本', ingredientCategory: 'main' as const, inStock: false },
+    ]
+
+    const result = formatWeeklyShoppingListByStoreSection('2026-01-06', items)
+
+    expect(result).toContain('【飲料・その他】')
+    expect(result).toContain('炭酸水')
   })
 })

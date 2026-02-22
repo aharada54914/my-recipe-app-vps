@@ -21,7 +21,7 @@ import {
   aggregateIngredients,
   buildWeeklyMenuRecipesWithServings,
   filterBySeasoningOption,
-  formatWeeklyShoppingList,
+  formatWeeklyShoppingListByStoreSection,
   getMissingWeeklyIngredients,
 } from '../utils/weeklyShoppingUtils'
 import { registerWeeklyMenuToCalendar, registerShoppingListToCalendar } from '../utils/weeklyMenuCalendar'
@@ -270,7 +270,7 @@ export function WeeklyMenuPage() {
           includeSeasonings
         )
         if (missing.length > 0) {
-          const shoppingListText = formatWeeklyShoppingList(weekStartStr, missing)
+          const shoppingListText = formatWeeklyShoppingListByStoreSection(weekStartStr, missing)
           await registerShoppingListToCalendar(providerToken, shoppingListText, weekStart, preferences)
         }
       }
