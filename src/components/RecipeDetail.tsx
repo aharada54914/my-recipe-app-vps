@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, Clock, Hash, Calendar } from 'lucide-react'
+import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, Clock, Hash, Calendar, MessageCircleQuestion } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
 import type { DeviceType } from '../db/db'
 import { adjustIngredients, formatQuantityVibe } from '../utils/recipeUtils'
 import { toggleFavorite } from '../utils/favoritesUtils'
 import { getMissingIngredients, formatShoppingListForLine, copyToClipboard } from '../utils/shoppingUtils'
 import { useWakeLock } from '../hooks/useWakeLock'
+import { useGeminiStore } from '../stores/geminiStore'
 import { RecipeImage } from './RecipeImage'
 import { ServingAdjuster } from './ServingAdjuster'
 import { SaltCalculator } from './SaltCalculator'
@@ -46,6 +48,12 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   const [copied, setCopied] = useState(false)
   const [showCalendarModal, setShowCalendarModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'ingredients' | 'steps'>('ingredients')
+  // Ask Gemini: set of ingredient names marked as "missing" by the user
+  const [missingIngNames, setMissingIngNames] = useState<Set<string>>(new Set())
+
+  const navigate = useNavigate()
+  const setPendingChatInput = useGeminiStore((s) => s.setPendingChatInput)
+  const setGeminiTab = useGeminiStore((s) => s.setActiveTab)
 
   // T-11: Keep screen on during recipe viewing
   useWakeLock()
@@ -92,6 +100,35 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
       setTimeout(() => setCopied(false), 2000)
     }
   }, [recipe, stockItems])
+
+  // Ask Gemini: navigate to /gemini chat tab with a pre-filled prompt
+  // Note: adjusted/currentServings/recipe are computed after early return, so this callback
+  // is intentionally placed before early return but uses a closure over `recipe`.
+  // The callback is safe because it's only called when the button is visible (recipe is defined).
+  const handleAskGemini = useCallback(() => {
+    if (!recipe) return
+    const currentServings_ = servings ?? recipe.baseServings
+    const adjusted_ = adjustIngredients(recipe.ingredients, recipe.baseServings, currentServings_)
+
+    const missingList = adjusted_
+      .filter(ing => missingIngNames.has(ing.name))
+      .map(ing => `・${ing.name}（${formatQuantityVibe(ing.quantity, ing.unit)}）`)
+      .join('\n')
+
+    const allIngredients = adjusted_
+      .map(ing => `・${ing.name} ${formatQuantityVibe(ing.quantity, ing.unit)}`)
+      .join('\n')
+
+    const prompt =
+      `【レシピ】${recipe.title}（${deviceLabels[recipe.device]}、${currentServings_}人分）\n\n` +
+      `【不足している食材】\n${missingList}\n\n` +
+      `【全材料】\n${allIngredients}\n\n` +
+      `上記の不足食材の代替案を提案してください。レシピの仕上がりや味への影響も教えてください。`
+
+    setPendingChatInput(prompt)
+    setGeminiTab('chat')
+    navigate('/gemini')
+  }, [recipe, servings, missingIngNames, setPendingChatInput, setGeminiTab, navigate])
 
   if (!recipe) return null
 
@@ -270,16 +307,31 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                     <div className="mb-1 text-xs font-medium text-accent">主材料</div>
                     <table className="w-full">
                       <tbody>
-                        {mainIngredients.map((ing) => (
-                          <tr key={ing.name} className="border-b border-white/5 last:border-0">
-                            <td className="py-1.5 text-sm">
-                              {ing.name}{ing.optional ? ' (任意)' : ''}
-                            </td>
-                            <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
-                              {formatQuantityVibe(ing.quantity, ing.unit)}
-                            </td>
-                          </tr>
-                        ))}
+                        {mainIngredients.map((ing) => {
+                          const isMissing = missingIngNames.has(ing.name)
+                          return (
+                            <tr
+                              key={ing.name}
+                              onClick={() => setMissingIngNames(prev => {
+                                const next = new Set(prev)
+                                if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
+                                return next
+                              })}
+                              className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${
+                                isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                              }`}
+                            >
+                              <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
+                                {ing.name}{ing.optional ? ' (任意)' : ''}
+                              </td>
+                              <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${
+                                isMissing ? 'text-red-400/50' : 'text-text-secondary'
+                              }`}>
+                                {formatQuantityVibe(ing.quantity, ing.unit)}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -290,19 +342,44 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                     <div className="mb-1 text-xs font-medium text-text-secondary">調味料・その他</div>
                     <table className="w-full">
                       <tbody>
-                        {subIngredients.map((ing) => (
-                          <tr key={ing.name} className="border-b border-white/5 last:border-0">
-                            <td className="py-1.5 text-sm">
-                              {ing.name}{ing.optional ? ' (任意)' : ''}
-                            </td>
-                            <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
-                              {formatQuantityVibe(ing.quantity, ing.unit)}
-                            </td>
-                          </tr>
-                        ))}
+                        {subIngredients.map((ing) => {
+                          const isMissing = missingIngNames.has(ing.name)
+                          return (
+                            <tr
+                              key={ing.name}
+                              onClick={() => setMissingIngNames(prev => {
+                                const next = new Set(prev)
+                                if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
+                                return next
+                              })}
+                              className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${
+                                isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                              }`}
+                            >
+                              <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
+                                {ing.name}{ing.optional ? ' (任意)' : ''}
+                              </td>
+                              <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${
+                                isMissing ? 'text-red-400/50' : 'text-text-secondary'
+                              }`}>
+                                {formatQuantityVibe(ing.quantity, ing.unit)}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
+                )}
+
+                {missingIngNames.size > 0 && (
+                  <button
+                    onClick={handleAskGemini}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent/20 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/30 active:scale-[0.98]"
+                  >
+                    <MessageCircleQuestion className="h-4 w-4" />
+                    代替食材を Gemini に相談（{missingIngNames.size}件）
+                  </button>
                 )}
               </div>
             ) : (
@@ -374,16 +451,31 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                 <div className="mb-1 text-xs font-medium text-accent">主材料</div>
                 <table className="w-full">
                   <tbody>
-                    {mainIngredients.map((ing) => (
-                      <tr key={ing.name} className="border-b border-white/5 last:border-0">
-                        <td className="py-1.5 text-sm">
-                          {ing.name}{ing.optional ? ' (任意)' : ''}
-                        </td>
-                        <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
-                          {formatQuantityVibe(ing.quantity, ing.unit)}
-                        </td>
-                      </tr>
-                    ))}
+                    {mainIngredients.map((ing) => {
+                      const isMissing = missingIngNames.has(ing.name)
+                      return (
+                        <tr
+                          key={ing.name}
+                          onClick={() => setMissingIngNames(prev => {
+                            const next = new Set(prev)
+                            if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
+                            return next
+                          })}
+                          className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${
+                            isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                          }`}
+                        >
+                          <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
+                            {ing.name}{ing.optional ? ' (任意)' : ''}
+                          </td>
+                          <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${
+                            isMissing ? 'text-red-400/50' : 'text-text-secondary'
+                          }`}>
+                            {formatQuantityVibe(ing.quantity, ing.unit)}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -394,19 +486,44 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                 <div className="mb-1 text-xs font-medium text-text-secondary">調味料・その他</div>
                 <table className="w-full">
                   <tbody>
-                    {subIngredients.map((ing) => (
-                      <tr key={ing.name} className="border-b border-white/5 last:border-0">
-                        <td className="py-1.5 text-sm">
-                          {ing.name}{ing.optional ? ' (任意)' : ''}
-                        </td>
-                        <td className="py-1.5 text-right text-sm font-medium text-text-secondary whitespace-nowrap">
-                          {formatQuantityVibe(ing.quantity, ing.unit)}
-                        </td>
-                      </tr>
-                    ))}
+                    {subIngredients.map((ing) => {
+                      const isMissing = missingIngNames.has(ing.name)
+                      return (
+                        <tr
+                          key={ing.name}
+                          onClick={() => setMissingIngNames(prev => {
+                            const next = new Set(prev)
+                            if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
+                            return next
+                          })}
+                          className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${
+                            isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                          }`}
+                        >
+                          <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
+                            {ing.name}{ing.optional ? ' (任意)' : ''}
+                          </td>
+                          <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${
+                            isMissing ? 'text-red-400/50' : 'text-text-secondary'
+                          }`}>
+                            {formatQuantityVibe(ing.quantity, ing.unit)}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {missingIngNames.size > 0 && (
+              <button
+                onClick={handleAskGemini}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent/20 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/30 active:scale-[0.98]"
+              >
+                <MessageCircleQuestion className="h-4 w-4" />
+                代替食材を Gemini に相談（{missingIngNames.size}件）
+              </button>
             )}
           </div>
         )}

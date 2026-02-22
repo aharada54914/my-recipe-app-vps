@@ -27,6 +27,9 @@ interface GeminiStore {
   chatMessages: ChatMessage[]
   setChatMessages: (messages: ChatMessage[]) => void
   appendChatMessage: (message: ChatMessage) => void
+
+  pendingChatInput: string | null
+  setPendingChatInput: (text: string | null) => void
 }
 
 export const useGeminiStore = create<GeminiStore>((set) => ({
@@ -48,4 +51,7 @@ export const useGeminiStore = create<GeminiStore>((set) => ({
   chatMessages: [],
   setChatMessages: (messages) => set({ chatMessages: messages }),
   appendChatMessage: (message) => set((state) => ({ chatMessages: [...state.chatMessages, message] })),
+
+  pendingChatInput: null,
+  setPendingChatInput: (text) => set({ pendingChatInput: text }),
 }))
