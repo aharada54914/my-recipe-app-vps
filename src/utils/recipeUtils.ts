@@ -157,10 +157,17 @@ export interface DeviceConflict {
  * Calculate schedules for multiple recipes against a single target time.
  * Enforces device constraints: only one hotcook and one healsio at a time.
  */
+export interface MultiRecipeSchedule {
+  targetTime: Date
+  recipes: RecipeSchedule[]
+  overallStart: Date
+  conflicts: DeviceConflict[]
+}
+
 export function calculateMultiRecipeSchedule(
   targetTime: Date,
   recipesWithSteps: Array<{ recipeId: number; title: string; steps: CookingStep[]; device: DeviceType }>
-): { targetTime: Date; recipes: RecipeSchedule[]; overallStart: Date; conflicts: DeviceConflict[] } {
+): MultiRecipeSchedule {
   const MAX_ITERATIONS = 10
   const conflicts: DeviceConflict[] = []
 
