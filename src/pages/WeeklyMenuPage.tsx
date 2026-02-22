@@ -17,7 +17,13 @@ import { usePreferences } from '../hooks/usePreferences'
 import { useAuth } from '../hooks/useAuth'
 import { useDebounce } from '../hooks/useDebounce'
 import { selectWeeklyMenu, getWeekStartDate } from '../utils/weeklyMenuSelector'
-import { aggregateIngredients, getMissingWeeklyIngredients, formatWeeklyShoppingList } from '../utils/weeklyShoppingUtils'
+import {
+  aggregateIngredients,
+  buildWeeklyMenuRecipesWithServings,
+  filterBySeasoningOption,
+  formatWeeklyShoppingList,
+  getMissingWeeklyIngredients,
+} from '../utils/weeklyShoppingUtils'
 import { registerWeeklyMenuToCalendar, registerShoppingListToCalendar } from '../utils/weeklyMenuCalendar'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { RecipeCard } from '../components/RecipeCard'
@@ -49,6 +55,7 @@ export function WeeklyMenuPage() {
   const [generating, setGenerating] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [showShoppingList, setShowShoppingList] = useState(false)
+  const [includeSeasonings, setIncludeSeasonings] = useState(false)
   const [swapDayIndex, setSwapDayIndex] = useState<number | null>(null)
   const [swapType, setSwapType] = useState<'main' | 'side'>('main')
   const [swapCandidates, setSwapCandidates] = useState<Recipe[]>([])
@@ -192,9 +199,9 @@ export function WeeklyMenuPage() {
     }
     const newItems = [...menu.items]
     if (swapType === 'main') {
-      newItems[swapDayIndex] = { ...newItems[swapDayIndex], recipeId: recipe.id! }
+      newItems[swapDayIndex] = { ...newItems[swapDayIndex], recipeId: recipe.id!, mainServings: undefined }
     } else {
-      newItems[swapDayIndex] = { ...newItems[swapDayIndex], sideRecipeId: recipe.id! }
+      newItems[swapDayIndex] = { ...newItems[swapDayIndex], sideRecipeId: recipe.id!, sideServings: undefined }
     }
     const updated = { ...menu, items: newItems, updatedAt: new Date() }
     setMenu(updated)
@@ -207,16 +214,34 @@ export function WeeklyMenuPage() {
 
   const selectedRecipes = useMemo(() => {
     if (!menu) return [] as Recipe[]
-    return menu.items.flatMap((item) => {
-      const out: Recipe[] = []
-      const main = recipes.get(item.recipeId)
-      if (main) out.push(main)
-      if (item.sideRecipeId != null) {
-        const side = recipes.get(item.sideRecipeId)
-        if (side) out.push(side)
-      }
-      return out
-    })
+    return buildWeeklyMenuRecipesWithServings(menu, recipes)
+  }, [menu, recipes])
+
+  const handleAdjustServings = useCallback((dayIndex: number, type: 'main' | 'side', delta: number) => {
+    if (!menu) return
+    const item = menu.items[dayIndex]
+    if (!item) return
+
+    const recipe = type === 'main'
+      ? recipes.get(item.recipeId)
+      : item.sideRecipeId != null ? recipes.get(item.sideRecipeId) : undefined
+    if (!recipe) return
+
+    const current = type === 'main'
+      ? (item.mainServings ?? recipe.baseServings)
+      : (item.sideServings ?? recipe.baseServings)
+    const nextValue = Math.min(10, Math.max(1, current + delta))
+
+    const newItems = [...menu.items]
+    newItems[dayIndex] = type === 'main'
+      ? { ...item, mainServings: nextValue }
+      : { ...item, sideServings: nextValue }
+
+    const updated = { ...menu, items: newItems, updatedAt: new Date() }
+    setMenu(updated)
+    if (menu.id != null) {
+      db.weeklyMenus.update(menu.id, { items: newItems, updatedAt: new Date() })
+    }
   }, [menu, recipes])
 
   // Calendar registration
@@ -240,7 +265,10 @@ export function WeeklyMenuPage() {
       const result = await registerWeeklyMenuToCalendar(providerToken, menu, mainRecipes, preferences)
 
       if (stockItems) {
-        const missing = getMissingWeeklyIngredients(selectedRecipes, stockItems)
+        const missing = filterBySeasoningOption(
+          getMissingWeeklyIngredients(selectedRecipes, stockItems),
+          includeSeasonings
+        )
         if (missing.length > 0) {
           const shoppingListText = formatWeeklyShoppingList(weekStartStr, missing)
           await registerShoppingListToCalendar(providerToken, shoppingListText, weekStart, preferences)
@@ -255,7 +283,7 @@ export function WeeklyMenuPage() {
     } finally {
       setRegistering(false)
     }
-  }, [isOAuthAvailable, menu, preferences, providerToken, recipes, selectedRecipes, signInWithGoogle, stockItems, weekStart, weekStartStr])
+  }, [includeSeasonings, isOAuthAvailable, menu, preferences, providerToken, recipes, selectedRecipes, signInWithGoogle, stockItems, weekStart, weekStartStr])
 
   // Week navigation
   const adjustWeek = (delta: number) => {
@@ -431,6 +459,8 @@ export function WeeklyMenuPage() {
                 const mainMatchRate = mainRecipe ? calculateMatchRate(mainRecipe.ingredients, stockNames) : undefined
                 const sideMatchRate = sideRecipe ? calculateMatchRate(sideRecipe.ingredients, stockNames) : undefined
                 const cookStart = getCookingStartTime(mainRecipe)
+                const mainServings = mainRecipe ? (item.mainServings ?? mainRecipe.baseServings) : 0
+                const sideServings = sideRecipe ? (item.sideServings ?? sideRecipe.baseServings) : 0
 
                 return (
                   <div
@@ -485,7 +515,16 @@ export function WeeklyMenuPage() {
                     <div className="grid grid-cols-2 gap-3">
                       {/* Main dish */}
                       <div>
-                        <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-text-secondary">主菜</div>
+                        <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
+                          <span>主菜</span>
+                          {mainRecipe && (
+                            <span className="inline-flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 normal-case">
+                              <button type="button" onClick={() => handleAdjustServings(i, 'main', -1)} className="px-1">-</button>
+                              <span>{mainServings}人</span>
+                              <button type="button" onClick={() => handleAdjustServings(i, 'main', 1)} className="px-1">+</button>
+                            </span>
+                          )}
+                        </div>
                         {mainRecipe ? (
                           <RecipeCard
                             recipe={mainRecipe}
@@ -502,7 +541,16 @@ export function WeeklyMenuPage() {
 
                       {/* Side dish */}
                       <div>
-                        <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-text-secondary">副菜・スープ</div>
+                        <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
+                          <span>副菜・スープ</span>
+                          {sideRecipe && (
+                            <span className="inline-flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 normal-case">
+                              <button type="button" onClick={() => handleAdjustServings(i, 'side', -1)} className="px-1">-</button>
+                              <span>{sideServings}人</span>
+                              <button type="button" onClick={() => handleAdjustServings(i, 'side', 1)} className="px-1">+</button>
+                            </span>
+                          )}
+                        </div>
                         {sideRecipe ? (
                           <RecipeCard
                             recipe={sideRecipe}
@@ -552,6 +600,8 @@ export function WeeklyMenuPage() {
                   weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
                   ingredients={aggregateIngredients(selectedRecipes, stockItems)}
                   storageKey={`shopping_checked_${weekStartStr}`}
+                  includeSeasonings={includeSeasonings}
+                  onToggleIncludeSeasonings={() => setIncludeSeasonings((v) => !v)}
                 />
               </div>
             )}

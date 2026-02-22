@@ -153,6 +153,8 @@ export type WeeklyMenuStatus = 'draft' | 'confirmed' | 'registered'
 export interface WeeklyMenuItem {
   recipeId: number        // 主菜
   sideRecipeId?: number   // 副菜またはスープ
+  mainServings?: number   // 主菜の最終人数
+  sideServings?: number   // 副菜/スープの最終人数
   date: string            // 'YYYY-MM-DD'
   mealType: 'dinner'
   locked: boolean

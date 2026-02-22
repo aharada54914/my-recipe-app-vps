@@ -4,8 +4,8 @@
  * Combines ingredients from multiple recipes and calculates missing items.
  */
 
-import type { Recipe, StockItem } from '../db/db'
-import { formatQuantityVibe } from './recipeUtils'
+import type { Recipe, StockItem, WeeklyMenu } from '../db/db'
+import { adjustIngredients, formatQuantityVibe } from './recipeUtils'
 
 export interface AggregatedIngredient {
   name: string
@@ -13,6 +13,52 @@ export interface AggregatedIngredient {
   unit: string
   ingredientCategory: 'main' | 'sub'
   inStock: boolean
+}
+
+function normalizeServings(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.min(10, Math.max(1, Math.round(value)))
+}
+
+function scaleRecipeIngredients(recipe: Recipe, targetServings: number): Recipe {
+  return {
+    ...recipe,
+    ingredients: adjustIngredients(recipe.ingredients, recipe.baseServings, targetServings),
+  }
+}
+
+/**
+ * Build recipe list for weekly shopping based on per-menu serving decisions.
+ */
+export function buildWeeklyMenuRecipesWithServings(
+  menu: WeeklyMenu,
+  recipeMap: Map<number, Recipe>
+): Recipe[] {
+  const output: Recipe[] = []
+
+  for (const item of menu.items) {
+    const main = recipeMap.get(item.recipeId)
+    if (main) {
+      output.push(scaleRecipeIngredients(main, normalizeServings(item.mainServings, main.baseServings)))
+    }
+
+    if (item.sideRecipeId != null) {
+      const side = recipeMap.get(item.sideRecipeId)
+      if (side) {
+        output.push(scaleRecipeIngredients(side, normalizeServings(item.sideServings, side.baseServings)))
+      }
+    }
+  }
+
+  return output
+}
+
+export function filterBySeasoningOption(
+  ingredients: AggregatedIngredient[],
+  includeSeasonings: boolean
+): AggregatedIngredient[] {
+  if (includeSeasonings) return ingredients
+  return ingredients.filter((i) => i.ingredientCategory === 'main')
 }
 
 /**
