@@ -20,16 +20,16 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: env -u npm_config_http_proxy npm ci
 
       - name: Lint
-        run: npm run lint
+        run: env -u npm_config_http_proxy npm run lint
 
       - name: Test
-        run: npm test
+        run: env -u npm_config_http_proxy npm test
 
       - name: Build
-        run: npm run build
+        run: env -u npm_config_http_proxy npm run build
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
