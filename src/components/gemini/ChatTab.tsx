@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Send } from 'lucide-react'
 import { GeminiIcon } from '../GeminiIcon'
 import { resolveGeminiApiKey, generateGeminiText } from '../../lib/geminiClient'
@@ -19,8 +19,18 @@ function GeminiApiKeyHint() {
 export function ChatTab() {
   const messages = useGeminiStore((s) => s.chatMessages)
   const appendChatMessage = useGeminiStore((s) => s.appendChatMessage)
+  const pendingChatInput = useGeminiStore((s) => s.pendingChatInput)
+  const setPendingChatInput = useGeminiStore((s) => s.setPendingChatInput)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // When navigated from RecipeDetail with a pre-built prompt, set it in the input field
+  useEffect(() => {
+    if (pendingChatInput) {
+      setInput(pendingChatInput)
+      setPendingChatInput(null)
+    }
+  }, [pendingChatInput, setPendingChatInput])
 
   const handleSend = async () => {
     const q = input.trim()
