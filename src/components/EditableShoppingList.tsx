@@ -21,6 +21,8 @@ interface Props {
   weekLabel: string
   ingredients: ShoppingIngredient[]
   storageKey?: string
+  includeSeasonings: boolean
+  onToggleIncludeSeasonings: () => void
 }
 
 interface EditableItem {
@@ -39,7 +41,13 @@ function formatQty(ing: ShoppingIngredient): string {
   return `${qty}${ing.unit}`
 }
 
-export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'shopping_checked' }: Props) {
+export function EditableShoppingList({
+  weekLabel,
+  ingredients,
+  storageKey = 'shopping_checked',
+  includeSeasonings,
+  onToggleIncludeSeasonings,
+}: Props) {
   const [checked, setChecked] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem(storageKey)
@@ -49,7 +57,6 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
     }
   })
   const [copied, setCopied] = useState(false)
-  const [includeSeasonings, setIncludeSeasonings] = useState(false)
   const [customName, setCustomName] = useState('')
   const [customQty, setCustomQty] = useState('')
   const [customUnit, setCustomUnit] = useState('個')
@@ -174,7 +181,7 @@ export function EditableShoppingList({ weekLabel, ingredients, storageKey = 'sho
       <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
         <span className="text-sm text-text-secondary">調味料も表示する</span>
         <button
-          onClick={() => setIncludeSeasonings((v) => !v)}
+          onClick={onToggleIncludeSeasonings}
           className={`min-h-[40px] rounded-lg px-3 py-1 text-sm font-semibold transition-colors ${
             includeSeasonings ? 'bg-accent text-white' : 'bg-white/10 text-text-secondary'
           }`}

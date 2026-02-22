@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { aggregateIngredients, getMissingWeeklyIngredients, formatWeeklyShoppingList } from '../weeklyShoppingUtils'
-import type { Recipe, StockItem } from '../../db/db'
+import {
+  aggregateIngredients,
+  buildWeeklyMenuRecipesWithServings,
+  filterBySeasoningOption,
+  formatWeeklyShoppingList,
+  getMissingWeeklyIngredients,
+} from '../weeklyShoppingUtils'
+import type { Recipe, StockItem, WeeklyMenu } from '../../db/db'
 
 // Minimal recipe factory
 function makeRecipe(overrides: Partial<Recipe> = {}): Recipe {
@@ -21,6 +27,16 @@ function makeRecipe(overrides: Partial<Recipe> = {}): Recipe {
 
 function makeStock(name: string, inStock = true): StockItem {
   return { id: 1, name, quantity: 1, unit: 'g', inStock, updatedAt: new Date() }
+}
+
+function makeMenu(items: WeeklyMenu['items']): WeeklyMenu {
+  return {
+    weekStartDate: '2026-01-06',
+    items,
+    status: 'draft',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
 }
 
 // --- aggregateIngredients ---
@@ -152,5 +168,43 @@ describe('formatWeeklyShoppingList', () => {
     const result = formatWeeklyShoppingList('2026-01-06', items)
     expect(result).toContain('豚肉')
     expect(result).not.toContain('玉ねぎ')
+  })
+})
+
+describe('buildWeeklyMenuRecipesWithServings', () => {
+  it('scales main and side ingredient quantities by finalized servings', () => {
+    const main = makeRecipe({
+      id: 1,
+      baseServings: 2,
+      ingredients: [{ name: '豚肉', quantity: 100, unit: 'g', category: 'main' }],
+    })
+    const side = makeRecipe({
+      id: 2,
+      baseServings: 2,
+      ingredients: [{ name: 'キャベツ', quantity: 50, unit: 'g', category: 'main' }],
+    })
+    const menu = makeMenu([{ recipeId: 1, sideRecipeId: 2, mainServings: 4, sideServings: 3, date: '2026-01-06', mealType: 'dinner', locked: false }])
+
+    const scaled = buildWeeklyMenuRecipesWithServings(menu, new Map([[1, main], [2, side]]))
+    const aggregated = aggregateIngredients(scaled, [])
+
+    expect(aggregated.find((i) => i.name === '豚肉')?.totalQuantity).toBe(200)
+    expect(aggregated.find((i) => i.name === 'キャベツ')?.totalQuantity).toBe(75)
+  })
+})
+
+describe('filterBySeasoningOption', () => {
+  const list = [
+    { name: '豚肉', totalQuantity: 300, unit: 'g', ingredientCategory: 'main' as const, inStock: false },
+    { name: '醤油', totalQuantity: 2, unit: '大さじ', ingredientCategory: 'sub' as const, inStock: false },
+  ]
+
+  it('removes sub ingredients when seasoning toggle is OFF', () => {
+    expect(filterBySeasoningOption(list, false)).toHaveLength(1)
+    expect(filterBySeasoningOption(list, false)[0].name).toBe('豚肉')
+  })
+
+  it('keeps both main and sub ingredients when seasoning toggle is ON', () => {
+    expect(filterBySeasoningOption(list, true)).toHaveLength(2)
   })
 })
