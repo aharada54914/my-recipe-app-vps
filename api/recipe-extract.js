@@ -19,6 +19,7 @@ const SUPPORTED_DOMAINS = [
 
 const REQUEST_TIMEOUT_MS = 12000
 const MAX_HTML_LENGTH = 2_000_000
+const MAX_TEXT_LENGTH = 24000
 
 function normalizeDomain(hostname) {
   return hostname.toLowerCase()
@@ -93,31 +94,80 @@ function extractJsonLdRecipes(html) {
   return recipes
 }
 
-async function fetchWithTimeout(url) {
+async function fetchTextWithTimeout(url, headers = {}) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml',
-      },
+      headers,
     })
 
     if (!res.ok) {
       throw new Error(`対象ページの取得に失敗しました (${res.status})`)
     }
 
-    const html = await res.text()
-    if (!html || html.length > MAX_HTML_LENGTH) {
+    const body = await res.text()
+    if (!body || body.length > MAX_HTML_LENGTH) {
       throw new Error('対象ページのサイズが大きすぎるか、本文を取得できませんでした。')
     }
 
-    return html
+    return body
   } finally {
     clearTimeout(timeout)
+  }
+}
+
+async function fetchDirectHtml(url) {
+  const html = await fetchTextWithTimeout(url, {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+    Referer: 'https://www.google.com/',
+  })
+
+  return {
+    source: 'direct',
+    html,
+    text: stripHtml(html).slice(0, MAX_TEXT_LENGTH),
+    jsonLdRecipes: extractJsonLdRecipes(html),
+    title: extractMetaContent(html, 'og:title') || extractMetaContent(html, 'twitter:title'),
+    imageUrl: extractMetaContent(html, 'og:image') || extractMetaContent(html, 'twitter:image'),
+    description: extractMetaContent(html, 'og:description') || extractMetaContent(html, 'description'),
+  }
+}
+
+async function fetchViaJinaAi(url) {
+  const proxyUrl = `https://r.jina.ai/http://${url.replace(/^https?:\/\//, '')}`
+  const text = await fetchTextWithTimeout(proxyUrl)
+
+  return {
+    source: 'jina-ai-proxy',
+    text: text.slice(0, MAX_TEXT_LENGTH),
+    jsonLdRecipes: [],
+    title: '',
+    imageUrl: '',
+    description: '',
+  }
+}
+
+async function extractRecipeSource(url) {
+  const attempts = []
+
+  try {
+    return await fetchDirectHtml(url)
+  } catch (error) {
+    attempts.push(error instanceof Error ? error.message : 'direct fetch failed')
+  }
+
+  try {
+    const fallback = await fetchViaJinaAi(url)
+    fallback.warnings = attempts
+    return fallback
+  } catch (error) {
+    attempts.push(error instanceof Error ? error.message : 'jina.ai fallback failed')
+    throw new Error(`URL取得に失敗しました。${attempts.join(' / ')}`)
   }
 }
 
@@ -151,19 +201,19 @@ export default async function handler(req, res) {
       })
     }
 
-    const html = await fetchWithTimeout(parsedUrl.toString())
-    const jsonLdRecipes = extractJsonLdRecipes(html)
-    const text = stripHtml(html).slice(0, 24000)
+    const extracted = await extractRecipeSource(parsedUrl.toString())
 
     return res.status(200).json({
       ok: true,
       url: parsedUrl.toString(),
       host: parsedUrl.hostname,
-      title: extractMetaContent(html, 'og:title') || extractMetaContent(html, 'twitter:title'),
-      imageUrl: extractMetaContent(html, 'og:image') || extractMetaContent(html, 'twitter:image'),
-      description: extractMetaContent(html, 'og:description') || extractMetaContent(html, 'description'),
-      jsonLdRecipes,
-      text,
+      title: extracted.title,
+      imageUrl: extracted.imageUrl,
+      description: extracted.description,
+      jsonLdRecipes: extracted.jsonLdRecipes,
+      text: extracted.text,
+      fetchStrategy: extracted.source,
+      warnings: extracted.warnings ?? [],
     })
   } catch (error) {
     return res.status(500).json({
