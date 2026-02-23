@@ -39,6 +39,8 @@ interface ExtractApiResponse {
   title?: string
   imageUrl?: string
   description?: string
+  fetchStrategy?: 'direct' | 'jina-ai-proxy'
+  warnings?: string[]
 }
 
 function generateRecipeNumber(): string {
@@ -130,6 +132,10 @@ export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'
   const apiSucceeded = response.ok || response.status === 404
   if (!apiSucceeded || !data.ok) {
     throw new Error(data.error || 'URLの解析に失敗しました。')
+  }
+
+  if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+    console.warn('recipe-extract warnings:', data.warnings)
   }
 
   const sourceSections: string[] = []
