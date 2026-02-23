@@ -53,7 +53,7 @@ export async function generateRecipesFromIngredients(
   }
 
   const prompt = buildPrompt(ingredientNames)
-  const text = await generateGeminiText(prompt, apiKey)
+  const text = await generateGeminiText(prompt, apiKey, { feature: 'stock_recipe_suggest' })
   const json = extractJsonObjectText(text)
   const parsed = JSON.parse(json) as GeneratedRecipeEnvelope
 

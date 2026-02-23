@@ -7,6 +7,7 @@
 import { db, type WeeklyMenu, type Recipe, type UserPreferences } from '../db/db'
 import { createCalendarEvent, type CalendarEventInput } from '../lib/googleCalendar'
 import { format, parse, setHours, setMinutes, subMinutes } from 'date-fns'
+import { adjustIngredients, formatQuantityVibe } from './recipeUtils'
 
 interface RegistrationResult {
   registered: number
@@ -30,12 +31,29 @@ export async function registerWeeklyMenuToCalendar(
 
   const recipeMap = new Map(recipes.map(r => [r.id!, r]))
 
+  const formatIngredientsBlock = (recipe: Recipe, targetServings: number | undefined): string => {
+    const servings = targetServings ?? recipe.baseServings
+    const adjusted = adjustIngredients(recipe.ingredients, recipe.baseServings, servings)
+    const rows = adjusted
+      .map((ing) => `・${ing.name} ${formatQuantityVibe(ing.quantity, ing.unit)}`)
+      .join('\n')
+
+    return [
+      `【${recipe.category}】${recipe.title}（${servings}人分）`,
+      `調理時間: ${recipe.totalTimeMinutes}分`,
+      recipe.sourceUrl ? `URL: ${recipe.sourceUrl}` : '',
+      '材料:',
+      rows,
+    ].filter(Boolean).join('\n')
+  }
+
   for (const item of menu.items) {
-    const recipe = recipeMap.get(item.recipeId)
-    if (!recipe) {
+    const mainRecipe = recipeMap.get(item.recipeId)
+    if (!mainRecipe) {
       result.errors.push(`レシピID ${item.recipeId} が見つかりません`)
       continue
     }
+    const sideRecipe = item.sideRecipeId != null ? recipeMap.get(item.sideRecipeId) : undefined
 
     try {
       const eventDate = parse(item.date, 'yyyy-MM-dd', new Date())
@@ -44,18 +62,15 @@ export async function registerWeeklyMenuToCalendar(
       const startTime = setMinutes(setHours(eventDate, preferences.mealStartHour), preferences.mealStartMinute)
       const endTime = setMinutes(setHours(eventDate, preferences.mealEndHour), preferences.mealEndMinute)
 
-      // Build description with ingredients
-      const ingredientList = recipe.ingredients
-        .map(ing => `・${ing.name} ${typeof ing.quantity === 'number' && ing.quantity > 0 ? `${ing.quantity}${ing.unit}` : ing.unit}`)
-        .join('\n')
-
-      const description = [
-        `調理時間: ${recipe.totalTimeMinutes}分`,
-        recipe.sourceUrl ? `レシピURL: ${recipe.sourceUrl}` : '',
+      const descriptionParts = [
+        `この予定は主菜と副菜/スープを1つのイベントにまとめています。`,
         '',
-        '材料:',
-        ingredientList,
-      ].filter(Boolean).join('\n')
+        formatIngredientsBlock(mainRecipe, item.mainServings),
+      ]
+      if (sideRecipe) {
+        descriptionParts.push('', formatIngredientsBlock(sideRecipe, item.sideServings))
+      }
+      const description = descriptionParts.join('\n')
 
       // Calculate cooking reminder
       const reminders: CalendarEventInput['reminders'] = { useDefault: false }
@@ -64,7 +79,10 @@ export async function registerWeeklyMenuToCalendar(
           setHours(eventDate, preferences.desiredMealHour),
           preferences.desiredMealMinute
         )
-        const cookingStartTime = subMinutes(desiredMealTime, recipe.totalTimeMinutes)
+        const cookingLeadMinutes = sideRecipe
+          ? Math.max(mainRecipe.totalTimeMinutes, sideRecipe.totalTimeMinutes)
+          : mainRecipe.totalTimeMinutes
+        const cookingStartTime = subMinutes(desiredMealTime, cookingLeadMinutes)
         const minutesBefore = Math.max(
           0,
           Math.round((startTime.getTime() - cookingStartTime.getTime()) / 60000)
@@ -75,8 +93,12 @@ export async function registerWeeklyMenuToCalendar(
         }
       }
 
+      const summary = sideRecipe
+        ? `夕食: ${mainRecipe.title} + ${sideRecipe.title}`
+        : `夕食: ${mainRecipe.title}`
+
       const event: CalendarEventInput = {
-        summary: `夕食: ${recipe.title}`,
+        summary,
         description,
         start: { dateTime: startTime.toISOString(), timeZone },
         end: { dateTime: endTime.toISOString(), timeZone },
@@ -99,7 +121,7 @@ export async function registerWeeklyMenuToCalendar(
       result.registered++
     } catch (err) {
       result.errors.push(
-        `${recipe.title}: ${err instanceof Error ? err.message : String(err)}`
+        `${mainRecipe.title}: ${err instanceof Error ? err.message : String(err)}`
       )
     }
   }

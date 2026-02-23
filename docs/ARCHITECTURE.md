@@ -1,7 +1,7 @@
 # Architecture Reference
 
-最終改訂: 2026-02-22
-対象バージョン: v1.9.1
+最終改訂: 2026-02-23
+対象バージョン: v1.9.5
 
 Kitchen App の現行アーキテクチャ概要です。
 
@@ -56,6 +56,7 @@ DB: `RecipeDB`（Dexie schema version 9）
 - `SplashScreen` 追加（起動アニメーション）
 - `route-enter` アニメーションで画面切替を滑らかに
 - `index.css` で Liquid Glass トーンを全体適用
+- `GeminiProcessingBanner` がチャット処理中の全画面バナー表示を担当
 
 ---
 
@@ -67,6 +68,7 @@ DB: `RecipeDB`（Dexie schema version 9）
 3. 買い物リストは主菜・副菜を合わせて集約
 4. 共有リンク/共有コードの生成・読込
 5. 日次タイルは時刻情報アイコンとガント導線を大きめ表示で統一
+6. Google Calendar登録は1日1イベントに主菜+副菜/スープを統合して作成
 
 ---
 
@@ -89,8 +91,10 @@ DB: `RecipeDB`（Dexie schema version 9）
 - Drive:
   - `backupToGoogleDrive`
   - `restoreFromGoogleDrive`
+  - 保存先は `appDataFolder`（通常のDrive一覧には表示されにくい）
+  - 現行のDriveバックアップ対象はユーザーデータ中心（レシピ本体の完全バックアップは手動エクスポート）
 - Calendar:
-  - 献立イベント
+  - 献立イベント（主菜+副菜/スープを1日1イベントに統合）
   - 買い物イベント
 
 ---
@@ -106,6 +110,13 @@ DB: `RecipeDB`（Dexie schema version 9）
   - 写真 -> 食材文字 -> 献立生成の2段階フロー
   - 再生成時は文字データのみ送信
   - `RecipeEditorModal` で編集後にDB保存
+- `src/lib/geminiClient.ts` + `src/lib/geminiSettings.ts`:
+  - 機能別モデル選択（Flash-Lite / Flash / 2.5 Flash）
+  - URL/画像解析の失敗時上位モデルリトライ
+  - 使用量（推定）カウント
+- `src/stores/geminiStore.ts`:
+  - Geminiチャット送信処理をストア側へ移し、タブ移動後も処理継続
+  - 履歴/下書きを localStorage に保持（履歴約3日）
 
 ---
 

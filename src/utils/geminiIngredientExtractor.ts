@@ -17,7 +17,10 @@ const INGREDIENT_EXTRACTION_PROMPT = `あなたは冷蔵庫食材の抽出アシ
 - JSON以外の説明文を出さない`
 
 export async function extractIngredientsFromPhotoCollage(image: InlineImagePart, apiKey?: string): Promise<string[]> {
-  const text = await generateGeminiTextFromImageAndPrompt(INGREDIENT_EXTRACTION_PROMPT, image, apiKey)
+  const text = await generateGeminiTextFromImageAndPrompt(INGREDIENT_EXTRACTION_PROMPT, image, apiKey, {
+    feature: 'image_ingredient_extract',
+    enableAutoRetryEscalation: true,
+  })
   const json = extractJsonObjectText(text)
 
   const parsed = JSON.parse(json) as { ingredients?: unknown }

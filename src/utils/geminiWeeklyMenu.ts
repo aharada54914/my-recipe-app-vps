@@ -80,7 +80,7 @@ ${availableText}
 ${userPromptSection}
 ${seasonalSection}`
 
-    const text = await generateGeminiText(prompt, apiKey)
+    const text = await generateGeminiText(prompt, apiKey, { feature: 'weekly_menu_refine' })
     const parsed = JSON.parse(extractJsonObjectText(text)) as { swaps: { date: string; newRecipeId: number }[] }
 
     if (!parsed.swaps || parsed.swaps.length === 0) return null

@@ -138,7 +138,7 @@ export function AccountTab() {
             </div>
           )}
           <p className="text-xs text-text-secondary leading-relaxed">
-            ログインするとデータ（在庫・お気に入り・メモ・履歴・献立）があなたのGoogle Driveに自動バックアップされ、機種変更時も復元できます。
+            ログインするとデータ（在庫・お気に入り・メモ・履歴・献立などのユーザーデータ）があなたのGoogle Driveのアプリ専用領域に自動バックアップされます。レシピを含む全データの控えが必要な場合は、設定→データのエクスポートもご利用ください。
           </p>
         </div>
       ) : (

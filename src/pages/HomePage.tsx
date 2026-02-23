@@ -141,7 +141,7 @@ export function HomePage() {
         <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-bg-card px-4 py-3">
           <div>
             <p className="text-base font-semibold">Google Driveにバックアップ</p>
-            <p className="text-sm text-text-secondary">在庫・お気に入り・献立を自動保存</p>
+            <p className="text-sm text-text-secondary">在庫・お気に入り・メモ・履歴・献立を自動保存</p>
           </div>
           <button
             onClick={signInWithGoogle}

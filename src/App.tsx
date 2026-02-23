@@ -21,6 +21,7 @@ import { AskGeminiPage } from './pages/AskGeminiPage'
 import { ToastContainer } from './components/ToastContainer'
 import { SplashScreen } from './components/SplashScreen'
 import { NotificationScheduler } from './components/NotificationScheduler'
+import { GeminiProcessingBanner } from './components/GeminiProcessingBanner'
 
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
@@ -34,6 +35,7 @@ function AppLayout() {
         onMultiSchedule={() => navigate('/multi-schedule')}
         onSettings={() => navigate('/settings')}
       />
+      <GeminiProcessingBanner />
       <main className="px-4 pb-24">
         <div key={location.pathname} className="route-enter">
           <Outlet />

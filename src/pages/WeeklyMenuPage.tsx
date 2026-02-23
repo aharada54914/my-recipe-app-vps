@@ -34,6 +34,7 @@ import { isRecipeAllowedForRole } from '../utils/mealRoleRules'
 import { SwapModal } from '../components/weekly/SwapModal'
 import { GanttDayModal } from '../components/weekly/GanttDayModal'
 import { ShareMenuModal } from '../components/weekly/ShareMenuModal'
+import { ServingsStepper } from '../components/weekly/ServingsStepper'
 
 export function WeeklyMenuPage() {
   const navigate = useNavigate()
@@ -258,11 +259,8 @@ export function WeeklyMenuPage() {
 
     setRegistering(true)
     try {
-      const mainRecipes = menu.items
-        .map((item) => recipes.get(item.recipeId))
-        .filter(Boolean) as Recipe[]
-
-      const result = await registerWeeklyMenuToCalendar(providerToken, menu, mainRecipes, preferences)
+      const mealRecipes = Array.from(recipes.values())
+      const result = await registerWeeklyMenuToCalendar(providerToken, menu, mealRecipes, preferences)
 
       if (stockItems) {
         const missing = filterBySeasoningOption(
@@ -518,11 +516,11 @@ export function WeeklyMenuPage() {
                         <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
                           <span>主菜</span>
                           {mainRecipe && (
-                            <span className="inline-flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 normal-case">
-                              <button type="button" onClick={() => handleAdjustServings(i, 'main', -1)} className="px-1">-</button>
-                              <span>{mainServings}人</span>
-                              <button type="button" onClick={() => handleAdjustServings(i, 'main', 1)} className="px-1">+</button>
-                            </span>
+                            <ServingsStepper
+                              value={mainServings}
+                              ariaLabel="主菜の人数"
+                              onChange={(next) => handleAdjustServings(i, 'main', next - mainServings)}
+                            />
                           )}
                         </div>
                         {mainRecipe ? (
@@ -544,11 +542,11 @@ export function WeeklyMenuPage() {
                         <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
                           <span>副菜・スープ</span>
                           {sideRecipe && (
-                            <span className="inline-flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 normal-case">
-                              <button type="button" onClick={() => handleAdjustServings(i, 'side', -1)} className="px-1">-</button>
-                              <span>{sideServings}人</span>
-                              <button type="button" onClick={() => handleAdjustServings(i, 'side', 1)} className="px-1">+</button>
-                            </span>
+                            <ServingsStepper
+                              value={sideServings}
+                              ariaLabel="副菜・スープの人数"
+                              onChange={(next) => handleAdjustServings(i, 'side', next - sideServings)}
+                            />
                           )}
                         </div>
                         {sideRecipe ? (

@@ -85,8 +85,11 @@ export function validateParsedRecipe(data: unknown): Omit<Recipe, 'id'> {
   }
 }
 
-export async function parseRecipeText(text: string): Promise<Omit<Recipe, 'id'>> {
-  const raw = await generateGeminiText(`${SYSTEM_PROMPT}\n\nレシピテキスト:\n---\n${text}\n---`)
+export async function parseRecipeText(text: string, source: 'text' | 'url' = 'text'): Promise<Omit<Recipe, 'id'>> {
+  const raw = await generateGeminiText(`${SYSTEM_PROMPT}\n\nレシピテキスト:\n---\n${text}\n---`, undefined, {
+    feature: source === 'url' ? 'recipe_import_url' : 'recipe_import_text',
+    enableAutoRetryEscalation: source === 'url',
+  })
   const json = extractJsonObjectText(raw)
   const parsed: unknown = JSON.parse(json)
   return validateParsedRecipe(parsed)
@@ -143,7 +146,7 @@ export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'
     throw new Error('URLからレシピ情報を抽出できませんでした。')
   }
 
-  const recipe = await parseRecipeText(sourceSections.join('\n\n'))
+  const recipe = await parseRecipeText(sourceSections.join('\n\n'), 'url')
   recipe.sourceUrl = parsedUrl.toString()
 
   if (data.imageUrl && !recipe.imageUrl) {
