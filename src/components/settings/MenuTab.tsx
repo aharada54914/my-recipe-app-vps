@@ -37,7 +37,6 @@ export function MenuTab() {
   const [confirmSave, setConfirmSave] = useState(false)
   const [featureConfig, setFeatureConfigState] = useState<GeminiFeatureModelConfig>(() => getGeminiFeatureConfig())
   const [usageStats, setUsageStats] = useState(() => getTodayUsageStats())
-  const [usageRefreshTick, setUsageRefreshTick] = useState(0)
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) || ''
@@ -49,7 +48,6 @@ export function MenuTab() {
   useEffect(() => {
     const interval = window.setInterval(() => {
       setUsageStats(getTodayUsageStats())
-      setUsageRefreshTick((tick) => tick + 1)
     }, 3000)
     return () => window.clearInterval(interval)
   }, [])
@@ -65,7 +63,7 @@ export function MenuTab() {
       ...option,
       count: usageStats.byModel[option.id] ?? 0,
     })),
-    [usageStats.byModel, usageRefreshTick]
+    [usageStats.byModel]
   )
 
   const featureUsageRows = useMemo(
@@ -75,7 +73,7 @@ export function MenuTab() {
       count: usageStats.byFeature[feature] ?? 0,
       modelId: (featureConfig.models[feature] ?? DEFAULT_GEMINI_FEATURE_CONFIG.models[feature]) as GeminiModelId,
     })),
-    [featureConfig.models, usageStats.byFeature, usageRefreshTick]
+    [featureConfig.models, usageStats.byFeature]
   )
 
   const handleUnlock = () => {
