@@ -159,11 +159,19 @@ export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'
     recipe.imageUrl = data.imageUrl
   }
 
-  return recipe
-}
-  const parseFromJsonLd = (): Omit<Recipe, 'id'> | null => {
-    if (!Array.isArray(data.jsonLdRecipes) || data.jsonLdRecipes.length === 0) return null
-    return null
+    const formatIssuePath = (segments: Array<string | number>): string => {
+      let path = ''
+      for (const segment of segments) {
+        if (typeof segment === 'number') {
+          path += `[${segment}]`
+          continue
+        }
+        path = path ? `${path}.${segment}` : segment
+      }
+      return path
+    }
+
+        const path = formatIssuePath(issue.path)
   const strategy = resolveRecipeImportStrategy(parsedUrl.hostname)
   const sourceText = sourceSections.join('\n\n')
   if (strategy === 'jsonld-first') {
