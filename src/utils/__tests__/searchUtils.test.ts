@@ -138,6 +138,17 @@ describe('japanese text pipeline', () => {
     expect(tokens).toContain('とり')
   })
 
+  it('keeps exact kanji single-character synonym expansion', () => {
+    const result = expandSynonyms('酢')
+    expect(result).toContain('米酢')
+  })
+
+  it('filters short broad hiragana tokens from debug expansion', () => {
+    const terms = getExpandedSearchTermsForDebug('とりにく')
+    expect(terms).not.toContain('とり')
+    expect(terms).not.toContain('にく')
+  })
+
   it('expands debug terms with readings and synonyms', () => {
     const terms = getExpandedSearchTermsForDebug('とりにく')
     expect(terms).toContain('鶏肉')

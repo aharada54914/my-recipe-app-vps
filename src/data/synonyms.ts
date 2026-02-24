@@ -67,13 +67,19 @@ export const synonymMap: Record<string, string[]> = {
     ご飯: ['ごはん', 'ライス', '白米'],
 }
 
+function isSingleKana(s: string): boolean {
+    return /^[ぁ-んァ-ヶー]$/.test(s)
+}
+
 function isSynonymMatch(candidate: string, query: string): boolean {
     const c = normalizeJaText(candidate)
     const q = normalizeJaText(query)
     if (!c || !q) return false
 
-    const minExactLength = 2
-    if (c === q) return q.length >= minExactLength
+    // Keep exact matching, but avoid expanding a lone kana like "す".
+    if (c === q) {
+        return !isSingleKana(q)
+    }
 
     const minSubstrLength = 2
     if (q.length >= minSubstrLength && c.includes(q)) return true
