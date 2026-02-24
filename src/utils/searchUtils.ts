@@ -71,7 +71,9 @@ function createSearchTerms(query: string): string[] {
     for (const term of currentTerms) {
         for (const canonical of findCanonicalByReading(term)) {
             terms.add(canonical)
-            terms.add(...expandSynonyms(canonical))
+            for (const synonym of expandSynonyms(canonical)) {
+                terms.add(synonym)
+            }
 
             const canonicalAliases = synonymMap[canonical] ?? []
             for (const alias of canonicalAliases) {
