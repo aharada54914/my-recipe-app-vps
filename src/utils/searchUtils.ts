@@ -1,6 +1,9 @@
 import Fuse, { type IFuseOptions } from 'fuse.js'
 import type { Recipe } from '../db/db'
-import { expandSynonyms } from '../data/synonyms'
+import { expandSynonyms, synonymMap } from '../data/synonyms'
+import { readingMap } from '../data/readings'
+import { normalizeJaText } from './jaText'
+import { tokenizeJa } from './tokenizeJa'
 
 /**
  * Fuse.js options for recipe fuzzy search.
@@ -37,6 +40,47 @@ function getFuseInstance(recipes: Recipe[]): Fuse<Recipe> {
     return fuseInstance
 }
 
+function findCanonicalByReading(term: string): string[] {
+    const normalized = normalizeJaText(term)
+    if (!normalized) return []
+
+    const matches: string[] = []
+    for (const [canonical, readings] of Object.entries(readingMap)) {
+        const hasMatch = readings.some((r) => normalizeJaText(r) === normalized)
+        if (hasMatch) matches.push(canonical)
+    }
+    return matches
+}
+
+function createSearchTerms(query: string): string[] {
+    const normalized = normalizeJaText(query)
+    const terms = new Set<string>([query])
+    if (normalized) terms.add(normalized)
+
+    for (const token of tokenizeJa(query)) {
+        terms.add(token)
+    }
+
+    const currentTerms = [...terms]
+    for (const term of currentTerms) {
+        for (const canonical of findCanonicalByReading(term)) {
+            terms.add(canonical)
+            terms.add(...expandSynonyms(canonical))
+
+            const canonicalAliases = synonymMap[canonical] ?? []
+            for (const alias of canonicalAliases) {
+                terms.add(alias)
+            }
+        }
+
+        for (const synonym of expandSynonyms(term)) {
+            terms.add(synonym)
+        }
+    }
+
+    return [...terms]
+}
+
 /**
  * Search recipes with fuzzy matching + synonym expansion.
  * Returns matching recipes sorted by relevance.
@@ -53,14 +97,12 @@ export function searchRecipesWithScores(recipes: Recipe[], query: string): Searc
     if (!query.trim()) return recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
 
     const fuse = getFuseInstance(recipes)
+    const expandedTerms = createSearchTerms(query)
 
-    // Expand synonyms: "とり肉" → ["とり肉", "鶏肉", "チキン", ...]
-    const expanded = expandSynonyms(query)
-
-    // Run Fuse.js search for each synonym and deduplicate
+    // Run Fuse.js search for each term and deduplicate
     const resultMap = new Map<number, { recipe: Recipe; score: number }>()
 
-    for (const term of expanded) {
+    for (const term of expandedTerms) {
         const results = fuse.search(term)
         for (const result of results) {
             const id = result.item.id!
@@ -79,4 +121,11 @@ export function searchRecipesWithScores(recipes: Recipe[], query: string): Searc
             recipe: r.recipe,
             queryScore: Math.max(0, 1 - Math.min(1, r.score)),
         }))
+}
+
+/**
+ * Exported for precision evaluation PoC.
+ */
+export function getExpandedSearchTermsForDebug(query: string): string[] {
+    return createSearchTerms(query)
 }

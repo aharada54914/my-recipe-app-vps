@@ -1,3 +1,5 @@
+import { normalizeJaText } from '../utils/jaText'
+
 /**
  * シノニム辞書 — 表記ゆれ・別名を吸収するマッピング。
  * キー: 正規化された名前、値: 別名の配列。
@@ -65,17 +67,31 @@ export const synonymMap: Record<string, string[]> = {
     ご飯: ['ごはん', 'ライス', '白米'],
 }
 
+function isSynonymMatch(candidate: string, query: string): boolean {
+    const c = normalizeJaText(candidate)
+    const q = normalizeJaText(query)
+    if (!c || !q) return false
+
+    const minExactLength = 2
+    if (c === q) return q.length >= minExactLength
+
+    const minSubstrLength = 2
+    if (q.length >= minSubstrLength && c.includes(q)) return true
+    if (c.length >= minSubstrLength && q.includes(c)) return true
+
+    return false
+}
+
 /**
  * 与えられた検索キーワードのシノニム（別名）を返す。
- * 完全一致とサブストリング一致の両方をチェック。
+ * 誤ヒットを減らすため、短語の過剰サブストリング展開を抑制する。
  */
 export function expandSynonyms(query: string): string[] {
-    const q = query.toLowerCase()
     const expanded = new Set<string>([query])
 
     for (const [canonical, aliases] of Object.entries(synonymMap)) {
         const all = [canonical, ...aliases]
-        const matched = all.some((s) => s.toLowerCase().includes(q) || q.includes(s.toLowerCase()))
+        const matched = all.some((s) => isSynonymMatch(s, query))
         if (matched) {
             for (const s of all) {
                 expanded.add(s)
