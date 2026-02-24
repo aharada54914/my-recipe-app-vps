@@ -44,7 +44,10 @@ interface ExtractApiResponse {
   warnings?: string[]
 }
 
-function generateRecipeNumber(): string {
+  image?: JsonLdImageValue
+type JsonLdImageObject = { url?: string }
+type JsonLdImageValue = string | JsonLdImageObject | Array<string | JsonLdImageObject>
+
   const now = new Date()
   const pad = (n: number) => n.toString().padStart(2, '0')
   return `AI-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
@@ -132,7 +135,7 @@ function pickFirstString(values: unknown[]): string | undefined {
   return undefined
 }
 
-function resolveJsonLdImageUrl(image: JsonLdRecipe['image']): string | undefined {
+function resolveJsonLdImageUrl(image: JsonLdImageValue | undefined): string | undefined {
   if (typeof image === 'string') return image
   if (Array.isArray(image)) {
     return pickFirstString(image)
@@ -184,12 +187,12 @@ function resolveJsonLdImageUrl(image: JsonLdRecipe['image']): string | undefined
       return path
     }
 
-        const path = formatIssuePath(issue.path)
-  const strategy = resolveRecipeImportStrategy(parsedUrl.hostname)
-  const sourceText = sourceSections.join('\n\n')
-  if (strategy === 'jsonld-first') {
-    const jsonLdRecipe = parseFromJsonLd()
-    if (jsonLdRecipe) return jsonLdRecipe
+    const formattedIssueMessages: string[] = []
+    for (const issue of result.error.issues) {
+      const path = formatIssuePath(issue.path)
+      formattedIssueMessages.push(path ? `${path}: ${issue.message}` : issue.message)
+    }
+    const formattedIssues = formattedIssueMessages.join('; ')
   try {
     const recipe = await parseRecipeText(sourceText, 'url')
     recipe.sourceUrl = parsedUrl.toString()
