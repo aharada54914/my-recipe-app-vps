@@ -7,6 +7,19 @@ export interface VersionChangeSection {
 
 export const VERSION_CHANGELOG: VersionChangeSection[] = [
   {
+    title: 'V1.9.6 と V1.9.5 の差分',
+    summary: '在庫管理の調味料登録を効率化し、URL取り込み失敗時の復旧性とGemini解析の安定性を改善。',
+    points: [
+      '在庫管理に「調味料をまとめて登録」プリセット（基本和食 / 定番追加 / 中華・洋風追加 / 全部まとめて）を追加し、数量1（本/袋/個）で在庫あり登録できるよう改善',
+      '在庫管理の検索候補を「食材のみ」から「食材 + 調味料」へ拡張',
+      'URLレシピ取り込みでページ取得失敗時のフォールバック経路を強化し、データ取得失敗に強く改善',
+      '対応サイトごとに JSON-LD優先 / Gemini優先 の取り込み戦略を切り替え可能に改善',
+      'Gemini API の429（利用上限）エラーを、待ち時間目安つきの分かりやすいメッセージへ改善',
+      'geminiParser のパーサー互換性を見直し、CI環境差による lint/test/build 失敗を起こしにくく改善',
+    ],
+    refs: ['v1.9.6'],
+  },
+  {
     title: 'V1.9.5 と V1.9.1 の差分',
     summary: 'Gemini運用性と設定UXを強化し、週間献立の人数調整・カレンダー登録品質を改善。',
     points: [

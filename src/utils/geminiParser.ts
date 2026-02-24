@@ -1,7 +1,7 @@
 import type { Recipe, Ingredient, CookingStep } from '../db/db'
-import { extractJsonObjectText, generateGeminiText } from '../lib/geminiClient'
-import { SUPPORTED_RECIPE_DOMAINS, resolveRecipeImportStrategy } from '../constants/supportedRecipeSites'
 import { ParsedRecipeSchema } from '../db/zodSchemas'
+import { SUPPORTED_RECIPE_DOMAINS, resolveRecipeImportStrategy } from '../constants/supportedRecipeSites'
+import { extractJsonObjectText, generateGeminiText } from '../lib/geminiClient'
 
 const SYSTEM_PROMPT = `あなたはレシピ解析AIです。以下の情報を解析し、JSONのみを出力してください。説明文は不要です。
 
@@ -44,37 +44,204 @@ interface ExtractApiResponse {
   warnings?: string[]
 }
 
-  image?: JsonLdImageValue
-type JsonLdImageObject = { url?: string }
+type JsonLdImageObject = { url?: unknown }
 type JsonLdImageValue = string | JsonLdImageObject | Array<string | JsonLdImageObject>
 
+interface JsonLdRecipe {
+  name?: unknown
+  recipeYield?: unknown
+  recipeIngredient?: unknown
+  recipeInstructions?: unknown
+  totalTime?: unknown
+  image?: JsonLdImageValue
+}
+
+function generateRecipeNumber(): string {
   const now = new Date()
   const pad = (n: number) => n.toString().padStart(2, '0')
   return `AI-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
 }
 
+function formatIssuePath(segments: PropertyKey[]): string {
+  let path = ''
+  for (const segment of segments) {
+    if (typeof segment === 'number') {
+      path += `[${segment}]`
+      continue
+    }
+    const key = typeof segment === 'symbol' ? String(segment) : segment
+    path = path ? `${path}.${key}` : key
+  }
+  return path
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function pickFirstString(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (isObjectRecord(value) && typeof value.url === 'string' && value.url.trim()) return value.url.trim()
+  }
+  return undefined
+}
+
+function resolveJsonLdImageUrl(image: JsonLdImageValue | undefined): string | undefined {
+  if (typeof image === 'string') return image.trim() || undefined
+  if (Array.isArray(image)) return pickFirstString(image)
+  if (!image || typeof image !== 'object') return undefined
+
+  if (typeof image.url === 'string') return image.url.trim() || undefined
+  if (Array.isArray(image.url)) return pickFirstString(image.url)
+  return undefined
+}
+
+function parseIso8601DurationMinutes(value: unknown): number | undefined {
+  if (typeof value !== 'string') return undefined
+  const match = value.match(/^P(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)$/i)
+  if (!match) return undefined
+
+  const hours = Number(match[1] ?? 0)
+  const minutes = Number(match[2] ?? 0)
+  const seconds = Number(match[3] ?? 0)
+  if (![hours, minutes, seconds].every((n) => Number.isFinite(n))) return undefined
+
+  const total = (hours * 60) + minutes + Math.ceil(seconds / 60)
+  return total > 0 ? total : undefined
+}
+
+function parseBaseServings(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+
+  if (typeof value === 'string') {
+    const match = value.match(/(\d+(?:\.\d+)?)/)
+    if (!match) return undefined
+    const parsed = Number(match[1])
+    if (Number.isFinite(parsed) && parsed > 0) return Math.round(parsed)
+    return undefined
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const parsed = parseBaseServings(entry)
+      if (parsed) return parsed
+    }
+  }
+
+  return undefined
+}
+
+function toJsonLdIngredients(value: unknown): Ingredient[] {
+  if (!Array.isArray(value)) return []
+
+  const ingredients: Ingredient[] = []
+  for (const item of value) {
+    if (typeof item !== 'string') continue
+    const name = item.trim()
+    if (!name) continue
+    ingredients.push({
+      name,
+      quantity: '適量',
+      unit: '',
+      category: 'main',
+    })
+  }
+
+  return ingredients
+}
+
+function collectInstructionTexts(value: unknown, out: string[]): void {
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (text) out.push(text)
+    return
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectInstructionTexts(item, out)
+    }
+    return
+  }
+
+  if (!isObjectRecord(value)) return
+
+  if (typeof value.text === 'string') {
+    const text = value.text.trim()
+    if (text) out.push(text)
+  }
+
+  if (Array.isArray(value.itemListElement)) {
+    for (const item of value.itemListElement) {
+      collectInstructionTexts(item, out)
+    }
+  }
+}
+
+function toJsonLdSteps(value: unknown): CookingStep[] {
+  const texts: string[] = []
+  collectInstructionTexts(value, texts)
+
+  const steps: CookingStep[] = []
+  for (const text of texts) {
+    steps.push({
+      name: text,
+      durationMinutes: 5,
+      isDeviceStep: false,
+    })
+  }
+  return steps
+}
+
+function toJsonLdRecipe(raw: unknown, sourceUrl: string): Omit<Recipe, 'id'> | null {
+  if (!isObjectRecord(raw)) return null
+
+  const recipe = raw as JsonLdRecipe
+  const title = typeof recipe.name === 'string' ? recipe.name.trim() : ''
+  if (!title) return null
+
+  const ingredients = toJsonLdIngredients(recipe.recipeIngredient)
+  const steps = toJsonLdSteps(recipe.recipeInstructions)
+  if (ingredients.length === 0 || steps.length === 0) return null
+
+  try {
+    const parsed = validateParsedRecipe({
+      title,
+      device: 'manual',
+      category: '主菜',
+      baseServings: parseBaseServings(recipe.recipeYield),
+      totalWeightG: undefined,
+      ingredients,
+      steps,
+      totalTimeMinutes: parseIso8601DurationMinutes(recipe.totalTime),
+    })
+
+    const imageUrl = resolveJsonLdImageUrl(recipe.image)
+    if (imageUrl) parsed.imageUrl = imageUrl
+    parsed.sourceUrl = sourceUrl
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 export function validateParsedRecipe(data: unknown): Omit<Recipe, 'id'> {
   const result = ParsedRecipeSchema.safeParse(data)
   if (!result.success) {
-    const formattedIssues = result.error.issues
-      .map((issue) => {
-        const path = issue.path.reduce<string>((acc, segment) => {
-          const part = String(segment)
-          if (typeof segment === 'number') return `${acc}[${part}]`
-          return acc ? `${acc}.${part}` : part
-        }, '')
-        return path ? `${path}: ${issue.message}` : issue.message
-      })
-      .join('; ')
-
+    const formattedIssueMessages: string[] = []
+    for (const issue of result.error.issues) {
+      const path = formatIssuePath(issue.path)
+      formattedIssueMessages.push(path ? `${path}: ${issue.message}` : issue.message)
+    }
+    const formattedIssues = formattedIssueMessages.join('; ')
     throw new Error(`Data validation failed: ${formattedIssues}`)
   }
 
   const parsed = result.data
-
   const totalTimeMinutes = typeof parsed.totalTimeMinutes === 'number'
     ? parsed.totalTimeMinutes
-    : parsed.steps.reduce((sum, s) => sum + s.durationMinutes, 0)
+    : parsed.steps.reduce((sum, step) => sum + step.durationMinutes, 0)
 
   return {
     title: parsed.title,
@@ -115,38 +282,24 @@ export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'
     throw new Error('URL形式が不正です。')
   }
 
-function formatIssuePath(segments: PropertyKey[]): string {
-  let path = ''
-  for (const segment of segments) {
-    if (typeof segment === 'number') {
-      path += `[${segment}]`
-      continue
+  ensureSupportedHost(parsedUrl)
+
+  const response = await fetch(`/api/recipe-extract?url=${encodeURIComponent(parsedUrl.toString())}`)
+  let data = await response.json() as ExtractApiResponse
+
+  if (response.status === 404) {
+    // Local dev fallback when Vercel function is not running
+    try {
+      const directRes = await fetch(parsedUrl.toString())
+      const directText = await directRes.text()
+      data = { ok: true, text: directText }
+    } catch {
+      throw new Error('URL解析APIが利用できません。Vercel上で実行するか、テキスト貼り付けで取り込みしてください。')
     }
-    const key = typeof segment === 'symbol' ? String(segment) : segment
-    path = path ? `${path}.${key}` : key
   }
-  return path
-}
 
-function pickFirstString(values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string') return value
-  }
-  return undefined
-}
-
-function resolveJsonLdImageUrl(image: JsonLdImageValue | undefined): string | undefined {
-  if (typeof image === 'string') return image
-  if (Array.isArray(image)) {
-    return pickFirstString(image)
-  }
-  if (image && typeof image === 'object' && typeof image.url === 'string') {
-    return image.url
-  }
-  return undefined
-}
-
-  const imageUrl = resolveJsonLdImageUrl(recipe.image)
+  const apiSucceeded = response.ok || response.status === 404
+  if (!apiSucceeded || !data.ok) {
     throw new Error(data.error || 'URLの解析に失敗しました。')
   }
 
@@ -154,59 +307,55 @@ function resolveJsonLdImageUrl(image: JsonLdImageValue | undefined): string | un
     console.warn('recipe-extract warnings:', data.warnings)
   }
 
-  const sourceSections: string[] = []
+  const parseFromJsonLd = (): Omit<Recipe, 'id'> | null => {
+    if (!Array.isArray(data.jsonLdRecipes) || data.jsonLdRecipes.length === 0) return null
 
+    for (const candidate of data.jsonLdRecipes) {
+      const parsed = toJsonLdRecipe(candidate, parsedUrl.toString())
+      if (!parsed) continue
+      if (data.imageUrl && !parsed.imageUrl) {
+        parsed.imageUrl = data.imageUrl
+      }
+      return parsed
+    }
+
+    return null
+  }
+
+  const sourceSections: string[] = []
   if (Array.isArray(data.jsonLdRecipes) && data.jsonLdRecipes.length > 0) {
     sourceSections.push(`JSON-LD Recipe Data:\n${JSON.stringify(data.jsonLdRecipes[0], null, 2)}`)
   }
-
   if (data.title) sourceSections.push(`ページタイトル: ${data.title}`)
   if (data.description) sourceSections.push(`説明: ${data.description}`)
   if (data.text) sourceSections.push(`本文テキスト:\n${data.text}`)
 
+  const strategy = resolveRecipeImportStrategy(parsedUrl.hostname)
+  if (strategy === 'jsonld-first') {
+    const jsonLdRecipe = parseFromJsonLd()
+    if (jsonLdRecipe) return jsonLdRecipe
+  }
+
   if (sourceSections.length === 0) {
+    const jsonLdRecipe = parseFromJsonLd()
+    if (jsonLdRecipe) return jsonLdRecipe
     throw new Error('URLからレシピ情報を抽出できませんでした。')
   }
 
-  const recipe = await parseRecipeText(sourceSections.join('\n\n'), 'url')
-  recipe.sourceUrl = parsedUrl.toString()
+  const sourceText = sourceSections.join('\n\n')
 
-  if (data.imageUrl && !recipe.imageUrl) {
-    recipe.imageUrl = data.imageUrl
-  }
-
-    const formatIssuePath = (segments: Array<string | number>): string => {
-      let path = ''
-      for (const segment of segments) {
-        if (typeof segment === 'number') {
-          path += `[${segment}]`
-          continue
-        }
-        path = path ? `${path}.${segment}` : segment
-      }
-      return path
-    }
-
-    const formattedIssueMessages: string[] = []
-    for (const issue of result.error.issues) {
-      const path = formatIssuePath(issue.path)
-      formattedIssueMessages.push(path ? `${path}: ${issue.message}` : issue.message)
-    }
-    const formattedIssues = formattedIssueMessages.join('; ')
   try {
     const recipe = await parseRecipeText(sourceText, 'url')
     recipe.sourceUrl = parsedUrl.toString()
-
     if (data.imageUrl && !recipe.imageUrl) {
       recipe.imageUrl = data.imageUrl
     }
-
     return recipe
   } catch (error) {
     if (strategy === 'gemini-first') {
       const jsonLdRecipe = parseFromJsonLd()
       if (jsonLdRecipe) return jsonLdRecipe
     }
-
     throw error
   }
+}
