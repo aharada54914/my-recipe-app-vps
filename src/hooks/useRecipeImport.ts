@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Recipe, ParseStatus } from '../db/db'
 import { db } from '../db/db'
 import { parseRecipeText, parseRecipeFromUrl } from '../utils/geminiParser'
+import { toUserFriendlyGeminiError } from '../utils/geminiError'
 
 export interface UseRecipeImportOptions {
     /** Called when a duplicate title is detected. Should resolve to true to confirm overwrite, false to cancel.
@@ -28,7 +29,7 @@ export function useRecipeImport(options?: UseRecipeImportOptions) {
             setParsed(result)
             setStatus('previewing')
         } catch (e) {
-            setError(e instanceof Error ? e.message : '解析に失敗しました')
+            setError(toUserFriendlyGeminiError(e))
             setStatus('error')
         }
     }

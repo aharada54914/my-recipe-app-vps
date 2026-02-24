@@ -5,10 +5,15 @@ import { db } from '../db/db'
 import { useDebounce } from '../hooks/useDebounce'
 import { expandSynonyms } from '../data/synonyms'
 import { STOCK_MASTER } from '../data/stockMaster'
+import { SEASONING_MASTER, SEASONING_PRESETS } from '../data/seasoningPresets'
 
 // Build the ingredient list from STOCK_MASTER, sorted 50音順
-const INGREDIENT_INDEX = [...STOCK_MASTER]
-  .map((item) => ({ name: item.name, defaultUnit: item.unit }))
+const INGREDIENT_INDEX = Array.from(
+  new Map(
+    [...STOCK_MASTER, ...SEASONING_MASTER].map((item) => [item.name, { name: item.name, defaultUnit: item.unit }])
+  ).values()
+)
+  .map((item) => ({ name: item.name, defaultUnit: item.defaultUnit }))
   .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
 
 function StockRow({
@@ -60,6 +65,31 @@ export function StockManager() {
     }
   }
 
+  const handleRegisterSeasoningPreset = async (items: Array<{ name: string; unit: string }>) => {
+    const uniqueItems = Array.from(new Map(items.map((item) => [item.name, item])).values())
+
+    await db.transaction('rw', db.stock, async () => {
+      for (const item of uniqueItems) {
+        const existing = await db.stock.where('name').equals(item.name).first()
+        if (existing) {
+          const currentQty = typeof existing.quantity === 'number' ? existing.quantity : 0
+          await db.stock.update(existing.id!, {
+            unit: existing.unit || item.unit,
+            quantity: currentQty > 0 ? currentQty : 1,
+            inStock: true,
+          })
+        } else {
+          await db.stock.add({
+            name: item.name,
+            unit: item.unit,
+            quantity: 1,
+            inStock: true,
+          })
+        }
+      }
+    })
+  }
+
   // Build a map of current stock quantities
   const stockMap = useMemo(
     () => new Map((stockItems ?? []).map((s) => [s.name, s])),
@@ -82,6 +112,18 @@ export function StockManager() {
   // Search results: filter by debounced query, exclude already-stocked items
   const inStockNames = useMemo(() => new Set(inStockItems.map((i) => i.name)), [inStockItems])
 
+  const presetAvailability = useMemo(
+    () =>
+      SEASONING_PRESETS.map((preset) => ({
+        ...preset,
+        addableCount: preset.items.filter((item) => {
+          const existing = stockMap.get(item.name)
+          return !existing || !existing.quantity || existing.quantity <= 0
+        }).length,
+      })),
+    [stockMap]
+  )
+
   const searchResults = useMemo(() => {
     if (!debouncedQuery.trim()) return []
     const synonyms = expandSynonyms(debouncedQuery.trim())
@@ -102,6 +144,31 @@ export function StockManager() {
     <div>
       <h2 className="mb-4 text-xl font-extrabold">在庫管理</h2>
 
+      <div className="mb-6 rounded-2xl bg-bg-card p-4 ring-1 ring-white/10">
+        <h3 className="text-sm font-bold text-text-primary">調味料をまとめて登録</h3>
+        <p className="mt-1 text-xs text-text-secondary">
+          日本の家庭で使う定番調味料を、在庫あり・数量1（本/袋/個）で一括登録できます。
+        </p>
+        <div className="mt-3 grid gap-2">
+          {presetAvailability.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => handleRegisterSeasoningPreset(preset.items)}
+              className="rounded-xl bg-white/5 px-3 py-3 text-left ring-1 ring-white/10 transition hover:bg-white/10"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-text-primary">{preset.label}</span>
+                <span className="shrink-0 text-[11px] text-text-secondary">
+                  追加候補 {preset.addableCount}/{preset.items.length}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-text-secondary">{preset.description}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Search bar */}
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
@@ -109,7 +176,7 @@ export function StockManager() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="食材を検索..."
+          placeholder="食材・調味料を検索..."
           className="w-full rounded-xl bg-bg-card py-3 pl-10 pr-4 text-base text-text-primary placeholder:text-text-secondary outline-none ring-1 ring-white/10"
         />
       </div>
@@ -153,14 +220,14 @@ export function StockManager() {
       {/* Empty state */}
       {inStockItems.length === 0 && !debouncedQuery.trim() && (
         <p className="py-12 text-center text-sm text-text-secondary">
-          食材を検索して在庫を登録しましょう
+          食材や調味料を検索して在庫を登録しましょう
         </p>
       )}
 
       {/* No search results */}
       {debouncedQuery.trim() && searchResults.length === 0 && inStockItems.length === 0 && (
         <p className="py-8 text-center text-sm text-text-secondary">
-          「{debouncedQuery}」に一致する食材が見つかりません
+          「{debouncedQuery}」に一致する食材・調味料が見つかりません
         </p>
       )}
     </div>

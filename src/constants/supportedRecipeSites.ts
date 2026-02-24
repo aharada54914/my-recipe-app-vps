@@ -3,6 +3,7 @@ export interface SupportedRecipeSite {
   url: string
   description: string
   domains: string[]
+  importStrategy?: 'jsonld-first' | 'gemini-first'
 }
 
 export const SUPPORTED_RECIPE_SITES: SupportedRecipeSite[] = [
@@ -53,6 +54,7 @@ export const SUPPORTED_RECIPE_SITES: SupportedRecipeSite[] = [
     url: 'https://foodistnote.recipe-blog.jp/',
     description: '料理ブロガー記事の集約サイト。',
     domains: ['foodistnote.recipe-blog.jp'],
+    importStrategy: 'gemini-first',
   },
   {
     name: 'リュウジのバズレシピ.com',
@@ -71,3 +73,27 @@ export const SUPPORTED_RECIPE_SITES: SupportedRecipeSite[] = [
 export const SUPPORTED_RECIPE_DOMAINS = Array.from(
   new Set(SUPPORTED_RECIPE_SITES.flatMap((site) => site.domains.map((domain) => domain.toLowerCase())))
 )
+
+export type RecipeImportStrategy = 'jsonld-first' | 'gemini-first'
+
+const RECIPE_IMPORT_STRATEGY_BY_DOMAIN = new Map<string, RecipeImportStrategy>()
+
+for (const site of SUPPORTED_RECIPE_SITES) {
+  const strategy = site.importStrategy ?? 'jsonld-first'
+  for (const domain of site.domains) {
+    RECIPE_IMPORT_STRATEGY_BY_DOMAIN.set(domain.toLowerCase(), strategy)
+  }
+}
+
+export function resolveRecipeImportStrategy(hostname: string): RecipeImportStrategy {
+  const host = hostname.toLowerCase()
+
+  const exact = RECIPE_IMPORT_STRATEGY_BY_DOMAIN.get(host)
+  if (exact) return exact
+
+  for (const [domain, strategy] of RECIPE_IMPORT_STRATEGY_BY_DOMAIN.entries()) {
+    if (host.endsWith(`.${domain}`)) return strategy
+  }
+
+  return 'jsonld-first'
+}
