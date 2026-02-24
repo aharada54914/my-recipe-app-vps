@@ -16,6 +16,7 @@ import { computeKitchenAppPreferenceScore } from '../utils/preferenceRanker'
 
 const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
 const seasonalIngredients = getCurrentSeasonalIngredients()
+const SEARCH_HISTORY_KEY = 'recipe_search_history'
 
 interface RecipeListProps {
   onSelectRecipe: (id: number) => void
@@ -27,6 +28,16 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   const [deviceFilter, setDeviceFilter] = useState<DeviceType | null>(null)
   const [quickFilter, setQuickFilter] = useState(false)
   const [seasonalFilter, setSeasonalFilter] = useState(false)
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    const stored = localStorage.getItem(SEARCH_HISTORY_KEY)
+    if (!stored) return []
+    try {
+      const parsed = JSON.parse(stored)
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string').slice(0, 5) : []
+    } catch {
+      return []
+    }
+  })
 
   const debouncedSearch = useDebounce(search, 300)
   // T-22: useDeferredValue defers re-renders during rapid input
@@ -195,9 +206,35 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       : seasonalFilter ? '旬のレシピ'
         : null
 
+  const saveSearchHistory = useCallback((keyword: string) => {
+    const normalized = keyword.trim()
+    if (!normalized) return
+
+    setSearchHistory((prev) => {
+      const next = [normalized, ...prev.filter((entry) => entry !== normalized)].slice(0, 5)
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const handleSubmitSearch = useCallback(() => {
+    saveSearchHistory(search)
+  }, [saveSearchHistory, search])
+
+  const handleSelectHistory = useCallback((value: string) => {
+    setSearch(value)
+    saveSearchHistory(value)
+  }, [saveSearchHistory])
+
   return (
     <>
-      <SearchBar value={search} onChange={setSearch} />
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        history={searchHistory}
+        onSubmit={handleSubmitSearch}
+        onSelectHistory={handleSelectHistory}
+      />
       <CategoryTags selected={category} onSelect={handleCategorySelect} />
 
       {/* Active special filter badge */}
