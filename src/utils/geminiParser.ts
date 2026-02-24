@@ -1,6 +1,6 @@
 import type { Recipe, Ingredient, CookingStep } from '../db/db'
 import { extractJsonObjectText, generateGeminiText } from '../lib/geminiClient'
-import { SUPPORTED_RECIPE_DOMAINS } from '../constants/supportedRecipeSites'
+import { SUPPORTED_RECIPE_DOMAINS, resolveRecipeImportStrategy } from '../constants/supportedRecipeSites'
 
 const SYSTEM_PROMPT = `あなたはレシピ解析AIです。以下の情報を解析し、JSONのみを出力してください。説明文は不要です。
 
@@ -161,3 +161,28 @@ export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'
 
   return recipe
 }
+  const parseFromJsonLd = (): Omit<Recipe, 'id'> | null => {
+    if (!Array.isArray(data.jsonLdRecipes) || data.jsonLdRecipes.length === 0) return null
+    return null
+  const strategy = resolveRecipeImportStrategy(parsedUrl.hostname)
+  const sourceText = sourceSections.join('\n\n')
+  if (strategy === 'jsonld-first') {
+    const jsonLdRecipe = parseFromJsonLd()
+    if (jsonLdRecipe) return jsonLdRecipe
+  try {
+    const recipe = await parseRecipeText(sourceText, 'url')
+    recipe.sourceUrl = parsedUrl.toString()
+
+    if (data.imageUrl && !recipe.imageUrl) {
+      recipe.imageUrl = data.imageUrl
+    }
+
+    return recipe
+  } catch (error) {
+    if (strategy === 'gemini-first') {
+      const jsonLdRecipe = parseFromJsonLd()
+      if (jsonLdRecipe) return jsonLdRecipe
+    }
+
+    throw error
+  }
