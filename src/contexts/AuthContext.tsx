@@ -10,6 +10,24 @@ const TOKEN_KEY = 'google_access_token'
 const TOKEN_EXPIRY_KEY = 'google_token_expiry'
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
+function getPersistedAuthItem(key: string): string | null {
+  try {
+    const localValue = localStorage.getItem(key)
+    if (localValue) return localValue
+
+    const sessionValue = sessionStorage.getItem(key)
+    if (sessionValue) {
+      localStorage.setItem(key, sessionValue)
+      sessionStorage.removeItem(key)
+      return sessionValue
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  return null
+}
+
 const SCOPES = [
   'openid',
   'email',
@@ -20,20 +38,15 @@ const SCOPES = [
 ].join(' ')
 
 function loadStoredToken(): string | null {
-  try {
-    const token = sessionStorage.getItem(TOKEN_KEY)
-    const expiry = sessionStorage.getItem(TOKEN_EXPIRY_KEY)
-    if (token && expiry && new Date(expiry) > new Date()) return token
-    return null
-  } catch {
-    return null
-  }
+  const token = getPersistedAuthItem(TOKEN_KEY)
+  const expiry = getPersistedAuthItem(TOKEN_EXPIRY_KEY)
+  if (token && expiry && new Date(expiry) > new Date()) return token
+  return null
 }
 
 function loadStoredUser(): GoogleUser | null {
   try {
-    // H3: Use sessionStorage for user info (clears on tab close, more secure)
-    const stored = sessionStorage.getItem(USER_KEY)
+    const stored = getPersistedAuthItem(USER_KEY)
     return stored ? (JSON.parse(stored) as GoogleUser) : null
   } catch {
     return null
@@ -69,8 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const storeToken = useCallback((token: string, expiresIn: number) => {
     const expiry = new Date(Date.now() + expiresIn * 1000).toISOString()
     try {
-      sessionStorage.setItem(TOKEN_KEY, token)
-      sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiry)
+      localStorage.setItem(TOKEN_KEY, token)
+      localStorage.setItem(TOKEN_EXPIRY_KEY, expiry)
     } catch { /* ignore storage errors */ }
     setProviderToken(token)
   }, [])
@@ -82,9 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       setProviderToken(null)
       try {
-        sessionStorage.removeItem(USER_KEY)
-        sessionStorage.removeItem(TOKEN_KEY)
-        sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
+        localStorage.removeItem(USER_KEY)
+        localStorage.removeItem(TOKEN_KEY)
+        localStorage.removeItem(TOKEN_EXPIRY_KEY)
       } catch { /* ignore */ }
     }
 
@@ -147,7 +160,7 @@ function OAuthEnabledAuthProvider({
         if (res.ok) {
           const userInfo = (await res.json()) as GoogleUser
           setUser(userInfo)
-          sessionStorage.setItem(USER_KEY, JSON.stringify(userInfo))
+          localStorage.setItem(USER_KEY, JSON.stringify(userInfo))
         }
       } catch { /* ignore fetch errors */ }
       setLoading(false)
@@ -166,9 +179,9 @@ function OAuthEnabledAuthProvider({
     setUser(null)
     setProviderToken(null)
     try {
-      sessionStorage.removeItem(USER_KEY)
-      sessionStorage.removeItem(TOKEN_KEY)
-      sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
+      localStorage.removeItem(USER_KEY)
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(TOKEN_EXPIRY_KEY)
     } catch { /* ignore */ }
   }, [setProviderToken, setUser])
 
