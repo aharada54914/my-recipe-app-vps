@@ -1,6 +1,7 @@
 import type { Recipe, Ingredient, CookingStep } from '../db/db'
 import { extractJsonObjectText, generateGeminiText } from '../lib/geminiClient'
 import { SUPPORTED_RECIPE_DOMAINS, resolveRecipeImportStrategy } from '../constants/supportedRecipeSites'
+import { ParsedRecipeSchema } from '../db/zodSchemas'
 
 const SYSTEM_PROMPT = `あなたはレシピ解析AIです。以下の情報を解析し、JSONのみを出力してください。説明文は不要です。
 
@@ -48,8 +49,6 @@ function generateRecipeNumber(): string {
   const pad = (n: number) => n.toString().padStart(2, '0')
   return `AI-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
 }
-
-import { ParsedRecipeSchema } from '../db/zodSchemas'
 
 export function validateParsedRecipe(data: unknown): Omit<Recipe, 'id'> {
   const result = ParsedRecipeSchema.safeParse(data)
@@ -113,24 +112,38 @@ export async function parseRecipeFromUrl(url: string): Promise<Omit<Recipe, 'id'
     throw new Error('URL形式が不正です。')
   }
 
-  ensureSupportedHost(parsedUrl)
-
-  const response = await fetch(`/api/recipe-extract?url=${encodeURIComponent(parsedUrl.toString())}`)
-  let data = await response.json() as ExtractApiResponse
-
-  if (response.status === 404) {
-    // Local dev fallback when Vercel function is not running
-    try {
-      const directRes = await fetch(parsedUrl.toString())
-      const directText = await directRes.text()
-      data = { ok: true, text: directText }
-    } catch {
-      throw new Error('URL解析APIが利用できません。Vercel上で実行するか、テキスト貼り付けで取り込みしてください。')
+function formatIssuePath(segments: PropertyKey[]): string {
+  let path = ''
+  for (const segment of segments) {
+    if (typeof segment === 'number') {
+      path += `[${segment}]`
+      continue
     }
+    const key = typeof segment === 'symbol' ? String(segment) : segment
+    path = path ? `${path}.${key}` : key
   }
+  return path
+}
 
-  const apiSucceeded = response.ok || response.status === 404
-  if (!apiSucceeded || !data.ok) {
+function pickFirstString(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string') return value
+  }
+  return undefined
+}
+
+function resolveJsonLdImageUrl(image: JsonLdRecipe['image']): string | undefined {
+  if (typeof image === 'string') return image
+  if (Array.isArray(image)) {
+    return pickFirstString(image)
+  }
+  if (image && typeof image === 'object' && typeof image.url === 'string') {
+    return image.url
+  }
+  return undefined
+}
+
+  const imageUrl = resolveJsonLdImageUrl(recipe.image)
     throw new Error(data.error || 'URLの解析に失敗しました。')
   }
 
