@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 
+export function getRecentSearchSuggestions(history: string[], focused: boolean): string[] {
+  if (!focused) return []
+  return history.slice(0, 5)
+}
+
 interface SearchBarProps {
   value: string
   onChange: (value: string) => void
@@ -18,12 +23,8 @@ export function SearchBar({
 }: SearchBarProps) {
   const [focused, setFocused] = useState(false)
   const suggestions = useMemo(() => {
-    const keyword = value.trim().toLowerCase()
-    if (!keyword) return []
-    return history
-      .filter((entry) => entry.toLowerCase().includes(keyword))
-      .slice(0, 5)
-  }, [history, value])
+    return getRecentSearchSuggestions(history, focused)
+  }, [focused, history])
 
   return (
     <div className="mb-6 relative">
