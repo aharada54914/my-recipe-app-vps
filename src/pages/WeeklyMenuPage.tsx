@@ -514,7 +514,7 @@ export function WeeklyMenuPage() {
                       {/* Main dish */}
                       <div>
                         <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
-                          <span>主菜</span>
+                          <span>分量</span>
                           {mainRecipe && (
                             <ServingsStepper
                               value={mainServings}
@@ -540,7 +540,7 @@ export function WeeklyMenuPage() {
                       {/* Side dish */}
                       <div>
                         <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
-                          <span>副菜・スープ</span>
+                          <span>分量</span>
                           {sideRecipe && (
                             <ServingsStepper
                               value={sideServings}
