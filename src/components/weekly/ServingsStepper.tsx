@@ -29,12 +29,12 @@ export function ServingsStepper({
         onClick={() => canDecrease && onChange(value - 1)}
         disabled={!canDecrease}
         aria-label={`${ariaLabel}を1人減らす`}
-        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-text-primary transition-colors hover:bg-white/10 disabled:opacity-35"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-primary transition-colors hover:bg-white/10 disabled:opacity-35"
       >
-        <Minus className="h-4 w-4" />
+        <Minus className="h-3 w-3" />
       </button>
 
-      <div className="flex min-h-[44px] min-w-[56px] items-center justify-center px-2 text-sm font-bold text-text-primary">
+      <div className="flex h-7 min-w-[36px] items-center justify-center px-1 text-xs font-bold text-text-primary">
         {value}人
       </div>
 
@@ -43,9 +43,9 @@ export function ServingsStepper({
         onClick={() => canIncrease && onChange(value + 1)}
         disabled={!canIncrease}
         aria-label={`${ariaLabel}を1人増やす`}
-        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-text-primary transition-colors hover:bg-white/10 disabled:opacity-35"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-primary transition-colors hover:bg-white/10 disabled:opacity-35"
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="h-3 w-3" />
       </button>
     </div>
   )
