@@ -2,12 +2,16 @@ import { useState, useRef } from 'react'
 import { Download, Upload } from 'lucide-react'
 import { exportData } from '../../utils/dataExport'
 import { importData, type ImportMode } from '../../utils/dataImport'
+import { StockQrShareModal } from './StockQrShareModal'
+import { StockQrReceiveModal } from './StockQrReceiveModal'
 
 export function DataTab() {
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'done' | 'error'>('idle')
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'done' | 'error'>('idle')
   const [importMessage, setImportMessage] = useState('')
   const [importMode, setImportMode] = useState<ImportMode>('overwrite')
+  const [showQrShare, setShowQrShare] = useState(false)
+  const [showQrReceive, setShowQrReceive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = async () => {
@@ -90,6 +94,21 @@ export function DataTab() {
                 : 'データをインポート'
           }
         </button>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setShowQrShare(true)}
+            className="ui-btn ui-btn-secondary text-xs font-semibold"
+          >
+            在庫をQRで共有
+          </button>
+          <button
+            onClick={() => setShowQrReceive(true)}
+            className="ui-btn ui-btn-secondary text-xs font-semibold"
+          >
+            在庫をQRで受信
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl bg-white/5 px-4 py-3">
@@ -98,6 +117,9 @@ export function DataTab() {
           インポートの際は、「上書き」を選ぶと現在のデータをすべて置き換え、「マージ」を選ぶと現在のデータに不足分を追加（合成）します。
         </p>
       </div>
+
+      {showQrShare && <StockQrShareModal onClose={() => setShowQrShare(false)} />}
+      {showQrReceive && <StockQrReceiveModal onClose={() => setShowQrReceive(false)} />}
     </>
   )
 }
