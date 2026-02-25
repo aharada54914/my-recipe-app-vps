@@ -71,6 +71,10 @@ const subKeywords = [
   'バニラ', 'ココア', 'パン粉', '水', '牛乳',
 ]
 
+function classifyIngredient(name) {
+  return subKeywords.some((kw) => name.includes(kw)) ? 'sub' : 'main'
+}
+
 function parseFraction(s) {
   if (s.includes('と')) {
     const parts = s.split('と')
@@ -84,9 +88,23 @@ function parseFraction(s) {
 }
 
 function parseQuantityUnit(raw) {
+  // Handle "大さじ・1/2" or "小さじ・1/2" → spoon unit with fraction (parsing artifact fix)
+  const spoonNakaMatch = raw.match(/^(大さじ|小さじ)・([\d/]+(?:\s*と\s*[\d/]+)?)$/)
+  if (spoonNakaMatch) {
+    return { quantity: parseFraction(spoonNakaMatch[2]), unit: spoonNakaMatch[1] }
+  }
+
   const spoonMatch = raw.match(/^(大さじ|小さじ)([\d/]+(?:\s*と\s*[\d/]+)?)$/)
   if (spoonMatch) {
     return { quantity: parseFraction(spoonMatch[2]), unit: spoonMatch[1] }
+  }
+
+  // Handle "1・1/2カップ" → 1.5 カップ (parsing artifact fix)
+  const nakaNumMatch = raw.match(/^([\d.]+)・([\d./]+)\s*(.*)$/)
+  if (nakaNumMatch) {
+    const qty = parseFloat(nakaNumMatch[1]) + parseFraction(nakaNumMatch[2])
+    const unit = nakaNumMatch[3].replace(/\(.*?\)/g, '').trim() || '個'
+    return { quantity: qty, unit }
   }
 
   const numMatch = raw.match(/^([\d./]+)\s*(.*)$/)
@@ -127,6 +145,92 @@ function parseIngredientLine(line) {
 
   const { quantity, unit } = parseQuantityUnit(rawQty)
   return { name, quantity, unit, category }
+}
+
+// ─── Ingredient normalization (expand grouped entries) ───
+
+/**
+ * Assign qty/unit to a list of split ingredient names.
+ * - unit starts with 各 → each gets qty + unit-without-各
+ * - unit contains 合わせて/合計 → each gets 適量 (combined total, no per-item amount)
+ * - otherwise → each gets the same qty/unit
+ */
+function assignQtyToExpanded(names, quantity, unit) {
+  const cleanNames = names
+    .map((n) => n.replace(/[など等]+$/, '').replace(/^[^：、・]+：/, '').trim())
+    .filter((n) => n)
+
+  if (unit.startsWith('各')) {
+    const cleanUnit = unit.slice(1)
+    return cleanNames.map((n) => ({ name: n, quantity, unit: cleanUnit, category: classifyIngredient(n) }))
+  }
+
+  if (unit.includes('合わせて') || unit.includes('合計')) {
+    return cleanNames.map((n) => ({ name: n, quantity: 0, unit: '適量', category: classifyIngredient(n) }))
+  }
+
+  return cleanNames.map((n) => ({ name: n, quantity, unit, category: classifyIngredient(n) }))
+}
+
+/**
+ * Expand a single ingredient entry into multiple if its name contains
+ * 、(Japanese comma) or ・(middle dot) separating multiple ingredients.
+ * Also handles grouped items inside Japanese parentheses: "野菜（A・B・C）"
+ */
+function expandGroupedIngredient(ing) {
+  const { quantity, unit } = ing
+
+  // Strip leading ・ or whitespace from name (occasional CSV artifact)
+  const cleanedName = ing.name.replace(/^[・\s]+/, '').trim()
+  if (!cleanedName) return []
+
+  // Pattern: Japanese parens contain ・ or 、-separated ingredient list
+  // e.g. "野菜（ピーマン・たけのこ・きくらげ）" or "野菜（玉ねぎ、パプリカ、なす）"
+  const jaParenMatch = cleanedName.match(/[（(]([^）)]+)[）)]/)
+  if (jaParenMatch) {
+    const inner = jaParenMatch[1]
+    const sep = inner.includes('・') ? '・' : inner.includes('、') ? '、' : null
+    if (sep) {
+      const contents = inner
+        .split(sep)
+        .map((s) => s.replace(/[など等]+$/, '').trim())
+        .filter((s) => s)
+      if (contents.length > 1) {
+        return contents.map((n) => ({ name: n, quantity: 0, unit: '適量', category: classifyIngredient(n) }))
+      }
+    }
+  }
+
+  // Remove Japanese parens before splitting on separators
+  const nameForSplit = cleanedName.replace(/[（(][^）)]*[）)]/g, '').trim()
+
+  // Split on ・
+  if (nameForSplit.includes('・')) {
+    const names = nameForSplit.split('・').map((n) => n.trim()).filter((n) => n)
+    if (names.length > 1) {
+      return assignQtyToExpanded(names, quantity, unit)
+    }
+  }
+
+  // Split on 、
+  if (nameForSplit.includes('、')) {
+    const names = nameForSplit.split('、').map((n) => n.trim()).filter((n) => n)
+    if (names.length > 1) {
+      return assignQtyToExpanded(names, quantity, unit)
+    }
+  }
+
+  // No expansion — return with cleaned name and reclassified category
+  return [{ ...ing, name: cleanedName, category: classifyIngredient(cleanedName) }]
+}
+
+function normalizeIngredients(ingredients) {
+  // Two passes: first splits on ・, second handles any 、 left inside split parts
+  let pass1 = []
+  for (const ing of ingredients) pass1.push(...expandGroupedIngredient(ing))
+  let pass2 = []
+  for (const ing of pass1) pass2.push(...expandGroupedIngredient(ing))
+  return pass2
 }
 
 // ─── Raw steps parser ───
@@ -250,10 +354,12 @@ function convertHealsioCSV(csvText) {
     const stepsText = row[7] || ''
     const sourceUrl = row[8]?.trim() || ''
 
-    const ingredients = ingredientsText
-      .split('\n')
-      .map(parseIngredientLine)
-      .filter((ing) => ing !== null)
+    const ingredients = normalizeIngredients(
+      ingredientsText
+        .split('\n')
+        .map(parseIngredientLine)
+        .filter((ing) => ing !== null)
+    )
 
     const rawSteps = parseRawSteps(stepsText)
     const steps = estimateCookingSteps('healsio', cookingTime, ingredients.length)
@@ -305,10 +411,12 @@ function convertHotcookCSV(csvText) {
     const stepsText = row[7] || ''
     const sourceUrl = row[8]?.trim() || ''
 
-    const ingredients = ingredientsText
-      .split('\n')
-      .map(parseIngredientLine)
-      .filter((ing) => ing !== null)
+    const ingredients = normalizeIngredients(
+      ingredientsText
+        .split('\n')
+        .map(parseIngredientLine)
+        .filter((ing) => ing !== null)
+    )
 
     const rawSteps = parseRawSteps(stepsText)
     const steps = estimateCookingSteps('hotcook', cookingTime, ingredients.length)
