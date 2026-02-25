@@ -1,7 +1,7 @@
 # Architecture Reference
 
 最終改訂: 2026-02-25
-対象バージョン: v1.9.6
+対象バージョン: v1.9.7
 
 Kitchen App の現行アーキテクチャ概要です。
 
@@ -69,6 +69,8 @@ DB: `RecipeDB`（Dexie schema version 9）
 4. 共有リンク/共有コードの生成・読込
 5. 日次タイルは時刻情報アイコンとガント導線を大きめ表示で統一
 6. Google Calendar登録は1日1イベントに主菜+副菜/スープを統合して作成
+7. 買い物リストイベントにQRコード画像（Drive経由）とインポートURLを添付
+8. `weeklyMenuQr.ts` のハイブリッドエンコードでQRデータをbase64url化
 
 ---
 
@@ -87,15 +89,14 @@ DB: `RecipeDB`（Dexie schema version 9）
 
 ## 7. Google連携
 
-- OAuthで `providerToken` 取得
+- OAuthで `providerToken` 取得。スコープ: `drive.appdata`, `drive.file`, `calendar.events`, `calendar.readonly`
 - Drive:
-  - `backupToGoogleDrive`
-  - `restoreFromGoogleDrive`
-  - 保存先は `appDataFolder`（通常のDrive一覧には表示されにくい）
-  - 現行のDriveバックアップ対象はユーザーデータ中心（レシピ本体の完全バックアップは手動エクスポート）
+  - `backupToGoogleDrive` / `restoreFromGoogleDrive`（appDataFolder）
+  - `uploadQrImageToDrive`（drive.fileスコープ、My Driveにイベント添付用QR画像を保存）
 - Calendar:
   - 献立イベント（主菜+副菜/スープを1日1イベントに統合）
-  - 買い物イベント
+  - 買い物イベント（QR画像添付 + `?import-menu=<base64>` のインポートURL）
+- QR受信: `?import-menu=<base64>` URLパラメータを `App.tsx` で検知 → `WeeklyMenuImportModal` で確認→インポート
 
 ---
 
