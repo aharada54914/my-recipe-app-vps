@@ -408,7 +408,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -453,11 +459,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 12
+        "durationMinutes": 14
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 10,
+        "durationMinutes": 8,
         "isDeviceStep": true
       },
       {
@@ -485,10 +491,16 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 200,
+    "totalWeightG": 250,
     "ingredients": [
       {
-        "name": "揚げ豚・エリンギ",
+        "name": "揚げ豚",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "エリンギ",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -515,11 +527,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 6
+        "durationMinutes": 8
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 21,
+        "durationMinutes": 19,
         "isDeviceStep": true
       },
       {
@@ -553,9 +565,27 @@
     "totalWeightG": 200,
     "ingredients": [
       {
-        "name": "具材（揚げ豚・白菜・にんじん・生姜）",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "揚げ豚",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "白菜",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "にんじん",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "生姜",
+        "quantity": 0,
+        "unit": "適量",
         "category": "main"
       },
       {
@@ -568,11 +598,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 8
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 22,
+        "durationMinutes": 19,
         "isDeviceStep": true
       },
       {
@@ -601,10 +631,16 @@
     "device": "hotcook",
     "category": "ご飯もの",
     "baseServings": 4,
-    "totalWeightG": 450,
+    "totalWeightG": 500,
     "ingredients": [
       {
-        "name": "あさり・千切り生姜",
+        "name": "あさり",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "千切り生姜",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -631,11 +667,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 6
+        "durationMinutes": 8
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 51,
+        "durationMinutes": 49,
         "isDeviceStep": true
       },
       {
@@ -1136,7 +1172,13 @@
         "category": "main"
       },
       {
-        "name": "厚揚げ、れんこん",
+        "name": "厚揚げ",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "れんこん",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -1865,12 +1907,30 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 3,
-    "totalWeightG": 500,
+    "totalWeightG": 450,
     "ingredients": [
       {
-        "name": "具材（豚バラ肉・白菜・ぶなじめじ・ニラ）",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "豚バラ肉",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "白菜",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "ぶなじめじ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "ニラ",
+        "quantity": 0,
+        "unit": "適量",
         "category": "main"
       },
       {
@@ -1892,7 +1952,25 @@
         "category": "main"
       },
       {
-        "name": "餃子・トッポギ・豆腐・春雨",
+        "name": "餃子",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "トッポギ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "豆腐",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "春雨",
         "quantity": 0,
         "unit": "適量",
         "category": "main"
@@ -1901,11 +1979,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 8
+        "durationMinutes": 17
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 44,
+        "durationMinutes": 35,
         "isDeviceStep": true
       },
       {
@@ -1977,7 +2055,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 600,
+    "totalWeightG": 650,
     "ingredients": [
       {
         "name": "青菜",
@@ -2010,9 +2088,15 @@
         "category": "sub"
       },
       {
-        "name": "酒、片栗粉",
+        "name": "酒",
         "quantity": 1,
-        "unit": "各大さじ/2",
+        "unit": "大さじ/2",
+        "category": "sub"
+      },
+      {
+        "name": "片栗粉",
+        "quantity": 1,
+        "unit": "大さじ/2",
         "category": "sub"
       },
       {
@@ -2037,7 +2121,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 14
+        "durationMinutes": 15
       },
       {
         "name": "ホットクック調理",
@@ -2049,7 +2133,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 22,
+    "totalTimeMinutes": 23,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4210",
     "servings": "材料：4人分",
     "calories": "約105kcal",
@@ -2069,10 +2153,16 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 3,
-    "totalWeightG": 300,
+    "totalWeightG": 350,
     "ingredients": [
       {
-        "name": "イカ・里芋",
+        "name": "イカ",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "里芋",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -2093,11 +2183,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 6
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 42,
+        "durationMinutes": 41,
         "isDeviceStep": true
       },
       {
@@ -2419,7 +2509,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -2437,7 +2533,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -2476,7 +2578,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 18
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
@@ -2488,7 +2590,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 26,
+    "totalTimeMinutes": 28,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4263",
     "servings": "材料：2人分",
     "calories": "約431kcal",
@@ -2507,10 +2609,16 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 250,
+    "totalWeightG": 300,
     "ingredients": [
       {
-        "name": "つみれ・鶏肉",
+        "name": "つみれ",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "鶏肉",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -2543,7 +2651,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 8
+        "durationMinutes": 9
       },
       {
         "name": "ホットクック調理",
@@ -2555,7 +2663,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 16,
+    "totalTimeMinutes": 17,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R101000000167",
     "servings": "材料：2人分",
     "calories": "約242kcal",
@@ -2586,7 +2694,13 @@
         "category": "main"
       },
       {
-        "name": "ピーマン・たけのこ",
+        "name": "ピーマン",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "たけのこ",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -2630,7 +2744,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 200,
+    "totalWeightG": 250,
     "ingredients": [
       {
         "name": "豚バラ肉",
@@ -2639,7 +2753,13 @@
         "category": "main"
       },
       {
-        "name": "キャベツ・にんじん",
+        "name": "キャベツ",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "にんじん",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -2666,7 +2786,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 8
+        "durationMinutes": 9
       },
       {
         "name": "ホットクック調理",
@@ -2678,7 +2798,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 16,
+    "totalTimeMinutes": 17,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R101000000128",
     "servings": "材料：2人分",
     "calories": "約260kcal",
@@ -2914,9 +3034,15 @@
         "category": "sub"
       },
       {
-        "name": "しょうゆ、みりん",
+        "name": "しょうゆ",
         "quantity": 2,
-        "unit": "各大さじ",
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "みりん",
+        "quantity": 2,
+        "unit": "大さじ",
         "category": "sub"
       },
       {
@@ -2935,11 +3061,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 18
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 34,
+        "durationMinutes": 32,
         "isDeviceStep": true
       },
       {
@@ -4408,7 +4534,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -4417,7 +4549,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 12
+        "durationMinutes": 14
       },
       {
         "name": "ホットクック調理",
@@ -4429,7 +4561,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 20,
+    "totalTimeMinutes": 22,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4132",
     "servings": "材料：4人分",
     "calories": "約240kcal",
@@ -4592,16 +4724,28 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 3,
-    "totalWeightG": 200,
+    "totalWeightG": 250,
     "ingredients": [
       {
-        "name": "海老・白身魚（ひめ鯛）",
+        "name": "海老",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
       },
       {
-        "name": "ブロッコリー・玉ねぎ",
+        "name": "白身魚",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "ブロッコリー",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "玉ねぎ",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -4616,11 +4760,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 8
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 32,
+        "durationMinutes": 29,
         "isDeviceStep": true
       },
       {
@@ -4648,7 +4792,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 400,
+    "totalWeightG": 450,
     "ingredients": [
       {
         "name": "えび",
@@ -4711,9 +4855,15 @@
         "category": "sub"
       },
       {
-        "name": "砂糖、塩",
+        "name": "砂糖",
         "quantity": 1,
-        "unit": "各小さじ/3",
+        "unit": "小さじ/3",
+        "category": "sub"
+      },
+      {
+        "name": "塩",
+        "quantity": 1,
+        "unit": "小さじ/3",
         "category": "sub"
       },
       {
@@ -4726,7 +4876,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 18
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
@@ -4738,7 +4888,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 26,
+    "totalTimeMinutes": 28,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4217",
     "servings": "材料：2人分",
     "calories": "約89kcal",
@@ -5062,7 +5212,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -5125,7 +5281,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 17
+        "durationMinutes": 18
       },
       {
         "name": "ホットクック調理",
@@ -5137,7 +5293,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 25,
+    "totalTimeMinutes": 26,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4538",
     "servings": "材料：2人分",
     "calories": "約119kcal",
@@ -6837,7 +6993,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -6882,7 +7044,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 15
+        "durationMinutes": 17
       },
       {
         "name": "ホットクック調理",
@@ -6894,7 +7056,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 23,
+    "totalTimeMinutes": 25,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4541",
     "servings": "材料：2人分",
     "calories": "約202kcal",
@@ -7322,7 +7484,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -7346,9 +7514,21 @@
         "category": "sub"
       },
       {
-        "name": "白ワイン、しょうゆ、酢",
+        "name": "白ワイン",
         "quantity": 2,
-        "unit": "各大さじ",
+        "unit": "大さじ",
+        "category": "main"
+      },
+      {
+        "name": "しょうゆ",
+        "quantity": 2,
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "酢",
+        "quantity": 2,
+        "unit": "大さじ",
         "category": "sub"
       },
       {
@@ -7367,11 +7547,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 14
+        "durationMinutes": 18
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 18,
+        "durationMinutes": 14,
         "isDeviceStep": true
       },
       {
@@ -7431,7 +7611,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -7440,11 +7626,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 23,
+        "durationMinutes": 21,
         "isDeviceStep": true
       },
       {
@@ -7499,9 +7685,15 @@
         "category": "sub"
       },
       {
-        "name": "薄口しょうゆ、みりん",
+        "name": "薄口しょうゆ",
         "quantity": 2,
-        "unit": "各大さじ",
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "みりん",
+        "quantity": 2,
+        "unit": "大さじ",
         "category": "sub"
       },
       {
@@ -7532,11 +7724,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 14
+        "durationMinutes": 15
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 13,
+        "durationMinutes": 12,
         "isDeviceStep": true
       },
       {
@@ -7874,7 +8066,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -7889,11 +8087,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 12
+        "durationMinutes": 14
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 55,
+        "durationMinutes": 53,
         "isDeviceStep": true
       },
       {
@@ -8119,7 +8317,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -8134,11 +8338,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 14
+        "durationMinutes": 15
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 8,
+        "durationMinutes": 7,
         "isDeviceStep": true
       },
       {
@@ -8204,7 +8408,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -8213,11 +8423,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 11,
+        "durationMinutes": 10,
         "isDeviceStep": true
       },
       {
@@ -9284,7 +9494,7 @@
     "device": "hotcook",
     "category": "ご飯もの",
     "baseServings": 3,
-    "totalWeightG": 250,
+    "totalWeightG": 300,
     "ingredients": [
       {
         "name": "生パスタ",
@@ -9299,7 +9509,13 @@
         "category": "sub"
       },
       {
-        "name": "ほうれん草・バター",
+        "name": "ほうれん草",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "バター",
         "quantity": 1,
         "unit": "パック",
         "category": "sub"
@@ -9314,11 +9530,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 6
+        "durationMinutes": 8
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 26,
+        "durationMinutes": 24,
         "isDeviceStep": true
       },
       {
@@ -9348,10 +9564,16 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 450,
+    "totalWeightG": 500,
     "ingredients": [
       {
-        "name": "栗・ごぼう",
+        "name": "栗",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "ごぼう",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -9378,11 +9600,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 6
+        "durationMinutes": 8
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 51,
+        "durationMinutes": 49,
         "isDeviceStep": true
       },
       {
@@ -9412,7 +9634,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 450,
+    "totalWeightG": 400,
     "ingredients": [
       {
         "name": "たけのこ",
@@ -9421,9 +9643,15 @@
         "category": "main"
       },
       {
-        "name": "たれ（にんじん・油揚げ入り）",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "にんじん",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "油揚げ入り",
+        "quantity": 0,
+        "unit": "適量",
         "category": "sub"
       },
       {
@@ -9442,11 +9670,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 6
+        "durationMinutes": 8
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 61,
+        "durationMinutes": 59,
         "isDeviceStep": true
       },
       {
@@ -9478,7 +9706,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 500,
+    "totalWeightG": 550,
     "ingredients": [
       {
         "name": "絹ごし豆腐",
@@ -9499,9 +9727,15 @@
         "category": "main"
       },
       {
-        "name": "しょうが、にんにく",
+        "name": "しょうが",
         "quantity": 1,
-        "unit": "各かけ",
+        "unit": "かけ",
+        "category": "main"
+      },
+      {
+        "name": "にんにく",
+        "quantity": 1,
+        "unit": "かけ",
         "category": "main"
       },
       {
@@ -10254,15 +10488,39 @@
     "totalWeightG": 200,
     "ingredients": [
       {
-        "name": "えのきだけ、生しいたけ、しめじ、まいたけ",
-        "quantity": 400,
-        "unit": "合わせてｇ",
+        "name": "えのきだけ",
+        "quantity": 0,
+        "unit": "適量",
         "category": "main"
       },
       {
-        "name": "しょうゆ、みりん",
+        "name": "生しいたけ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "しめじ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "まいたけ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "しょうゆ",
         "quantity": 3,
-        "unit": "各大さじ",
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "みりん",
+        "quantity": 3,
+        "unit": "大さじ",
         "category": "sub"
       },
       {
@@ -10275,11 +10533,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 22,
+        "durationMinutes": 16,
         "isDeviceStep": true
       },
       {
@@ -10558,7 +10816,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -10804,7 +11068,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -10813,11 +11083,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 48,
+        "durationMinutes": 46,
         "isDeviceStep": true
       },
       {
@@ -11001,7 +11271,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 500,
+    "totalWeightG": 550,
     "ingredients": [
       {
         "name": "切り干し大根",
@@ -11022,9 +11292,15 @@
         "category": "sub"
       },
       {
-        "name": "砂糖、薄口しょうゆ",
+        "name": "砂糖",
         "quantity": 3,
-        "unit": "各大さじ",
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "薄口しょうゆ",
+        "quantity": 3,
+        "unit": "大さじ",
         "category": "sub"
       },
       {
@@ -11037,11 +11313,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 8
+        "durationMinutes": 9
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 14,
+        "durationMinutes": 13,
         "isDeviceStep": true
       },
       {
@@ -11401,7 +11677,13 @@
         "category": "main"
       },
       {
-        "name": "しょうが、白ねぎの青い部分",
+        "name": "しょうが",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "白ねぎの青い部分",
         "quantity": 0,
         "unit": "適量",
         "category": "main"
@@ -11446,11 +11728,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 12
+        "durationMinutes": 14
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 75,
+        "durationMinutes": 73,
         "isDeviceStep": true
       },
       {
@@ -11551,7 +11833,13 @@
         "category": "sub"
       },
       {
-        "name": "ごはん、青ねぎ",
+        "name": "ごはん",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "青ねぎ",
         "quantity": 0,
         "unit": "適量",
         "category": "main"
@@ -11560,11 +11848,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 18
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 69,
+        "durationMinutes": 67,
         "isDeviceStep": true
       },
       {
@@ -11605,7 +11893,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -12521,10 +12815,46 @@
     "totalWeightG": 200,
     "ingredients": [
       {
-        "name": "具材（海老・あさり・ブロッコリー・マッシュルーム・エリンギ・オリーブ油・たれ）",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "海老",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "あさり",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "ブロッコリー",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "マッシュルーム",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "エリンギ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "オリーブ油",
+        "quantity": 0,
+        "unit": "適量",
         "category": "sub"
+      },
+      {
+        "name": "たれ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
       },
       {
         "name": "あおさ",
@@ -12536,11 +12866,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 17,
+        "durationMinutes": 10,
         "isDeviceStep": true
       },
       {
@@ -12734,7 +13064,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -12743,7 +13079,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 17
+        "durationMinutes": 18
       },
       {
         "name": "ホットクック調理",
@@ -12755,7 +13091,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 25,
+    "totalTimeMinutes": 26,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4033",
     "servings": "材料：4人分",
     "calories": "約211kcal",
@@ -12936,7 +13272,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -12993,11 +13335,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 18
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 24,
+        "durationMinutes": 22,
         "isDeviceStep": true
       },
       {
@@ -13266,7 +13608,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 750,
+    "totalWeightG": 800,
     "ingredients": [
       {
         "name": "きざみ昆布",
@@ -13305,9 +13647,21 @@
         "category": "sub"
       },
       {
-        "name": "酒、みりん、砂糖",
+        "name": "酒",
         "quantity": 2,
-        "unit": "各大さじ",
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "みりん",
+        "quantity": 2,
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "砂糖",
+        "quantity": 2,
+        "unit": "大さじ",
         "category": "sub"
       },
       {
@@ -13320,11 +13674,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 12
+        "durationMinutes": 15
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 20,
+        "durationMinutes": 17,
         "isDeviceStep": true
       },
       {
@@ -13359,20 +13713,32 @@
         "category": "main"
       },
       {
-        "name": "野菜（ピーマン・たけのこ・きくらげ）",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "ピーマン",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "たけのこ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "きくらげ",
+        "quantity": 0,
+        "unit": "適量",
         "category": "main"
       }
     ],
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 6
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 17,
+        "durationMinutes": 16,
         "isDeviceStep": true
       },
       {
@@ -13402,7 +13768,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 3,
-    "totalWeightG": 650,
+    "totalWeightG": 700,
     "ingredients": [
       {
         "name": "国産鶏生つみれ（9個）",
@@ -13411,7 +13777,13 @@
         "category": "main"
       },
       {
-        "name": "小松菜・にんじん",
+        "name": "小松菜",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "にんじん",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -13438,11 +13810,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 8
+        "durationMinutes": 9
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 19,
+        "durationMinutes": 18,
         "isDeviceStep": true
       },
       {
@@ -14157,7 +14529,7 @@
     "device": "hotcook",
     "category": "ご飯もの",
     "baseServings": 3,
-    "totalWeightG": 200,
+    "totalWeightG": 300,
     "ingredients": [
       {
         "name": "せいろ蒸し麺",
@@ -14172,7 +14544,19 @@
         "category": "main"
       },
       {
-        "name": "えび・いか・あずまにしき貝",
+        "name": "えび",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "いか",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "あずまにしき貝",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -14187,11 +14571,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 6
+        "durationMinutes": 9
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 11,
+        "durationMinutes": 8,
         "isDeviceStep": true
       },
       {
@@ -15407,7 +15791,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -15416,11 +15806,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 8,
+        "durationMinutes": 6,
         "isDeviceStep": true
       },
       {
@@ -15610,9 +16000,33 @@
         "category": "main"
       },
       {
-        "name": "野菜（玉ねぎ、赤パプリカ、黄パプリカ、ズッキーニ、なす)",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "玉ねぎ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "赤パプリカ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "黄パプリカ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "ズッキーニ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "なす",
+        "quantity": 0,
+        "unit": "適量",
         "category": "main"
       },
       {
@@ -15625,11 +16039,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 17,
+        "durationMinutes": 11,
         "isDeviceStep": true
       },
       {
@@ -16083,7 +16497,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -16092,11 +16512,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 13,
+        "durationMinutes": 11,
         "isDeviceStep": true
       },
       {
@@ -16627,9 +17047,21 @@
         "category": "main"
       },
       {
-        "name": "野菜（じゃがいも、にんじん、れんこん）",
-        "quantity": 1,
-        "unit": "人前×2パック",
+        "name": "じゃがいも",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "にんじん",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "れんこん",
+        "quantity": 0,
+        "unit": "適量",
         "category": "main"
       },
       {
@@ -16642,11 +17074,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 6
+        "durationMinutes": 9
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 31,
+        "durationMinutes": 28,
         "isDeviceStep": true
       },
       {
@@ -16709,7 +17141,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -16718,11 +17156,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 13,
+        "durationMinutes": 11,
         "isDeviceStep": true
       },
       {
@@ -16853,7 +17291,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -16880,11 +17324,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 19,
+        "durationMinutes": 18,
         "isDeviceStep": true
       },
       {
@@ -17212,7 +17656,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -17233,11 +17683,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 16,
+        "durationMinutes": 15,
         "isDeviceStep": true
       },
       {
@@ -18655,7 +19105,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -18664,11 +19120,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 14
+        "durationMinutes": 15
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 93,
+        "durationMinutes": 92,
         "isDeviceStep": true
       },
       {
@@ -19168,7 +19624,13 @@
         "category": "main"
       },
       {
-        "name": "砂糖、オリーブオイル",
+        "name": "砂糖",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "オリーブオイル",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -19180,7 +19642,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -19189,11 +19657,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 14
+        "durationMinutes": 17
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 133,
+        "durationMinutes": 130,
         "isDeviceStep": true
       },
       {
@@ -19220,13 +19688,25 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 650,
+    "totalWeightG": 600,
     "ingredients": [
       {
-        "name": "たけのこの水煮、にんじん、生しいたけ",
-        "quantity": 150,
-        "unit": "合わせてｇ程度",
+        "name": "たけのこの水煮",
+        "quantity": 0,
+        "unit": "適量",
         "category": "sub"
+      },
+      {
+        "name": "にんじん",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "生しいたけ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
       },
       {
         "name": "豚肉",
@@ -19292,11 +19772,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 17
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 10,
+        "durationMinutes": 7,
         "isDeviceStep": true
       },
       {
@@ -21466,7 +21946,13 @@
         "category": "main"
       },
       {
-        "name": "にんにく、しょうが",
+        "name": "にんにく",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "しょうが",
         "quantity": 0,
         "unit": "適量",
         "category": "main"
@@ -21481,11 +21967,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 51,
+        "durationMinutes": 50,
         "isDeviceStep": true
       },
       {
@@ -21587,7 +22073,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -21710,7 +22202,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -21737,7 +22235,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 18
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
@@ -21749,7 +22247,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 26,
+    "totalTimeMinutes": 28,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4089",
     "servings": "材料：4人分",
     "calories": "約561kcal",
@@ -22052,7 +22550,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -22067,11 +22571,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 6,
+        "durationMinutes": 5,
         "isDeviceStep": true
       },
       {
@@ -22166,7 +22670,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -22175,7 +22685,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 18
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
@@ -22187,7 +22697,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 26,
+    "totalTimeMinutes": 28,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4141",
     "servings": "材料：4人分",
     "calories": "約160kcal",
@@ -22337,7 +22847,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -22346,11 +22862,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 13,
+        "durationMinutes": 11,
         "isDeviceStep": true
       },
       {
@@ -22958,16 +23474,34 @@
         "category": "sub"
       },
       {
-        "name": "酒、みりん、砂糖",
+        "name": "酒",
         "quantity": 2,
-        "unit": "各大さじ",
+        "unit": "大さじ",
         "category": "sub"
       },
       {
-        "name": "しょうゆ、豆板醤",
-        "quantity": 1,
-        "unit": "各小さじ",
+        "name": "みりん",
+        "quantity": 2,
+        "unit": "大さじ",
         "category": "sub"
+      },
+      {
+        "name": "砂糖",
+        "quantity": 2,
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "しょうゆ",
+        "quantity": 1,
+        "unit": "小さじ",
+        "category": "sub"
+      },
+      {
+        "name": "豆板醤",
+        "quantity": 1,
+        "unit": "小さじ",
+        "category": "main"
       },
       {
         "name": "そうめん",
@@ -22985,7 +23519,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 15
       },
       {
         "name": "ホットクック調理",
@@ -22997,7 +23531,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 19,
+    "totalTimeMinutes": 23,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4222",
     "cookingTime": "15分",
     "rawSteps": [
@@ -23970,7 +24504,19 @@
         "category": "sub"
       },
       {
-        "name": "マスタード、からし、ブラックペッパー",
+        "name": "マスタード",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "からし",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "ブラックペッパー",
         "quantity": 0,
         "unit": "適量",
         "category": "main"
@@ -23979,11 +24525,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 17
+        "durationMinutes": 20
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 55,
+        "durationMinutes": 52,
         "isDeviceStep": true
       },
       {
@@ -24058,7 +24604,13 @@
         "category": "sub"
       },
       {
-        "name": "おろしにんにく、おろししょうが",
+        "name": "おろしにんにく",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "おろししょうが",
         "quantity": 0,
         "unit": "適量",
         "category": "main"
@@ -24067,11 +24619,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 76,
+        "durationMinutes": 75,
         "isDeviceStep": true
       },
       {
@@ -24253,10 +24805,28 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 300,
+    "totalWeightG": 450,
     "ingredients": [
       {
-        "name": "鶏肉・玉ねぎ・じゃがいも・バター",
+        "name": "鶏肉",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "玉ねぎ",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "じゃがいも",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "バター",
         "quantity": 1,
         "unit": "パック",
         "category": "sub"
@@ -24277,11 +24847,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 9
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 22,
+        "durationMinutes": 18,
         "isDeviceStep": true
       },
       {
@@ -24737,7 +25307,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -24746,11 +25322,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 15
+        "durationMinutes": 17
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 7,
+        "durationMinutes": 5,
         "isDeviceStep": true
       },
       {
@@ -25242,7 +25818,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -25260,7 +25842,13 @@
         "category": "main"
       },
       {
-        "name": "サラダ菜、ラディッシュ",
+        "name": "サラダ菜",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "ラディッシュ",
         "quantity": 0,
         "unit": "適量",
         "category": "main"
@@ -25269,11 +25857,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 8
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 14,
+        "durationMinutes": 11,
         "isDeviceStep": true
       },
       {
@@ -25412,10 +26000,28 @@
         "category": "main"
       },
       {
-        "name": "たれ（豚ひき肉・しいたけ・油揚げ・たけのこ入り）",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "豚ひき肉",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "しいたけ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "油揚げ",
+        "quantity": 0,
+        "unit": "適量",
         "category": "sub"
+      },
+      {
+        "name": "たけのこ入り",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
       },
       {
         "name": "水",
@@ -25433,11 +26039,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 6
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 21,
+        "durationMinutes": 16,
         "isDeviceStep": true
       },
       {
@@ -25963,12 +26569,24 @@
     "device": "hotcook",
     "category": "スープ",
     "baseServings": 3,
-    "totalWeightG": 450,
+    "totalWeightG": 400,
     "ingredients": [
       {
-        "name": "スープ（鶏肉・野菜・押し麦入り）",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "鶏肉",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "野菜",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "押し麦入り",
+        "quantity": 0,
+        "unit": "適量",
         "category": "main"
       },
       {
@@ -25981,11 +26599,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 6
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 22,
+        "durationMinutes": 21,
         "isDeviceStep": true
       },
       {
@@ -26047,7 +26665,13 @@
         "category": "main"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -26062,7 +26686,7 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
@@ -26074,7 +26698,7 @@
         "durationMinutes": 3
       }
     ],
-    "totalTimeMinutes": 19,
+    "totalTimeMinutes": 20,
     "sourceUrl": "https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4143",
     "servings": "材料：4人分",
     "calories": "約186kcal",
@@ -26133,7 +26757,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -26142,11 +26772,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 11
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 11,
+        "durationMinutes": 10,
         "isDeviceStep": true
       },
       {
@@ -26174,12 +26804,24 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 3,
-    "totalWeightG": 750,
+    "totalWeightG": 700,
     "ingredients": [
       {
-        "name": "具材（揚げ豚・きくらげ・にら）",
-        "quantity": 1,
-        "unit": "パック",
+        "name": "揚げ豚",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "きくらげ",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "にら",
+        "quantity": 0,
+        "unit": "適量",
         "category": "main"
       },
       {
@@ -26216,11 +26858,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 12
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 18,
+        "durationMinutes": 15,
         "isDeviceStep": true
       },
       {
@@ -26494,7 +27136,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -26503,11 +27151,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 13,
+        "durationMinutes": 11,
         "isDeviceStep": true
       },
       {
@@ -26563,7 +27211,13 @@
         "category": "sub"
       },
       {
-        "name": "塩、こしょう",
+        "name": "塩",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "sub"
+      },
+      {
+        "name": "こしょう",
         "quantity": 0,
         "unit": "適量",
         "category": "sub"
@@ -26572,11 +27226,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 8
+        "durationMinutes": 9
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 49,
+        "durationMinutes": 48,
         "isDeviceStep": true
       },
       {
@@ -27038,7 +27692,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 3,
-    "totalWeightG": 300,
+    "totalWeightG": 350,
     "ingredients": [
       {
         "name": "大根",
@@ -27071,7 +27725,13 @@
         "category": "sub"
       },
       {
-        "name": "片栗粉、水",
+        "name": "片栗粉",
+        "quantity": 1,
+        "unit": "大さじ",
+        "category": "sub"
+      },
+      {
+        "name": "水",
         "quantity": 1,
         "unit": "大さじ",
         "category": "sub"
@@ -27080,11 +27740,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 23,
+        "durationMinutes": 21,
         "isDeviceStep": true
       },
       {
@@ -27598,7 +28258,13 @@
         "category": "main"
       },
       {
-        "name": "味付きチキン・ブロッコリー",
+        "name": "味付きチキン",
+        "quantity": 1,
+        "unit": "パック",
+        "category": "main"
+      },
+      {
+        "name": "ブロッコリー",
         "quantity": 1,
         "unit": "パック",
         "category": "main"
@@ -27613,11 +28279,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 5
+        "durationMinutes": 6
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 37,
+        "durationMinutes": 36,
         "isDeviceStep": true
       },
       {
@@ -27673,7 +28339,13 @@
         "category": "main"
       },
       {
-        "name": "おろしにんにく、おろししょうが",
+        "name": "おろしにんにく",
+        "quantity": 0,
+        "unit": "適量",
+        "category": "main"
+      },
+      {
+        "name": "おろししょうが",
         "quantity": 0,
         "unit": "適量",
         "category": "main"
@@ -27688,11 +28360,11 @@
     "steps": [
       {
         "name": "下ごしらえ",
-        "durationMinutes": 9
+        "durationMinutes": 11
       },
       {
         "name": "ホットクック調理",
-        "durationMinutes": 53,
+        "durationMinutes": 51,
         "isDeviceStep": true
       },
       {
