@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getRecentSearchSuggestions } from '../SearchBar'
+import { getRecentSearchSuggestions } from '../../utils/searchUtils'
 
 describe('getRecentSearchSuggestions', () => {
   it('returns empty array when input is not focused', () => {

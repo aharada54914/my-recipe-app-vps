@@ -1,10 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
-
-export function getRecentSearchSuggestions(history: string[], focused: boolean): string[] {
-  if (!focused) return []
-  return history.slice(0, 5)
-}
+import { getRecentSearchSuggestions } from '../utils/searchUtils'
 
 interface SearchBarProps {
   value: string
