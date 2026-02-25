@@ -123,3 +123,8 @@ export function searchRecipesWithScores(recipes: Recipe[], query: string): Searc
 export function getExpandedSearchTermsForDebug(query: string): string[] {
     return createSearchTerms(query)
 }
+
+export function getRecentSearchSuggestions(history: string[], focused: boolean): string[] {
+    if (!focused) return []
+    return history.slice(0, 5)
+}
