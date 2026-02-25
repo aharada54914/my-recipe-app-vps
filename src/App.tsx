@@ -22,6 +22,8 @@ import { ToastContainer } from './components/ToastContainer'
 import { SplashScreen } from './components/SplashScreen'
 import { NotificationScheduler } from './components/NotificationScheduler'
 import { GeminiProcessingBanner } from './components/GeminiProcessingBanner'
+import { WeeklyMenuImportModal } from './components/WeeklyMenuImportModal'
+import { WEEKLY_MENU_IMPORT_PARAM } from './utils/weeklyMenuQr'
 
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
@@ -29,10 +31,12 @@ function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
 
+  // Detect ?import-menu=<base64> URL parameter
+  const importMenuParam = new URLSearchParams(location.search).get(WEEKLY_MENU_IMPORT_PARAM)
+
   return (
     <div className="min-h-dvh bg-bg-primary liquid-background">
       <Header
-        onMultiSchedule={() => navigate('/multi-schedule')}
         onSettings={() => navigate('/settings')}
       />
       <GeminiProcessingBanner />
@@ -43,6 +47,20 @@ function AppLayout() {
       </main>
       <BottomNav />
       <ToastContainer />
+      {importMenuParam && (
+        <WeeklyMenuImportModal
+          encoded={importMenuParam}
+          onClose={() => {
+            history.replaceState(null, '', window.location.pathname)
+            navigate(location.pathname, { replace: true })
+          }}
+          onImported={(weekStartDate) => {
+            history.replaceState(null, '', '/weekly-menu')
+            navigate('/weekly-menu', { replace: true })
+            alert(`${weekStartDate}週の献立を取り込みました！`)
+          }}
+        />
+      )}
     </div>
   )
 }

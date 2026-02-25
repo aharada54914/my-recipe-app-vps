@@ -5,6 +5,7 @@
   --color-bg-primary: #0e1118;
   --color-bg-card: rgba(255, 255, 255, 0.09);
   --color-bg-card-hover: rgba(255, 255, 255, 0.14);
+  --color-bg-overlay: #1c1c1f;
   --color-accent: #F97316;
   --color-accent-hover: #EA580C;
   --color-text-primary: rgba(255, 255, 255, 0.95);
@@ -18,6 +19,7 @@
     --color-bg-primary: #F8F9FA;
     --color-bg-card: #FFFFFF;
     --color-bg-card-hover: #F0F0F0;
+    --color-bg-overlay: #ffffff;
     --color-accent: #F57C00;
     --color-accent-hover: #E65100;
     --color-text-primary: #212121;

@@ -46,7 +46,7 @@ export function SearchBar({
       </form>
 
       {focused && suggestions.length > 0 && (
-        <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-2xl bg-bg-card py-2 ring-1 ring-white/10">
+        <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-2xl bg-bg-overlay py-2 ring-1 ring-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.65)]">
           {suggestions.map((entry) => (
             <button
               key={entry}

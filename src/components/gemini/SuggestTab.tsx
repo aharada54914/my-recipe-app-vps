@@ -4,8 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { Package, Loader2, RotateCcw, ImagePlus, WandSparkles, FilePenLine, Upload, Trash2 } from 'lucide-react'
 import { db } from '../../db/db'
 import type { Recipe } from '../../db/db'
-import { getLocalRecommendations } from '../../utils/geminiRecommender'
-import { RecipeCard } from '../RecipeCard'
 import { GeminiIcon } from '../GeminiIcon'
 import { resolveGeminiApiKey } from '../../lib/geminiClient'
 import { preprocessImagesToCollage } from '../../utils/imagePreprocess'
@@ -64,11 +62,8 @@ export function SuggestTab() {
   const [editorSessionKey, setEditorSessionKey] = useState('suggest-editor-initial')
 
   const data = useLiveQuery(async () => {
-    const [stockItems, recs] = await Promise.all([
-      db.stock.filter(s => (s.quantity ?? 0) > 0 || s.inStock).toArray(),
-      getLocalRecommendations(6),
-    ])
-    return { stockItems, recs }
+    const stockItems = await db.stock.filter(s => (s.quantity ?? 0) > 0 || s.inStock).toArray()
+    return { stockItems }
   })
 
   useEffect(() => {
@@ -157,7 +152,7 @@ export function SuggestTab() {
 
   if (!data) return null
 
-  const { stockItems, recs } = data
+  const { stockItems } = data
   const selectionLabel = photoFiles.length === 0 ? '未選択' : `${photoFiles.length}枚選択中`
 
   return (
@@ -202,22 +197,6 @@ export function SuggestTab() {
         )}
       </div>
 
-      {recs.length > 0 && (
-        <div className="ui-panel">
-          <h4 className="ui-section-title mb-3">在庫でつくれるレシピ</h4>
-          <div className="grid grid-cols-2 gap-3">
-            {recs.map(({ recipe, matchRate }) => (
-              <RecipeCard
-                key={recipe.id}
-                recipe={recipe}
-                variant="grid"
-                matchRate={matchRate}
-                onClick={() => navigate(`/recipe/${recipe.id}`)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="ui-panel">
         <p className="ui-section-kicker">Step 1</p>

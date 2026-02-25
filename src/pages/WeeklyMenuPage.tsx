@@ -269,7 +269,7 @@ export function WeeklyMenuPage() {
         )
         if (missing.length > 0) {
           const shoppingListText = formatWeeklyShoppingListByStoreSection(weekStartStr, missing)
-          await registerShoppingListToCalendar(providerToken, shoppingListText, weekStart, preferences)
+          await registerShoppingListToCalendar(providerToken, shoppingListText, weekStart, preferences, menu, recipes)
         }
       }
 

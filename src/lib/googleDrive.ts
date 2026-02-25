@@ -235,3 +235,65 @@ export async function restoreFromGoogleDrive(token: string): Promise<boolean> {
 
   return true
 }
+
+/**
+ * Upload a QR code PNG image to the user's Google Drive.
+ * Requires the drive.file scope (in addition to drive.appdata).
+ * Returns the file ID and a web view link.
+ */
+export async function uploadQrImageToDrive(
+  token: string,
+  pngDataUrl: string,  // e.g. canvas.toDataURL('image/png')
+  fileName: string,    // e.g. 'weekly-menu-2026-02-24.png'
+): Promise<{ id: string; webViewLink: string; webContentLink: string }> {
+  // Convert data URL to Blob
+  const byteString = atob(pngDataUrl.split(',')[1])
+  const bytes = new Uint8Array(byteString.length)
+  for (let i = 0; i < byteString.length; i++) {
+    bytes[i] = byteString.charCodeAt(i)
+  }
+  const blob = new Blob([bytes], { type: 'image/png' })
+
+  const metadata = JSON.stringify({
+    name: fileName,
+    mimeType: 'image/png',
+  })
+
+  const boundary = 'qr_upload_boundary_001'
+  const delimiter = `--${boundary}\r\n`
+  const closing = `\r\n--${boundary}--`
+
+  const metaPart = `${delimiter}Content-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`
+  const dataPartHeader = `${delimiter}Content-Type: image/png\r\n\r\n`
+
+  // Combine metadata + blob using fetch multipart
+  const metaBlob = new Blob([metaPart, dataPartHeader], { type: 'text/plain' })
+  const closingBlob = new Blob([closing], { type: 'text/plain' })
+  const bodyBlob = new Blob([metaBlob, blob, closingBlob])
+
+  const uploadRes = await fetch(
+    `${DRIVE_UPLOAD_URL}?uploadType=multipart&fields=id,webViewLink,webContentLink`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body: bodyBlob,
+    },
+  )
+  await assertDriveOk(uploadRes, 'QR image upload')
+  const json = (await uploadRes.json()) as { id: string; webViewLink: string; webContentLink: string }
+
+  // Make the file publicly readable so Calendar can display it
+  await fetch(`${DRIVE_FILES_URL}/${json.id}/permissions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ type: 'anyone', role: 'reader' }),
+  })
+
+  return json
+}

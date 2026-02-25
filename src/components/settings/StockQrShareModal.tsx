@@ -86,30 +86,35 @@ export function StockQrShareModal({ onClose }: Props) {
           <p className="text-sm text-text-secondary">在庫データが空のため共有する内容がありません。</p>
         ) : (
           <>
-            <p className="mb-3 text-xs text-text-secondary">
-              受信側で順に読み取ってください（{current + 1}/{chunks.length}）
-            </p>
+            {chunks.length > 1 && (
+              <p className="mb-3 text-xs text-text-secondary">
+                受信側で順に読み取ってください（{current + 1}/{chunks.length}）
+              </p>
+            )}
 
             <div className="mb-3 flex justify-center rounded-xl bg-white p-3">
               {qrDataUrl ? <img src={qrDataUrl} alt="stock-share-qr" className="h-72 w-72" /> : <div className="h-72 w-72" />}
             </div>
 
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <button
-                className="ui-btn ui-btn-secondary flex-1 disabled:opacity-40"
-                disabled={current <= 0}
-                onClick={() => setCurrent((v) => Math.max(0, v - 1))}
-              >
-                <ChevronLeft className="h-4 w-4" /> 前へ
-              </button>
-              <button
-                className="ui-btn ui-btn-secondary flex-1 disabled:opacity-40"
-                disabled={current >= chunks.length - 1}
-                onClick={() => setCurrent((v) => Math.min(chunks.length - 1, v + 1))}
-              >
-                次へ <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+            {chunks.length > 1 && (
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <button
+                  className="ui-btn ui-btn-secondary flex-1 disabled:opacity-40"
+                  disabled={current <= 0}
+                  onClick={() => setCurrent((v) => Math.max(0, v - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" /> 前へ
+                </button>
+                <button
+                  className="ui-btn ui-btn-secondary flex-1 disabled:opacity-40"
+                  disabled={current >= chunks.length - 1}
+                  onClick={() => setCurrent((v) => Math.min(chunks.length - 1, v + 1))}
+                >
+                  次へ <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
 
             <button onClick={handleCopy} className="ui-btn ui-btn-secondary mb-2 flex w-full items-center justify-center gap-2">
               <Copy className="h-4 w-4" />

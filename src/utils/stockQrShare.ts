@@ -1,7 +1,7 @@
 import type { StockItem } from '../db/db'
 
 const QR_SHARE_VERSION = 1
-const MAX_CHUNK_LENGTH = 850
+const MAX_CHUNK_LENGTH = 2700
 
 export interface StockShareChunk {
   v: 1
@@ -20,6 +20,7 @@ export interface StockShareEnvelope {
 
 export function buildStockShareChunks(stock: StockItem[], maxChunkLength = MAX_CHUNK_LENGTH): string[] {
   const normalizedStock = stock
+    .filter((item) => item.inStock || (item.quantity ?? 0) > 0)
     .map((item) => ({
       name: item.name,
       inStock: Boolean(item.inStock),

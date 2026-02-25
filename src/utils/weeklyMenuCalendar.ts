@@ -5,7 +5,10 @@
  */
 
 import { db, type WeeklyMenu, type Recipe, type UserPreferences } from '../db/db'
-import { createCalendarEvent, type CalendarEventInput } from '../lib/googleCalendar'
+import { createCalendarEvent, buildWeeklyShoppingEventInput, type CalendarEventInput } from '../lib/googleCalendar'
+import { uploadQrImageToDrive } from '../lib/googleDrive'
+import { encodeWeeklyMenuQr, buildMenuImportUrl } from './weeklyMenuQr'
+import QRCode from 'qrcode'
 import { format, parse, setHours, setMinutes, subMinutes } from 'date-fns'
 import { adjustIngredients, formatQuantityVibe } from './recipeUtils'
 
@@ -139,29 +142,84 @@ export async function registerWeeklyMenuToCalendar(
 
 /**
  * Register a consolidated shopping list as a calendar event.
+ * Also generates a QR code, uploads it to Drive, and attaches it to the event.
  */
 export async function registerShoppingListToCalendar(
   token: string,
   shoppingListText: string,
   date: Date,
-  preferences: UserPreferences
+  preferences: UserPreferences,
+  menu?: WeeklyMenu,
+  recipeMap?: Map<number, Recipe>,
 ): Promise<string | null> {
   const calendarId = preferences.defaultCalendarId ?? 'primary'
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
   const startTime = setMinutes(setHours(date, preferences.shoppingListHour), preferences.shoppingListMinute)
-  const endTime = new Date(startTime.getTime() + 5 * 60000) // 5 minutes
 
-  const event: CalendarEventInput = {
-    summary: `🛒 週間買い物リスト (${format(date, 'M/d')}〜)`,
-    description: shoppingListText,
-    start: { dateTime: startTime.toISOString(), timeZone },
-    end: { dateTime: endTime.toISOString(), timeZone },
-    reminders: { useDefault: true },
+  const weekLabel = format(date, 'M/d')
+
+  // Build QR import URL
+  let importUrl = ''
+  let driveFileUrl = ''
+
+  if (menu && recipeMap && recipeMap.size > 0) {
+    try {
+      const encoded = encodeWeeklyMenuQr(menu.weekStartDate, menu.items, recipeMap)
+      importUrl = buildMenuImportUrl(encoded)
+
+      // Generate QR image PNG
+      const pngDataUrl = await QRCode.toDataURL(importUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 512,
+      })
+
+      // Upload to Drive (best-effort: don't fail the whole flow if this fails)
+      try {
+        const uploaded = await uploadQrImageToDrive(
+          token,
+          pngDataUrl,
+          `weekly-menu-${menu.weekStartDate}.png`,
+        )
+        driveFileUrl = uploaded.webViewLink
+      } catch {
+        // Drive upload failed — proceed without image attachment
+      }
+    } catch {
+      // QR generation failed — proceed without QR
+    }
+  }
+
+  // Use new event builder if we have QR data, otherwise fall back to simple event
+  let event: CalendarEventInput
+  if (importUrl) {
+    event = buildWeeklyShoppingEventInput({
+      weekLabel,
+      shoppingText: shoppingListText,
+      importUrl,
+      driveFileUrl,
+      eventTime: startTime,
+      timeZone,
+    })
+  } else {
+    const endTime = new Date(startTime.getTime() + 5 * 60000)
+    event = {
+      summary: `🛒 週間買い物リスト (${weekLabel}〜)`,
+      description: shoppingListText,
+      start: { dateTime: startTime.toISOString(), timeZone },
+      end: { dateTime: endTime.toISOString(), timeZone },
+      reminders: { useDefault: true },
+    }
   }
 
   try {
-    const created = await createCalendarEvent(token, calendarId, event)
+    const created = await createCalendarEvent(
+      token,
+      calendarId,
+      event,
+      driveFileUrl ? { supportsAttachments: true } : undefined,
+    )
     return created.id
   } catch {
     return null

@@ -1,6 +1,6 @@
 # Architecture Reference
 
-最終改訂: 2026-02-24
+最終改訂: 2026-02-25
 対象バージョン: v1.9.6
 
 Kitchen App の現行アーキテクチャ概要です。

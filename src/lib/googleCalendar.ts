@@ -25,6 +25,11 @@ export interface CalendarEventInput {
     useDefault: boolean
     overrides?: { method: string; minutes: number }[]
   }
+  attachments?: Array<{
+    fileUrl: string
+    title: string
+    mimeType: string
+  }>
 }
 
 export interface CalendarEvent {
@@ -91,10 +96,12 @@ export async function createCalendarEvent(
   token: string,
   calendarId: string,
   event: CalendarEventInput,
+  options?: { supportsAttachments?: boolean },
 ): Promise<CalendarEvent> {
+  const params = options?.supportsAttachments ? '?supportsAttachments=true' : ''
   return gcalFetch<CalendarEvent>(
     token,
-    `/calendars/${encodeURIComponent(calendarId)}/events`,
+    `/calendars/${encodeURIComponent(calendarId)}/events${params}`,
     {
       method: 'POST',
       body: JSON.stringify(event),
@@ -192,4 +199,53 @@ export function buildShoppingListEventInput(
     end: { dateTime: endTime.toISOString(), timeZone: tz },
     reminders: { useDefault: true },
   }
+}
+
+/**
+ * Build a weekly shopping list event with QR code attachment.
+ * importUrl: the ?import-menu=<base64> URL embedded in event description.
+ * driveFileUrl: Google Drive webViewLink for the QR image attachment.
+ */
+export function buildWeeklyShoppingEventInput({
+  weekLabel,
+  shoppingText,
+  importUrl,
+  driveFileUrl,
+  eventTime,
+  timeZone,
+}: {
+  weekLabel: string
+  shoppingText: string
+  importUrl: string
+  driveFileUrl: string
+  eventTime: Date
+  timeZone: string
+}): CalendarEventInput {
+  const endTime = new Date(eventTime.getTime() + 5 * 60 * 1000)
+
+  const description = [
+    shoppingText,
+    '',
+    '---',
+    `📱 週間献立をアプリで受け取る:`,
+    importUrl,
+  ].join('\n')
+
+  const event: CalendarEventInput = {
+    summary: `🛒 週間買い物リスト (${weekLabel})`,
+    description,
+    start: { dateTime: eventTime.toISOString(), timeZone },
+    end: { dateTime: endTime.toISOString(), timeZone },
+    reminders: { useDefault: true },
+  }
+
+  if (driveFileUrl) {
+    event.attachments = [{
+      fileUrl: driveFileUrl,
+      title: `献立QR_${weekLabel}.png`,
+      mimeType: 'image/png',
+    }]
+  }
+
+  return event
 }

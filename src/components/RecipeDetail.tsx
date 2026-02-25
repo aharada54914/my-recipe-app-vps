@@ -237,8 +237,8 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
               <button
                 onClick={() => setActiveTab('ingredients')}
                 className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${activeTab === 'ingredients'
-                    ? 'bg-accent text-white'
-                    : 'bg-bg-card text-text-secondary hover:text-text-primary'
+                  ? 'bg-accent text-white'
+                  : 'bg-bg-card text-text-secondary hover:text-text-primary'
                   }`}
               >
                 材料
@@ -246,8 +246,8 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
               <button
                 onClick={() => setActiveTab('steps')}
                 className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${activeTab === 'steps'
-                    ? 'bg-accent text-white'
-                    : 'bg-bg-card text-text-secondary hover:text-text-primary'
+                  ? 'bg-accent text-white'
+                  : 'bg-bg-card text-text-secondary hover:text-text-primary'
                   }`}
               >
                 手順
@@ -317,16 +317,14 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                                 if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
                                 return next
                               })}
-                              className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${
-                                isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
-                              }`}
+                              className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                                }`}
                             >
                               <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
                                 {ing.name}{ing.optional ? ' (任意)' : ''}
                               </td>
-                              <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${
-                                isMissing ? 'text-red-400/50' : 'text-text-secondary'
-                              }`}>
+                              <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${isMissing ? 'text-red-400/50' : 'text-text-secondary'
+                                }`}>
                                 {formatQuantityVibe(ing.quantity, ing.unit)}
                               </td>
                             </tr>
@@ -352,16 +350,14 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                                 if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
                                 return next
                               })}
-                              className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${
-                                isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
-                              }`}
+                              className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                                }`}
                             >
                               <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
                                 {ing.name}{ing.optional ? ' (任意)' : ''}
                               </td>
-                              <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${
-                                isMissing ? 'text-red-400/50' : 'text-text-secondary'
-                              }`}>
+                              <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${isMissing ? 'text-red-400/50' : 'text-text-secondary'
+                                }`}>
                                 {formatQuantityVibe(ing.quantity, ing.unit)}
                               </td>
                             </tr>
@@ -461,16 +457,14 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                             if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
                             return next
                           })}
-                          className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${
-                            isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
-                          }`}
+                          className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                            }`}
                         >
                           <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
                             {ing.name}{ing.optional ? ' (任意)' : ''}
                           </td>
-                          <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${
-                            isMissing ? 'text-red-400/50' : 'text-text-secondary'
-                          }`}>
+                          <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${isMissing ? 'text-red-400/50' : 'text-text-secondary'
+                            }`}>
                             {formatQuantityVibe(ing.quantity, ing.unit)}
                           </td>
                         </tr>
@@ -496,16 +490,14 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                             if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
                             return next
                           })}
-                          className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${
-                            isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
-                          }`}
+                          className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                            }`}
                         >
                           <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
                             {ing.name}{ing.optional ? ' (任意)' : ''}
                           </td>
-                          <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${
-                            isMissing ? 'text-red-400/50' : 'text-text-secondary'
-                          }`}>
+                          <td className={`py-1.5 pr-1 text-right text-sm font-medium whitespace-nowrap ${isMissing ? 'text-red-400/50' : 'text-text-secondary'
+                            }`}>
                             {formatQuantityVibe(ing.quantity, ing.unit)}
                           </td>
                         </tr>
