@@ -35,6 +35,8 @@ import { SwapModal } from '../components/weekly/SwapModal'
 import { GanttDayModal } from '../components/weekly/GanttDayModal'
 import { ShareMenuModal } from '../components/weekly/ShareMenuModal'
 import { ServingsStepper } from '../components/weekly/ServingsStepper'
+import jsQR from 'jsqr'
+import { WEEKLY_MENU_IMPORT_PARAM } from '../utils/weeklyMenuQr'
 
 export function WeeklyMenuPage() {
   const navigate = useNavigate()
@@ -390,6 +392,44 @@ export function WeeklyMenuPage() {
     }
   }, [shareCodeInput, applySharedMenu])
 
+  // 画像から週間献立QRを読み取る
+  const handleScanMenuImage = useCallback((file: File) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { URL.revokeObjectURL(url); alert('Canvasが使えません'); return }
+      ctx.drawImage(img, 0, 0)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' })
+      URL.revokeObjectURL(url)
+      if (!code?.data) {
+        alert('QRコードが見つかりませんでした。別の画像を試してください。')
+        return
+      }
+      // QRに含まれるURLからimport-menuパラメータを抽出
+      try {
+        const qrUrl = new URL(code.data)
+        const param = qrUrl.searchParams.get(WEEKLY_MENU_IMPORT_PARAM)
+        if (param) {
+          navigate(`/weekly-menu?${WEEKLY_MENU_IMPORT_PARAM}=${encodeURIComponent(param)}`, { replace: false })
+          return
+        }
+      } catch {
+        // URL形式でない場合は続行して共有コードとして試す
+      }
+      // 共有コードQRの可能性
+      applySharedMenu(code.data)
+        .then(() => alert('共有コードから週間献立を読み込みました'))
+        .catch(() => alert('QRデータを読み取れませんでした。週間献立用QRを使ってください。'))
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); alert('画像の読み込みに失敗しました') }
+    img.src = url
+  }, [navigate, applySharedMenu])
+
   useEffect(() => {
     if (!showShoppingList) return
     if (!stockItems || !preferences.notifyShoppingListDone) return
@@ -642,6 +682,7 @@ export function WeeklyMenuPage() {
             onImportCodeChange={setShareCodeInput}
             onShare={handleShareLink}
             onImport={handleImportFromCode}
+            onScanImage={handleScanMenuImage}
             onClose={() => setShareOpen(false)}
           />
         )}

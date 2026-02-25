@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
-import { X, Share2, Download } from 'lucide-react'
+import { X, Share2, Download, ImagePlus } from 'lucide-react'
+import { useRef } from 'react'
 
 export interface ShareMenuModalProps {
     weekLabel: string
@@ -8,6 +9,7 @@ export interface ShareMenuModalProps {
     onImportCodeChange: (value: string) => void
     onShare: () => Promise<void>
     onImport: () => Promise<void>
+    onScanImage: (file: File) => void
     onClose: () => void
 }
 
@@ -18,8 +20,10 @@ export function ShareMenuModal({
     onImportCodeChange,
     onShare,
     onImport,
+    onScanImage,
     onClose,
 }: ShareMenuModalProps) {
+    const fileInputRef = useRef<HTMLInputElement>(null)
     return createPortal(
         <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60" onClick={onClose}>
             <div
@@ -64,9 +68,29 @@ export function ShareMenuModal({
                 />
                 <button
                     onClick={onImport}
-                    className="w-full rounded-xl bg-white/10 py-2.5 text-sm font-bold text-text-primary transition-colors hover:bg-white/20 cursor-pointer"
+                    className="mb-2 w-full rounded-xl bg-white/10 py-2.5 text-sm font-bold text-text-primary transition-colors hover:bg-white/20 cursor-pointer"
                 >
                     コードを読み込む
+                </button>
+
+                {/* QR画像読み取り */}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) { onScanImage(file); onClose() }
+                        e.target.value = ''
+                    }}
+                />
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-2.5 text-sm font-semibold text-text-secondary transition-colors hover:border-accent/50 hover:text-accent cursor-pointer"
+                >
+                    <ImagePlus className="h-4 w-4" />
+                    QR画像から読み込む
                 </button>
             </div>
         </div>,

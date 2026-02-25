@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { X, Plus, CheckCircle2, Camera, CameraOff, Keyboard } from 'lucide-react'
+import { X, Plus, CheckCircle2, Camera, CameraOff, Keyboard, ImagePlus } from 'lucide-react'
 import jsQR from 'jsqr'
 import { db } from '../../db/db'
 import { decodeStockShareChunks, parseChunk } from '../../utils/stockQrShare'
@@ -10,7 +10,7 @@ interface Props {
 }
 
 type ImportMode = 'merge' | 'overwrite'
-type InputMode = 'camera' | 'text'
+type InputMode = 'camera' | 'image' | 'text'
 
 export function StockQrReceiveModal({ onClose }: Props) {
   const addToast = useUIStore((s) => s.addToast)
@@ -29,6 +29,9 @@ export function StockQrReceiveModal({ onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const [imageError, setImageError] = useState('')
+  const [imageScanResult, setImageScanResult] = useState<'success' | 'fail' | null>(null)
 
   const receivedIndexes = useMemo(() => {
     const indexes = new Set<number>()
@@ -168,6 +171,45 @@ export function StockQrReceiveModal({ onClose }: Props) {
     setScanning(false)
   }
 
+  // 画像からQRを読み取る
+  const scanFromImage = useCallback((file: File) => {
+    setImageError('')
+    setImageScanResult(null)
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { setImageError('Canvas が使えません'); URL.revokeObjectURL(url); return }
+      ctx.drawImage(img, 0, 0)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' })
+      URL.revokeObjectURL(url)
+      if (!code?.data) {
+        setImageError('QRコードが見つかりませんでした。別の画像を試してください。')
+        setImageScanResult('fail')
+        return
+      }
+      const added = addChunk(code.data)
+      setImageScanResult(added ? 'success' : 'fail')
+      if (added) addToast({ type: 'success', message: 'QR読み取り成功' })
+    }
+    img.onerror = () => {
+      setImageError('画像の読み込みに失敗しました')
+      URL.revokeObjectURL(url)
+    }
+    img.src = url
+  }, [addChunk, addToast])
+
+  const handleImageFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) scanFromImage(file)
+    // ファイル選択後にリセットして同じファイルを再選択できるように
+    e.target.value = ''
+  }, [scanFromImage])
+
   const handleAddChunk = () => {
     const ok = addChunk(chunkInput)
     if (ok) setChunkInput('')
@@ -218,14 +260,21 @@ export function StockQrReceiveModal({ onClose }: Props) {
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors ${inputMode === 'camera' ? 'bg-accent text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}
           >
             <Camera className="h-3.5 w-3.5" />
-            カメラで読む
+            カメラ
+          </button>
+          <button
+            onClick={() => { stopCamera(); setInputMode('image'); setImageError(''); setImageScanResult(null) }}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors ${inputMode === 'image' ? 'bg-accent text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}
+          >
+            <ImagePlus className="h-3.5 w-3.5" />
+            画像
           </button>
           <button
             onClick={() => { stopCamera(); setInputMode('text') }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors ${inputMode === 'text' ? 'bg-accent text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}
           >
             <Keyboard className="h-3.5 w-3.5" />
-            テキスト入力
+            テキスト
           </button>
         </div>
 
@@ -257,6 +306,35 @@ export function StockQrReceiveModal({ onClose }: Props) {
             <p className="mt-1.5 text-center text-xs text-text-secondary">
               QRコードをカメラに向けてください
             </p>
+          </div>
+        )}
+
+        {/* 画像モード */}
+        {inputMode === 'image' && (
+          <div className="mb-3">
+            <p className="mb-2 text-xs text-text-secondary">
+              スクリーンショット等のQR画像を選択してください。
+            </p>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageFile}
+            />
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              className="mb-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 py-6 text-sm font-semibold text-text-secondary transition-colors hover:border-accent/50 hover:text-accent"
+            >
+              <ImagePlus className="h-5 w-5" />
+              画像を選択
+            </button>
+            {imageError && (
+              <p className="mt-1 text-xs text-red-400">{imageError}</p>
+            )}
+            {imageScanResult === 'success' && (
+              <p className="mt-1 text-xs text-accent">✓ QRコードを読み取りました</p>
+            )}
           </div>
         )}
 
