@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import Fuse from 'fuse.js'
 import { Search, X, Star } from 'lucide-react'
 import type { Recipe } from '../../db/db'
 import { RecipeCard } from '../RecipeCard'
 import { calculateMatchRate } from '../../utils/recipeUtils'
+import { searchRecipesWithScores } from '../../utils/searchUtils'
 
 export interface SwapModalProps {
     swapType: 'main' | 'side'
@@ -22,15 +22,10 @@ export function SwapModal({
     swapType, candidates, favorites, searchQuery, debouncedSearch,
     stockNames, onSearchChange, onSelect, onClose,
 }: SwapModalProps) {
-    const fuse = useMemo(
-        () => new Fuse(candidates, { keys: ['title'], threshold: 0.4 }),
-        [candidates]
-    )
-
     const filtered = useMemo(() => {
         if (!debouncedSearch.trim()) return null
-        return fuse.search(debouncedSearch).map(r => r.item).slice(0, 20)
-    }, [fuse, debouncedSearch])
+        return searchRecipesWithScores(candidates, debouncedSearch).map(r => r.recipe).slice(0, 30)
+    }, [candidates, debouncedSearch])
 
     const showSearch = !!filtered
     const topAlternatives = useMemo(
