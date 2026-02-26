@@ -12,9 +12,7 @@ import { tokenizeJa } from './tokenizeJa'
 const fuseOptions: IFuseOptions<Recipe> = {
     keys: [
         { name: 'title', weight: 2 },
-        { name: 'titleKana', weight: 2 },
         { name: 'ingredients.name', weight: 1 },
-        { name: 'ingredients.nameKana', weight: 1 },
     ],
     threshold: 0.4, // 0 = exact, 1 = match anything
     distance: 100,
