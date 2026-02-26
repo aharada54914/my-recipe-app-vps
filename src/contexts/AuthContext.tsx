@@ -89,8 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProviderToken(token)
   }, [])
 
-  const isTokenExpired = user !== null && providerToken === null
-
   if (!clientId) {
     const signInWithGoogle = () => { }
 
@@ -105,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return (
-      <AuthContext.Provider value={{ user, loading: false, isOAuthAvailable: false, isTokenExpired, providerToken, signInWithGoogle, signOut }}>
+      <AuthContext.Provider value={{ user, loading: false, isOAuthAvailable: false, providerToken, signInWithGoogle, signOut }}>
         {children}
       </AuthContext.Provider>
     )
@@ -147,10 +145,13 @@ function OAuthEnabledAuthProvider({
   setProviderToken,
   children,
 }: OAuthEnabledAuthProviderProps) {
-  const isTokenExpired = user !== null && providerToken === null
-
   const googleLogin = useGoogleLogin({
     scope: SCOPES,
+    // Note: Since useGoogleLogin does not take clientId directly here in all react-oauth/google versions (it takes it from GoogleOAuthProvider wrapper usually),
+    // we make sure to wrap the app with GoogleOAuthProvider properly in main.tsx or App.tsx using this exported ClientId if needed, 
+    // but the underlying googleLogin relies on the nearest context. 
+    // This file assumes the outer tree provides it correctly. We will pass it to AuthContext if we needed to initialize it manually.
+
     onSuccess: async (tokenResponse) => {
       storeToken(tokenResponse.access_token, tokenResponse.expires_in)
       try {
@@ -170,45 +171,6 @@ function OAuthEnabledAuthProvider({
     },
   })
 
-  // Silent token refresh — no popup shown if the browser still has an active Google session
-  const googleSilentLogin = useGoogleLogin({
-    scope: SCOPES,
-    prompt: 'none',
-    hint: user?.email,
-    onSuccess: (tokenResponse) => {
-      storeToken(tokenResponse.access_token, tokenResponse.expires_in)
-    },
-    onError: () => {
-      // Silent refresh failed (Google session also expired) — clear the stale token so
-      // isTokenExpired becomes true and the UI can prompt for manual re-login.
-      setProviderToken(null)
-      try {
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(TOKEN_EXPIRY_KEY)
-      } catch { /* ignore */ }
-    },
-  })
-
-  // Proactively refresh the token when it is within 10 minutes of expiry.
-  // Checks every 5 minutes and also whenever the window regains focus.
-  useEffect(() => {
-    const checkAndRefresh = () => {
-      const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
-      if (!expiry || !providerToken) return
-      const expiresAt = new Date(expiry)
-      const tenMinutesFromNow = new Date(Date.now() + 10 * 60 * 1000)
-      if (expiresAt < tenMinutesFromNow) {
-        googleSilentLogin()
-      }
-    }
-    const interval = setInterval(checkAndRefresh, 5 * 60 * 1000)
-    window.addEventListener('focus', checkAndRefresh)
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener('focus', checkAndRefresh)
-    }
-  }, [providerToken, googleSilentLogin])
-
   const signInWithGoogle = useCallback(() => {
     setLoading(true)
     googleLogin()
@@ -225,7 +187,7 @@ function OAuthEnabledAuthProvider({
   }, [setProviderToken, setUser])
 
   return (
-    <AuthContext.Provider value={{ user, loading, isOAuthAvailable: true, isTokenExpired, providerToken, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, isOAuthAvailable: true, providerToken, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   )
