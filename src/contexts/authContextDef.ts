@@ -11,6 +11,7 @@ export interface AuthContextValue {
   user: GoogleUser | null
   loading: boolean
   isOAuthAvailable: boolean
+  isTokenExpired: boolean
   providerToken: string | null
   signInWithGoogle: () => void
   signOut: () => void

@@ -68,7 +68,7 @@ export function SuggestTab() {
 
   useEffect(() => {
     if (ingredientsDraft.trim()) return
-    const cached = sessionStorage.getItem(INGREDIENT_CACHE_KEY)
+    const cached = localStorage.getItem(INGREDIENT_CACHE_KEY)
     if (cached) setIngredientsDraft(cached)
   }, [ingredientsDraft, setIngredientsDraft])
 
@@ -102,7 +102,7 @@ export function SuggestTab() {
       const ingredients = await extractIngredientsFromPhotoCollage(collage, getApiKey())
       const text = ingredients.join('、')
       setIngredientsDraft(text)
-      sessionStorage.setItem(INGREDIENT_CACHE_KEY, text)
+      localStorage.setItem(INGREDIENT_CACHE_KEY, text)
       setStatusMessage(`食材を${ingredients.length}件抽出しました。必要なら編集してください。`)
     } catch (e) {
       setStatusMessage(e instanceof Error ? e.message : '食材抽出に失敗しました。')
@@ -130,7 +130,7 @@ export function SuggestTab() {
       const recipes = await generateRecipesFromIngredients(mergedIngredients, getApiKey())
       setGeneratedRecipes(recipes)
       setStatusMessage('献立候補を生成しました。保存してレシピ一覧に追加できます。')
-      sessionStorage.setItem(INGREDIENT_CACHE_KEY, imageIngredients.join('、'))
+      localStorage.setItem(INGREDIENT_CACHE_KEY, imageIngredients.join('、'))
     } catch (e) {
       setStatusMessage(e instanceof Error ? e.message : '献立生成に失敗しました。')
     } finally {
@@ -273,7 +273,7 @@ export function SuggestTab() {
           value={ingredientsDraft}
           onChange={(e) => {
             setIngredientsDraft(e.target.value)
-            sessionStorage.setItem(INGREDIENT_CACHE_KEY, e.target.value)
+            localStorage.setItem(INGREDIENT_CACHE_KEY, e.target.value)
           }}
           rows={4}
           placeholder="例: 鶏もも肉、玉ねぎ、にんじん"

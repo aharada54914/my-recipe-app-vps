@@ -49,7 +49,13 @@ export function DriveBackupProvider({ children }: { children: ReactNode }) {
   const hasRestoredRef = useRef(false)
 
   const backupNow = useCallback(async () => {
-    if (!providerToken || lockRef.current) return
+    if (!providerToken) {
+      if (user) {
+        addToast({ message: 'トークンが期限切れです。再ログインしてください。', type: 'error' })
+      }
+      return
+    }
+    if (lockRef.current) return
     lockRef.current = true
     setIsBackingUp(true)
     setError(null)
@@ -67,7 +73,7 @@ export function DriveBackupProvider({ children }: { children: ReactNode }) {
       setIsBackingUp(false)
       lockRef.current = false
     }
-  }, [providerToken, addToast])
+  }, [providerToken, user, addToast])
 
   // Restore on first login
   useEffect(() => {
