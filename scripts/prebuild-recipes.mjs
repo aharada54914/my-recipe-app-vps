@@ -8,10 +8,41 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import kuromoji from 'kuromoji'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const ROOT = join(__dirname, '..')
+
+// ─── Kuromoji tokenizer (built once) ───
+
+function buildTokenizer() {
+  const dicPath = join(ROOT, 'node_modules', 'kuromoji', 'dict')
+  return new Promise((resolve, reject) => {
+    kuromoji.builder({ dicPath }).build((err, tokenizer) => {
+      if (err) reject(err)
+      else resolve(tokenizer)
+    })
+  })
+}
+
+function katakanaToHiragana(str) {
+  return str.replace(/[\u30A1-\u30F6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+}
+
+/**
+ * Returns hiragana reading of text using kuromoji.
+ * Falls back to original text on error.
+ */
+function getKanaReading(tokenizer, text) {
+  try {
+    const tokens = tokenizer.tokenize(text)
+    const kana = tokens.map((t) => t.reading ?? t.surface_form).join('')
+    return katakanaToHiragana(kana)
+  } catch {
+    return ''
+  }
+}
 
 // ─── RFC4180 CSV Parser (multiline-safe) ───
 
@@ -445,16 +476,35 @@ function convertHotcookCSV(csvText) {
   return recipes
 }
 
+// ─── Furigana enrichment ───
+
+/**
+ * Adds titleKana and ingredient nameKana to every recipe using kuromoji.
+ */
+function enrichWithKana(recipes, tokenizer) {
+  for (const recipe of recipes) {
+    recipe.titleKana = getKanaReading(tokenizer, recipe.title)
+    for (const ing of recipe.ingredients) {
+      ing.nameKana = getKanaReading(tokenizer, ing.name)
+    }
+  }
+  return recipes
+}
+
 // ─── Main ───
 
-function main() {
+async function main() {
+  console.log('🔤 Building kuromoji tokenizer...')
+  const tokenizer = await buildTokenizer()
+  console.log('✅ Tokenizer ready')
+
   const outDir = join(ROOT, 'src', 'data')
   mkdirSync(outDir, { recursive: true })
 
   // Healsio
   console.log('📖 Reading Healsio CSV...')
   const healsioCsv = readFileSync(join(ROOT, 'AX-XA20_recipes_complete.csv'), 'utf-8')
-  const healsioRecipes = convertHealsioCSV(healsioCsv)
+  const healsioRecipes = enrichWithKana(convertHealsioCSV(healsioCsv), tokenizer)
   const healsioOut = join(outDir, 'recipes-healsio.json')
   writeFileSync(healsioOut, JSON.stringify(healsioRecipes, null, 2), 'utf-8')
   console.log(`✅ Healsio: ${healsioRecipes.length} recipes → ${healsioOut}`)
@@ -462,12 +512,12 @@ function main() {
   // Hotcook
   console.log('📖 Reading Hotcook CSV...')
   const hotcookCsv = readFileSync(join(ROOT, 'KN-HW24H_recipes_complete_complete.csv'), 'utf-8')
-  const hotcookRecipes = convertHotcookCSV(hotcookCsv)
+  const hotcookRecipes = enrichWithKana(convertHotcookCSV(hotcookCsv), tokenizer)
   const hotcookOut = join(outDir, 'recipes-hotcook.json')
   writeFileSync(hotcookOut, JSON.stringify(hotcookRecipes, null, 2), 'utf-8')
   console.log(`✅ Hotcook: ${hotcookRecipes.length} recipes → ${hotcookOut}`)
 
-  console.log(`\n🎉 Total: ${healsioRecipes.length + hotcookRecipes.length} recipes pre-built`)
+  console.log(`\n🎉 Total: ${healsioRecipes.length + hotcookRecipes.length} recipes pre-built (with furigana)`)
 }
 
 main()

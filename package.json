@@ -52,6 +52,7 @@
     "globals": "^16.5.0",
     "jimp": "^0.22.12",
     "jsdom": "^28.1.0",
+    "kuromoji": "^0.1.2",
     "sharp": "^0.34.5",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",

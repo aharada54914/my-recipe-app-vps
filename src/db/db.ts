@@ -10,6 +10,7 @@ export type TabId = 'home' | 'menu' | 'gemini' | 'favorites' | 'history'
 
 export interface Ingredient {
   name: string
+  nameKana?: string
   quantity: number | string
   unit: string
   category: IngredientCategory
@@ -25,6 +26,7 @@ export interface CookingStep {
 export interface Recipe {
   id?: number
   title: string
+  titleKana?: string
   recipeNumber: string
   device: DeviceType
   category: RecipeCategory
@@ -272,6 +274,17 @@ class RecipeDB extends Dexie {
           migratable.category = 'スイーツ'
         }
       })
+    })
+    // v10: Add titleKana index for furigana-based search
+    this.version(10).stores({
+      recipes: '++id, title, titleKana, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
     })
   }
 }
