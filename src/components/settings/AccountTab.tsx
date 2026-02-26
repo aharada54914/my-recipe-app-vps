@@ -19,7 +19,7 @@ function formatTimeAgo(date: Date): string {
 }
 
 export function AccountTab() {
-  const { user, loading: authLoading, isOAuthAvailable, isTokenExpired, signInWithGoogle, signOut } = useAuth()
+  const { user, loading: authLoading, isOAuthAvailable, signInWithGoogle, signOut } = useAuth()
   const { isBackingUp, isRestoring, lastBackupAt, backupNow, error: backupError } = useGoogleDriveSync()
 
   const [googleClientId, setGoogleClientId] = useState(
@@ -103,24 +103,10 @@ export function AccountTab() {
             </div>
           </div>
 
-          {/* Token expired — re-login prompt */}
-          {isTokenExpired && (
-            <div className="rounded-xl bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
-              <p className="mb-2">アクセストークンが期限切れです。バックアップを続けるには再ログインしてください。</p>
-              <button
-                onClick={signInWithGoogle}
-                className="flex items-center gap-2 rounded-lg bg-yellow-500/20 px-3 py-1.5 text-xs font-medium text-yellow-300 transition-colors hover:bg-yellow-500/30"
-              >
-                <LogIn className="h-3.5 w-3.5" />
-                再ログイン
-              </button>
-            </div>
-          )}
-
           {/* Backup now */}
           <button
             onClick={backupNow}
-            disabled={isBackingUp || isRestoring || isTokenExpired}
+            disabled={isBackingUp || isRestoring}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
           >
             <RefreshCw className={`h-4 w-4 ${isBackingUp ? 'animate-spin' : ''}`} />
