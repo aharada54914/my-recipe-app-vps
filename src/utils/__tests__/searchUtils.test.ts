@@ -54,12 +54,28 @@ const mockRecipes: Recipe[] = [
     steps: [{ name: '調理', durationMinutes: 25, isDeviceStep: true }],
     totalTimeMinutes: 25,
   },
+  {
+    id: 4,
+    title: 'かす汁',
+    recipeNumber: '004',
+    device: 'hotcook',
+    category: 'スープ',
+    baseServings: 2,
+    totalWeightG: 700,
+    ingredients: [
+      { name: '酒粕', quantity: 120, unit: 'g', category: 'main' },
+      { name: '大根', quantity: 150, unit: 'g', category: 'main' },
+      { name: 'にんじん', quantity: 50, unit: 'g', category: 'main' },
+    ],
+    steps: [{ name: '調理', durationMinutes: 25, isDeviceStep: true }],
+    totalTimeMinutes: 25,
+  },
 ]
 
 describe('searchRecipes', () => {
   it('returns all recipes for empty query', () => {
     const result = searchRecipes(mockRecipes, '')
-    expect(result).toHaveLength(3)
+    expect(result).toHaveLength(4)
   })
 
   it('returns matching recipes by title', () => {
@@ -104,6 +120,12 @@ describe('searchRecipes', () => {
   it('returns empty array for no matches', () => {
     const result = searchRecipes(mockRecipes, 'ラーメン')
     expect(result).toHaveLength(0)
+  })
+
+  it('finds kana title by kanji variant query (粕汁 -> かす汁)', () => {
+    const result = searchRecipes(mockRecipes, '粕汁')
+    const titles = result.map((r) => r.title)
+    expect(titles).toContain('かす汁')
   })
 })
 

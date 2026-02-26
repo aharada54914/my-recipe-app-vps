@@ -22,6 +22,14 @@ export const DEFAULT_PREFERENCES: Omit<UserPreferences, 'id'> = {
   cookingNotifyMinute: 0,
   desiredMealHour: 18,
   desiredMealMinute: 0,
+  geminiModelChat: 'gemini-2.0-flash-lite',
+  geminiModelRecipeImportText: 'gemini-2.0-flash-lite',
+  geminiModelRecipeImportUrl: 'gemini-2.0-flash-lite',
+  geminiModelImageIngredientExtract: 'gemini-2.0-flash',
+  geminiModelStockRecipeSuggest: 'gemini-2.0-flash',
+  geminiModelWeeklyMenuRefine: 'gemini-2.0-flash-lite',
+  geminiRetryEscalationForUrlAndImage: true,
+  geminiEstimatedDailyLimit: 40,
   updatedAt: new Date(),
 }
 

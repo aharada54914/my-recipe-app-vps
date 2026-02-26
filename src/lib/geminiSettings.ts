@@ -1,3 +1,5 @@
+import type { UserPreferences } from '../db/db'
+
 export type GeminiModelId = 'gemini-2.0-flash-lite' | 'gemini-2.0-flash' | 'gemini-2.5-flash'
 
 export type GeminiFeatureKey =
@@ -79,6 +81,15 @@ export const DEFAULT_GEMINI_FEATURE_CONFIG: GeminiFeatureModelConfig = {
   estimatedDailyLimit: 40,
 }
 
+const GEMINI_MODEL_PREF_KEYS: Record<GeminiFeatureKey, keyof UserPreferences> = {
+  chat: 'geminiModelChat',
+  recipe_import_text: 'geminiModelRecipeImportText',
+  recipe_import_url: 'geminiModelRecipeImportUrl',
+  image_ingredient_extract: 'geminiModelImageIngredientExtract',
+  stock_recipe_suggest: 'geminiModelStockRecipeSuggest',
+  weekly_menu_refine: 'geminiModelWeeklyMenuRefine',
+}
+
 export function getDefaultModelForFeature(feature: GeminiFeatureKey): GeminiModelId {
   return DEFAULT_MODELS[feature]
 }
@@ -106,6 +117,53 @@ export function getGeminiFeatureConfig(): GeminiFeatureModelConfig {
 
 export function setGeminiFeatureConfig(config: GeminiFeatureModelConfig): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(config))
+}
+
+export function isDefaultGeminiFeatureConfig(config: GeminiFeatureModelConfig): boolean {
+  return JSON.stringify(config) === JSON.stringify(DEFAULT_GEMINI_FEATURE_CONFIG)
+}
+
+export function getGeminiFeatureConfigFromPreferences(preferences: Partial<UserPreferences> | null | undefined): GeminiFeatureModelConfig {
+  const defaults = DEFAULT_GEMINI_FEATURE_CONFIG
+  const models: Partial<Record<GeminiFeatureKey, GeminiModelId>> = { ...defaults.models }
+
+  if (preferences) {
+    for (const feature of Object.keys(GEMINI_MODEL_PREF_KEYS) as GeminiFeatureKey[]) {
+      const prefKey = GEMINI_MODEL_PREF_KEYS[feature]
+      const raw = preferences[prefKey]
+      if (typeof raw === 'string' && raw.trim()) {
+        models[feature] = raw as GeminiModelId
+      }
+    }
+  }
+
+  return {
+    models,
+    retryEscalationForUrlAndImage:
+      typeof preferences?.geminiRetryEscalationForUrlAndImage === 'boolean'
+        ? preferences.geminiRetryEscalationForUrlAndImage
+        : defaults.retryEscalationForUrlAndImage,
+    estimatedDailyLimit:
+      typeof preferences?.geminiEstimatedDailyLimit === 'number' && Number.isFinite(preferences.geminiEstimatedDailyLimit)
+        ? Math.max(1, Math.min(9999, Math.round(preferences.geminiEstimatedDailyLimit)))
+        : defaults.estimatedDailyLimit,
+  }
+}
+
+export function getGeminiFeaturePreferenceUpdates(config: GeminiFeatureModelConfig): Partial<UserPreferences> {
+  return {
+    geminiModelChat: config.models.chat ?? DEFAULT_GEMINI_FEATURE_CONFIG.models.chat!,
+    geminiModelRecipeImportText: config.models.recipe_import_text ?? DEFAULT_GEMINI_FEATURE_CONFIG.models.recipe_import_text!,
+    geminiModelRecipeImportUrl: config.models.recipe_import_url ?? DEFAULT_GEMINI_FEATURE_CONFIG.models.recipe_import_url!,
+    geminiModelImageIngredientExtract:
+      config.models.image_ingredient_extract ?? DEFAULT_GEMINI_FEATURE_CONFIG.models.image_ingredient_extract!,
+    geminiModelStockRecipeSuggest:
+      config.models.stock_recipe_suggest ?? DEFAULT_GEMINI_FEATURE_CONFIG.models.stock_recipe_suggest!,
+    geminiModelWeeklyMenuRefine:
+      config.models.weekly_menu_refine ?? DEFAULT_GEMINI_FEATURE_CONFIG.models.weekly_menu_refine!,
+    geminiRetryEscalationForUrlAndImage: !!config.retryEscalationForUrlAndImage,
+    geminiEstimatedDailyLimit: Math.max(1, Math.min(9999, Math.round(config.estimatedDailyLimit || 1))),
+  }
 }
 
 export function getSelectedModelForFeature(feature: GeminiFeatureKey): GeminiModelId {

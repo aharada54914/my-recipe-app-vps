@@ -15,7 +15,7 @@ const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files'
 const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files'
 
 interface BackupData {
-  version: 2
+  version: 3
   exportedAt: string
   stock: StockItem[]
   favorites: Favorite[]
@@ -24,6 +24,12 @@ interface BackupData {
   weeklyMenus: WeeklyMenu[]
   calendarEvents: CalendarEventRecord[]
   preferences: UserPreferences | null
+}
+
+export type PreferencesRestoreStrategy = 'preserve-local' | 'prefer-newer' | 'prefer-drive'
+
+interface RestoreFromGoogleDriveOptions {
+  preferencesStrategy?: PreferencesRestoreStrategy
 }
 
 async function driveGet(token: string, url: string): Promise<Response> {
@@ -69,7 +75,7 @@ export async function backupToGoogleDrive(token: string): Promise<void> {
   const preferences = (await db.userPreferences.toCollection().first()) ?? null
 
   const backup: BackupData = {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     stock,
     favorites,
@@ -129,7 +135,10 @@ export async function backupToGoogleDrive(token: string): Promise<void> {
  * Restore data from Google Drive backup into IndexedDB.
  * Returns true if a backup was found and restored.
  */
-export async function restoreFromGoogleDrive(token: string): Promise<boolean> {
+export async function restoreFromGoogleDrive(
+  token: string,
+  options: RestoreFromGoogleDriveOptions = {},
+): Promise<boolean> {
   const fileId = await findBackupFile(token)
   if (!fileId) return false
 
@@ -223,6 +232,7 @@ export async function restoreFromGoogleDrive(token: string): Promise<boolean> {
 
   // Restore preferences (only if none exist locally)
   if (backup.preferences) {
+    const strategy = options.preferencesStrategy ?? 'prefer-newer'
     const existing = await db.userPreferences.toCollection().first()
     if (!existing) {
       const { id: _id, ...rest } = backup.preferences
@@ -230,6 +240,21 @@ export async function restoreFromGoogleDrive(token: string): Promise<boolean> {
         ...rest,
         updatedAt: new Date(backup.preferences.updatedAt),
       } as UserPreferences)
+    } else {
+      const localUpdatedAt = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0
+      const driveUpdatedAt = backup.preferences.updatedAt ? new Date(backup.preferences.updatedAt).getTime() : 0
+
+      const shouldApplyDrive =
+        strategy === 'prefer-drive' ||
+        (strategy === 'prefer-newer' && driveUpdatedAt > localUpdatedAt)
+
+      if (shouldApplyDrive) {
+        const { id: _id, ...rest } = backup.preferences
+        await db.userPreferences.update(existing.id!, {
+          ...rest,
+          updatedAt: new Date(backup.preferences.updatedAt),
+        } as Partial<UserPreferences>)
+      }
     }
   }
 

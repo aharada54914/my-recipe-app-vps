@@ -164,9 +164,9 @@ export function WeeklyMenuPage() {
         return ids
       }))
 
-      // Load candidates: top 200 recipes excluding used + ヘルシオデリ, sorted by stock match
+      // Load candidates from all recipes excluding used + ヘルシオデリ, sorted by stock match
       const [allRecipes, favRecords] = await Promise.all([
-        db.recipes.limit(200).toArray(),
+        db.recipes.toArray(),
         db.favorites.toArray(),
       ])
 

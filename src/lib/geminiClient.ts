@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { getCachedGeminiApiKey, getLegacyPlaintextGeminiApiKey, cacheGeminiApiKeyForSession } from './geminiKeyVault'
 import {
   getEscalatedModel,
   getGeminiFeatureConfig,
@@ -15,8 +16,14 @@ export function resolveGeminiApiKey(override?: string): string | null {
   if (override?.trim()) return override.trim()
   const envKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
   if (envKey?.trim()) return envKey.trim()
-  const storedKey = localStorage.getItem('gemini_api_key')
-  if (storedKey?.trim()) return storedKey.trim()
+  const cached = getCachedGeminiApiKey()
+  if (cached?.trim()) return cached.trim()
+  // Legacy fallback for migration compatibility until user re-saves with passphrase encryption.
+  const legacy = getLegacyPlaintextGeminiApiKey()
+  if (legacy) {
+    cacheGeminiApiKeyForSession(legacy)
+    return legacy
+  }
   return null
 }
 

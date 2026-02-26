@@ -144,6 +144,15 @@ export interface UserPreferences {
   // Desired meal time
   desiredMealHour: number
   desiredMealMinute: number
+  // AI feature settings (Drive-backup eligible)
+  geminiModelChat: string
+  geminiModelRecipeImportText: string
+  geminiModelRecipeImportUrl: string
+  geminiModelImageIngredientExtract: string
+  geminiModelStockRecipeSuggest: string
+  geminiModelWeeklyMenuRefine: string
+  geminiRetryEscalationForUrlAndImage: boolean
+  geminiEstimatedDailyLimit: number
   // Meta
   updatedAt: Date
 }

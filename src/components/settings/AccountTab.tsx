@@ -140,6 +140,9 @@ export function AccountTab() {
           <p className="text-xs text-text-secondary leading-relaxed">
             ログインするとデータ（在庫・お気に入り・メモ・履歴・献立などのユーザーデータ）があなたのGoogle Driveのアプリ専用領域に自動バックアップされます。レシピを含む全データの控えが必要な場合は、設定→データのエクスポートもご利用ください。
           </p>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            ※ Google Client ID は環境依存のログイン設定のため、Google Drive バックアップ対象外です（端末/デプロイ環境ごとに設定）。
+          </p>
         </div>
       ) : (
         <div className="space-y-3 rounded-xl bg-white/5 px-4 py-3">
@@ -222,7 +225,7 @@ export function AccountTab() {
 
         <div className="mt-3 rounded-2xl bg-white/5 px-4 py-3">
           <p className="text-xs text-text-secondary leading-relaxed">
-            クライアントIDはお客様のブラウザ内（手元の端末）にのみ保存されます。.envファイルで設定されている場合はそちらが優先されることがあります。<br />
+            クライアントIDはお客様のブラウザ内（手元の端末）にのみ保存され、Google Drive バックアップには含まれません。.envファイルで設定されている場合はそちらが優先されることがあります。<br />
             設定後、サインイン機能（バックアップ等）を利用するには、念のため一度ページを再読み込み（リロード）してください。
           </p>
         </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Calendar, ShoppingCart, Loader2, Check } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../hooks/useAuth'
@@ -128,7 +129,7 @@ export function CalendarRegistrationModal({
   }, [providerToken, selectedCalendarId, date, startHour, startMinute, endHour, endMinute, mode, recipe, stockItems, enableReminder, formatIngredientsText, onClose])
 
   if (!providerToken) {
-    return (
+    return createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
         <div className="w-full max-w-sm rounded-2xl bg-bg-card p-6" onClick={(e) => e.stopPropagation()}>
           <div className="mb-4 text-center">
@@ -151,14 +152,15 @@ export function CalendarRegistrationModal({
             閉じる
           </button>
         </div>
-      </div>
+      </div>,
+      document.body
     )
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-t-2xl bg-bg-card p-5 sm:rounded-2xl"
+        className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-bg-card p-5 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -341,6 +343,7 @@ export function CalendarRegistrationModal({
           )}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

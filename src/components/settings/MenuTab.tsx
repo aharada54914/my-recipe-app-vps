@@ -2,19 +2,27 @@ import { useEffect, useMemo, useState } from 'react'
 import { Eye, EyeOff, Lock, Unlock, Wifi, WifiOff, Gauge, RotateCcw, Sparkles } from 'lucide-react'
 import { MealPlanSettings } from '../MealPlanSettings'
 import { generateGeminiText } from '../../lib/geminiClient'
+import { usePreferences } from '../../hooks/usePreferences'
+import {
+  cacheGeminiApiKeyForSession,
+  getCachedGeminiApiKey,
+  getLegacyPlaintextGeminiApiKey,
+  hasEncryptedGeminiApiKey,
+  hasLegacyPlaintextGeminiApiKey,
+  saveEncryptedGeminiApiKey,
+  unlockEncryptedGeminiApiKey,
+} from '../../lib/geminiKeyVault'
 import {
   DEFAULT_GEMINI_FEATURE_CONFIG,
   GEMINI_FEATURE_LABELS,
   GEMINI_MODEL_OPTIONS,
-  getGeminiFeatureConfig,
+  getGeminiFeatureConfigFromPreferences,
+  getGeminiFeaturePreferenceUpdates,
   getTodayUsageStats,
-  setGeminiFeatureConfig,
   type GeminiFeatureKey,
   type GeminiFeatureModelConfig,
   type GeminiModelId,
 } from '../../lib/geminiSettings'
-
-const STORAGE_KEY = 'gemini_api_key'
 
 const FEATURE_ORDER: GeminiFeatureKey[] = [
   'chat',
@@ -30,20 +38,33 @@ function modelCaption(modelId: GeminiModelId): string {
 }
 
 export function MenuTab() {
+  const { preferences, updatePreferences } = usePreferences()
   const [apiKey, setApiKey] = useState('')
+  const [passphrase, setPassphrase] = useState('')
+  const [unlockPassphrase, setUnlockPassphrase] = useState('')
   const [isLocked, setIsLocked] = useState(true)
   const [showKey, setShowKey] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [vaultStatus, setVaultStatus] = useState<'idle' | 'saving' | 'unlocking' | 'saved' | 'unlocked' | 'error'>('idle')
+  const [vaultMessage, setVaultMessage] = useState('')
+  const [hasEncryptedKey, setHasEncryptedKey] = useState(() => hasEncryptedGeminiApiKey())
+  const [hasLegacyKey, setHasLegacyKey] = useState(() => hasLegacyPlaintextGeminiApiKey())
   const [confirmSave, setConfirmSave] = useState(false)
-  const [featureConfig, setFeatureConfigState] = useState<GeminiFeatureModelConfig>(() => getGeminiFeatureConfig())
+  const [featureConfig, setFeatureConfigState] = useState<GeminiFeatureModelConfig>(() => getGeminiFeatureConfigFromPreferences(preferences))
   const [usageStats, setUsageStats] = useState(() => getTodayUsageStats())
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) || ''
-    setApiKey(stored)
-    setFeatureConfigState(getGeminiFeatureConfig())
+    const cached = getCachedGeminiApiKey()
+    const legacy = getLegacyPlaintextGeminiApiKey()
+    setApiKey(cached || legacy || '')
+    setHasEncryptedKey(hasEncryptedGeminiApiKey())
+    setHasLegacyKey(hasLegacyPlaintextGeminiApiKey())
     setUsageStats(getTodayUsageStats())
   }, [])
+
+  useEffect(() => {
+    setFeatureConfigState(getGeminiFeatureConfigFromPreferences(preferences))
+  }, [preferences])
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -79,6 +100,7 @@ export function MenuTab() {
   const handleUnlock = () => {
     setIsLocked(false)
     setShowKey(true)
+    setVaultMessage('')
   }
 
   const handleSave = () => {
@@ -86,18 +108,48 @@ export function MenuTab() {
       setConfirmSave(true)
       return
     }
-    localStorage.setItem(STORAGE_KEY, apiKey.trim())
-    setIsLocked(true)
-    setShowKey(false)
-    setConfirmSave(false)
+    setVaultStatus('saving')
+    setVaultMessage('')
+    void saveEncryptedGeminiApiKey(apiKey, passphrase)
+      .then(() => {
+        cacheGeminiApiKeyForSession(apiKey.trim())
+        setHasEncryptedKey(true)
+        setHasLegacyKey(false)
+        setVaultStatus('saved')
+        setVaultMessage('APIキーを暗号化して保存しました')
+        setIsLocked(true)
+        setShowKey(false)
+        setConfirmSave(false)
+      })
+      .catch((err) => {
+        setVaultStatus('error')
+        setVaultMessage(err instanceof Error ? err.message : 'APIキーの暗号化保存に失敗しました')
+      })
   }
 
   const handleCancel = () => {
-    const stored = localStorage.getItem(STORAGE_KEY) || ''
-    setApiKey(stored)
+    const cached = getCachedGeminiApiKey()
+    const legacy = getLegacyPlaintextGeminiApiKey()
+    setApiKey(cached || legacy || '')
     setIsLocked(true)
     setShowKey(false)
     setConfirmSave(false)
+    setVaultMessage('')
+    setPassphrase('')
+  }
+
+  const handleUnlockEncryptedKey = async () => {
+    setVaultStatus('unlocking')
+    setVaultMessage('')
+    try {
+      const key = await unlockEncryptedGeminiApiKey(unlockPassphrase)
+      setApiKey(key)
+      setVaultStatus('unlocked')
+      setVaultMessage('暗号化保存されたAPIキーを復号しました（このセッションで利用可能）')
+    } catch (err) {
+      setVaultStatus('error')
+      setVaultMessage(err instanceof Error ? err.message : '復号に失敗しました')
+    }
   }
 
   const handleTest = async () => {
@@ -124,13 +176,13 @@ export function MenuTab() {
       models: { ...featureConfig.models, [feature]: modelId },
     }
     setFeatureConfigState(next)
-    setGeminiFeatureConfig(next)
+    void updatePreferences(getGeminiFeaturePreferenceUpdates(next))
   }
 
   const updateRetryEscalation = (enabled: boolean) => {
     const next = { ...featureConfig, retryEscalationForUrlAndImage: enabled }
     setFeatureConfigState(next)
-    setGeminiFeatureConfig(next)
+    void updatePreferences(getGeminiFeaturePreferenceUpdates(next))
   }
 
   const updateEstimatedDailyLimit = (value: number) => {
@@ -139,12 +191,12 @@ export function MenuTab() {
       estimatedDailyLimit: Math.max(1, Math.min(9999, Math.round(value || 1))),
     }
     setFeatureConfigState(next)
-    setGeminiFeatureConfig(next)
+    void updatePreferences(getGeminiFeaturePreferenceUpdates(next))
   }
 
   const resetAiConfig = () => {
     setFeatureConfigState(DEFAULT_GEMINI_FEATURE_CONFIG)
-    setGeminiFeatureConfig(DEFAULT_GEMINI_FEATURE_CONFIG)
+    void updatePreferences(getGeminiFeaturePreferenceUpdates(DEFAULT_GEMINI_FEATURE_CONFIG))
   }
 
   return (
@@ -184,7 +236,7 @@ export function MenuTab() {
               <input
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
-                onChange={(e) => { setApiKey(e.target.value); setConfirmSave(false) }}
+                onChange={(e) => { setApiKey(e.target.value); setConfirmSave(false); setVaultMessage('') }}
                 placeholder="APIキーを入力..."
                 className="w-full rounded-xl bg-white/5 px-4 py-3 pr-10 text-base text-text-primary font-mono placeholder:text-text-secondary outline-none ring-1 ring-accent/30"
               />
@@ -205,15 +257,72 @@ export function MenuTab() {
               </button>
               <button
                 onClick={handleSave}
+                disabled={vaultStatus === 'saving'}
                 className={`flex-1 rounded-xl py-2.5 text-sm font-bold text-white transition-colors ${confirmSave
                   ? 'bg-red-500 hover:bg-red-600'
                   : 'bg-accent hover:bg-accent-hover'
                   }`}
               >
-                {confirmSave ? '本当に保存しますか？' : '保存'}
+                {vaultStatus === 'saving' ? '暗号化中...' : confirmSave ? '本当に保存しますか？' : '暗号化して保存'}
               </button>
             </div>
+
+            <div className="rounded-xl bg-white/5 p-3">
+              <label className="mb-1 block text-xs font-bold text-text-secondary">
+                保存用パスフレーズ（8文字以上）
+              </label>
+              <input
+                type="password"
+                value={passphrase}
+                onChange={(e) => { setPassphrase(e.target.value); setConfirmSave(false) }}
+                placeholder="パスフレーズを入力..."
+                className="w-full rounded-xl bg-bg-card px-3 py-2.5 text-sm text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+              />
+              <p className="mt-2 text-[11px] leading-relaxed text-text-secondary">
+                APIキーはこのパスフレーズでWebCrypto暗号化して端末内に保存されます。パスフレーズを忘れると復号できません。
+              </p>
+            </div>
           </div>
+        )}
+
+        {(hasEncryptedKey || hasLegacyKey) && (
+          <div className="mt-3 rounded-xl bg-white/5 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-text-secondary">保存状態</p>
+              <span className="text-[11px] text-text-secondary">
+                {hasEncryptedKey ? '暗号化保存あり' : hasLegacyKey ? '旧形式（平文）' : '未保存'}
+              </span>
+            </div>
+            {hasEncryptedKey && (
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={unlockPassphrase}
+                  onChange={(e) => setUnlockPassphrase(e.target.value)}
+                  placeholder="復号パスフレーズ"
+                  className="flex-1 rounded-xl bg-bg-card px-3 py-2 text-sm text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                />
+                <button
+                  onClick={handleUnlockEncryptedKey}
+                  disabled={vaultStatus === 'unlocking'}
+                  className="rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-text-primary hover:bg-white/15 disabled:opacity-50"
+                >
+                  {vaultStatus === 'unlocking' ? '復号中...' : '復号'}
+                </button>
+              </div>
+            )}
+            {hasLegacyKey && !hasEncryptedKey && (
+              <p className="text-[11px] leading-relaxed text-yellow-300">
+                旧形式の平文保存APIキーが見つかりました。編集を開いて「暗号化して保存」で移行してください。
+              </p>
+            )}
+          </div>
+        )}
+
+        {vaultMessage && (
+          <p className={`mt-2 text-xs ${vaultStatus === 'error' ? 'text-red-400' : 'text-text-secondary'}`}>
+            {vaultMessage}
+          </p>
         )}
 
         <button
@@ -344,7 +453,7 @@ export function MenuTab() {
 
       <div className="rounded-2xl bg-white/5 px-4 py-3">
         <p className="text-xs text-text-secondary leading-relaxed">
-          APIキーは端末のローカルストレージに保存されます。
+          APIキーはユーザーパスフレーズを用いてWebCryptoで暗号化した上で端末のローカルストレージに保存され、Google Drive バックアップには含まれません。
           <code className="mx-1 rounded bg-white/10 px-1 py-0.5 text-[10px]">.env</code>
           ファイルにキーが設定されている場合はそちらが優先されます。
         </p>

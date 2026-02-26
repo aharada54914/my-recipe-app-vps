@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Search } from 'lucide-react'
 import { db } from '../db/db'
@@ -20,27 +20,56 @@ function StockRow({
   name,
   unit,
   quantity,
-  onUpdateQuantity,
+  onCommitQuantity,
 }: {
   name: string
   unit: string
-  quantity: number
-  onUpdateQuantity: (quantity: number) => void
+  quantity?: number
+  onCommitQuantity: (quantity: number) => void
 }) {
+  const [draft, setDraft] = useState(() => (typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''))
+  const [isEditing, setIsEditing] = useState(false)
+
+  useEffect(() => {
+    if (isEditing) return
+    setDraft(typeof quantity === 'number' && quantity > 0 ? String(quantity) : '')
+  }, [quantity, isEditing])
+
+  const commit = () => {
+    const normalized = draft.trim()
+    if (!normalized) {
+      onCommitQuantity(0)
+      return
+    }
+
+    const parsed = Number(normalized)
+    onCommitQuantity(Number.isFinite(parsed) && parsed >= 0 ? parsed : 0)
+  }
+
   return (
     <div className="flex min-h-[52px] items-center gap-2 rounded-xl bg-bg-card px-4 py-3 ring-1 ring-white/10">
       <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
         {name}
       </span>
       <input
-        type="number"
+        type="text"
         inputMode="decimal"
-        min={0}
-        step={1}
-        value={quantity || ''}
+        value={draft}
         onChange={(e) => {
-          const val = parseFloat(e.target.value)
-          onUpdateQuantity(isNaN(val) ? 0 : val)
+          const next = e.target.value
+          if (next === '' || /^\d*\.?\d*$/.test(next)) {
+            setDraft(next)
+          }
+        }}
+        onFocus={() => setIsEditing(true)}
+        onBlur={() => {
+          setIsEditing(false)
+          commit()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur()
+          }
         }}
         placeholder="0"
         className="w-16 rounded-lg bg-white/5 px-2 py-2 text-sm text-text-primary text-right outline-none"
@@ -192,7 +221,7 @@ export function StockManager() {
                 name={item.name}
                 unit={item.defaultUnit}
                 quantity={item.quantity}
-                onUpdateQuantity={(q) => handleUpdateQuantity(item.name, item.defaultUnit, q)}
+                onCommitQuantity={(q) => handleUpdateQuantity(item.name, item.defaultUnit, q)}
               />
             ))}
           </div>
@@ -210,7 +239,7 @@ export function StockManager() {
                 name={ing.name}
                 unit={ing.defaultUnit}
                 quantity={0}
-                onUpdateQuantity={(q) => handleUpdateQuantity(ing.name, ing.defaultUnit, q)}
+                onCommitQuantity={(q) => handleUpdateQuantity(ing.name, ing.defaultUnit, q)}
               />
             ))}
           </div>

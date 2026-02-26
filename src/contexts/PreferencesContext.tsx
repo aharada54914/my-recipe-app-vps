@@ -2,6 +2,13 @@ import { useCallback, useEffect, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type UserPreferences } from '../db/db'
 import { DEFAULT_PREFERENCES, PreferencesContext } from './preferencesContextDef'
+import {
+  getGeminiFeatureConfig,
+  getGeminiFeatureConfigFromPreferences,
+  getGeminiFeaturePreferenceUpdates,
+  isDefaultGeminiFeatureConfig,
+  setGeminiFeatureConfig,
+} from '../lib/geminiSettings'
 
 export type { PreferencesContextValue } from './preferencesContextDef'
 
@@ -17,6 +24,37 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     if (stored === undefined) return // still loading
     if (stored === null) {
       db.userPreferences.add({ ...DEFAULT_PREFERENCES, updatedAt: new Date() })
+    }
+  }, [stored])
+
+  useEffect(() => {
+    if (stored === undefined || stored === null || !stored.id) return
+
+    const prefsConfig = getGeminiFeatureConfigFromPreferences(stored)
+    const legacyConfig = getGeminiFeatureConfig()
+    const needsBackfill =
+      typeof stored.geminiModelChat !== 'string' ||
+      typeof stored.geminiModelRecipeImportText !== 'string' ||
+      typeof stored.geminiModelRecipeImportUrl !== 'string' ||
+      typeof stored.geminiModelImageIngredientExtract !== 'string' ||
+      typeof stored.geminiModelStockRecipeSuggest !== 'string' ||
+      typeof stored.geminiModelWeeklyMenuRefine !== 'string' ||
+      typeof stored.geminiRetryEscalationForUrlAndImage !== 'boolean' ||
+      typeof stored.geminiEstimatedDailyLimit !== 'number'
+
+    const migratedConfig =
+      needsBackfill && !isDefaultGeminiFeatureConfig(legacyConfig)
+        ? legacyConfig
+        : prefsConfig
+
+    // Keep synchronous Gemini config readers working while DB-backed preferences are the source of truth.
+    setGeminiFeatureConfig(migratedConfig)
+
+    if (needsBackfill) {
+      void db.userPreferences.update(stored.id, {
+        ...getGeminiFeaturePreferenceUpdates(migratedConfig),
+        updatedAt: new Date(),
+      })
     }
   }, [stored])
 
