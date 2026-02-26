@@ -81,8 +81,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       let fetchedRecipes: Recipe[] = []
       if (deviceFilter) {
         fetchedRecipes = await db.recipes.where('device').equals(deviceFilter).toArray()
-      } else if (category !== 'すべて' && !deferredSearch) {
-        // Category filter is skipped when a search query is active (search across all menus)
+      } else if (category !== 'すべて') {
         fetchedRecipes = await db.recipes.where('category').equals(category).toArray()
       } else {
         fetchedRecipes = await db.recipes.toArray()
@@ -108,7 +107,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
       return { recipes, stockItems, viewHistory, favorites, weeklyMenus, calendarEvents }
     },
-    [category, deviceFilter, !!deferredSearch],
+    [category, deviceFilter],
     { recipes: [], stockItems: [], viewHistory: [], favorites: [], weeklyMenus: [], calendarEvents: [] }
   )
 
