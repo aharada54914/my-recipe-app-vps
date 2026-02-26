@@ -33,17 +33,17 @@ function StockRow({
         {name}
       </span>
       <input
-        type="text"
+        type="number"
         inputMode="decimal"
+        min={0}
+        step={1}
         value={quantity || ''}
         onChange={(e) => {
           const val = parseFloat(e.target.value)
           onUpdateQuantity(isNaN(val) ? 0 : val)
         }}
         placeholder="0"
-        pattern="[0-9.]*"
-        style={{ fontSize: '16px' }}
-        className="w-16 rounded-lg bg-white/5 px-2 py-2 text-text-primary text-right outline-none"
+        className="w-16 rounded-lg bg-white/5 px-2 py-2 text-sm text-text-primary text-right outline-none"
       />
       <span className="w-10 text-sm font-medium text-text-secondary">{unit}</span>
     </div>
