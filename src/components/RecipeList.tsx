@@ -7,15 +7,14 @@ import type { Recipe, RecipeCategory, DeviceType } from '../db/db'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { searchRecipesWithScores } from '../utils/searchUtils'
 import { useDebounce } from '../hooks/useDebounce'
-import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { SearchBar } from './SearchBar'
 import { CategoryTags } from './CategoryTags'
 import { RecipeCard } from './RecipeCard'
 import { buildPreferenceProfile } from '../utils/preferenceSignals'
 import { computeKitchenAppPreferenceScore } from '../utils/preferenceRanker'
+import { applyUiRecipeFilters } from '../utils/recipeFilters'
 
 const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
-const seasonalIngredients = getCurrentSeasonalIngredients()
 const SEARCH_HISTORY_KEY = 'recipe_search_history'
 
 interface RecipeListProps {
@@ -128,21 +127,10 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       ? searchRecipesWithScores(data.recipes, deferredSearch)
       : data.recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
 
-    let filtered = scored.map((entry) => entry.recipe)
-
-    // JS-side filters (no DB index available for these)
-    if (quickFilter) {
-      filtered = filtered.filter((r) => r.totalTimeMinutes <= 30)
-    }
-    if (seasonalFilter) {
-      filtered = filtered.filter(
-        (r) =>
-          !isHelsioDeli(r) &&
-          r.ingredients.some((ing) =>
-            seasonalIngredients.some((s) => ing.name.includes(s))
-          )
-      )
-    }
+    const filtered = applyUiRecipeFilters(
+      scored.map((entry) => entry.recipe),
+      { category, quickFilter, seasonalFilter }
+    )
 
     const scoreById = new Map(scored.map((entry) => [entry.recipe.id!, entry.queryScore]))
 
@@ -174,6 +162,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     data.calendarEvents,
     deferredSearch,
     stockNames,
+    category,
     quickFilter,
     seasonalFilter,
   ])
