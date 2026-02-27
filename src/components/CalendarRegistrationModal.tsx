@@ -46,6 +46,17 @@ export function CalendarRegistrationModal({
   const [status, setStatus] = useState<Status>('idle')
   const [errorMessage, setErrorMessage] = useState('')
 
+  const [year, month, day] = date.split('-').map(Number)
+  const selectedDate = new Date(year, month - 1, day)
+  const yearOptions = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i)
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const dayOptions = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+  const updateDatePart = useCallback((nextYear: number, nextMonth: number, nextDay: number) => {
+    const safeDay = Math.min(nextDay, new Date(nextYear, nextMonth, 0).getDate())
+    setDate(`${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`)
+  }, [])
+
   // Load calendars
   useEffect(() => {
     if (!providerToken) return
@@ -212,12 +223,38 @@ export function CalendarRegistrationModal({
         {/* Date */}
         <div className="mb-3">
           <label className="mb-1 block text-xs font-medium text-text-secondary">日付</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-xl bg-white/5 px-4 py-2.5 text-base text-text-primary outline-none"
-          />
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              value={year}
+              onChange={(e) => updateDatePart(Number(e.target.value), month, day)}
+              className="w-full rounded-xl bg-white/5 px-3 py-2.5 text-base text-text-primary outline-none"
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>{y}年</option>
+              ))}
+            </select>
+            <select
+              value={month}
+              onChange={(e) => updateDatePart(year, Number(e.target.value), day)}
+              className="w-full rounded-xl bg-white/5 px-3 py-2.5 text-base text-text-primary outline-none"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{m}月</option>
+              ))}
+            </select>
+            <select
+              value={day}
+              onChange={(e) => updateDatePart(year, month, Number(e.target.value))}
+              className="w-full rounded-xl bg-white/5 px-3 py-2.5 text-base text-text-primary outline-none"
+            >
+              {dayOptions.map((d) => (
+                <option key={d} value={d}>{d}日</option>
+              ))}
+            </select>
+          </div>
+          <p className="mt-1 text-xs text-text-secondary">
+            選択日: {format(selectedDate, 'yyyy/MM/dd')}
+          </p>
         </div>
 
         {/* Time range (meal mode) */}
