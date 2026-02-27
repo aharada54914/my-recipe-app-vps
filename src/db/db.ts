@@ -46,6 +46,8 @@ export interface Recipe {
   rawSteps?: string[]
   // Metadata fields
   updatedAt?: Date
+  // True for recipes added by the user (AI import, manual entry) — backed up to Drive
+  isUserAdded?: boolean
 }
 
 export interface StockItem {

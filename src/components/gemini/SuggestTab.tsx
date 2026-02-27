@@ -145,7 +145,7 @@ export function SuggestTab() {
       if (!allowDuplicate) return
     }
     setEditorSaving(true)
-    await db.recipes.add(recipe as Recipe)
+    await db.recipes.add({ ...recipe, isUserAdded: true } as Recipe)
     setEditorSaving(false)
     setStatusMessage(`「${recipe.title}」を保存しました。`)
   }
