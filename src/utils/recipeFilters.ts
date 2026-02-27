@@ -7,18 +7,21 @@ const seasonalIngredients = getCurrentSeasonalIngredients()
 export function applyUiRecipeFilters(
   recipes: Recipe[],
   options: {
-    category: RecipeCategory
+    selectedCategories: RecipeCategory[]
     quickFilter: boolean
     seasonalFilter: boolean
   }
 ) {
-  const { category, quickFilter, seasonalFilter } = options
+  const { selectedCategories, quickFilter, seasonalFilter } = options
   let filtered = recipes
 
-  // Defense-in-depth: keep category filter at UI layer as well.
-  // This prevents mixed results if DB query scope is widened by future refactors.
-  if (category !== 'すべて') {
-    filtered = filtered.filter((r) => r.category === category)
+  const activeCategories = selectedCategories.filter(
+    (category): category is Exclude<RecipeCategory, 'すべて'> => category !== 'すべて'
+  )
+
+  if (activeCategories.length > 0) {
+    const categorySet = new Set(activeCategories)
+    filtered = filtered.filter((r) => r.category !== 'すべて' && categorySet.has(r.category))
   }
 
   if (quickFilter) {

@@ -23,7 +23,7 @@ interface RecipeListProps {
 
 export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState<RecipeCategory>('すべて')
+  const [selectedCategories, setSelectedCategories] = useState<RecipeCategory[]>([])
   const [deviceFilter, setDeviceFilter] = useState<DeviceType | null>(null)
   const [quickFilter, setQuickFilter] = useState(false)
   const [seasonalFilter, setSeasonalFilter] = useState(false)
@@ -53,21 +53,22 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     if (filterParam.startsWith('device:')) {
       const device = filterParam.replace('device:', '') as DeviceType
       setDeviceFilter(device)
-      setCategory('すべて')
+      setSelectedCategories([])
       setQuickFilter(false)
       setSeasonalFilter(false)
     } else if (filterParam === 'quick') {
       setQuickFilter(true)
-      setCategory('すべて')
+      setSelectedCategories([])
       setDeviceFilter(null)
       setSeasonalFilter(false)
     } else if (filterParam === 'seasonal') {
       setSeasonalFilter(true)
-      setCategory('すべて')
+      setSelectedCategories([])
       setDeviceFilter(null)
       setQuickFilter(false)
     } else if (filterParam && (RECIPE_CATEGORIES as string[]).includes(filterParam)) {
-      setCategory(filterParam as RecipeCategory)
+      const parsedCategory = filterParam as RecipeCategory
+      setSelectedCategories(parsedCategory === 'すべて' ? [] : [parsedCategory])
       setDeviceFilter(null)
       setQuickFilter(false)
       setSeasonalFilter(false)
@@ -80,9 +81,8 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       let fetchedRecipes: Recipe[] = []
       if (deviceFilter) {
         fetchedRecipes = await db.recipes.where('device').equals(deviceFilter).toArray()
-      } else if (category !== 'すべて') {
-        // Keep category filtering active even while searching
-        fetchedRecipes = await db.recipes.where('category').equals(category).toArray()
+      } else if (selectedCategories.length > 0) {
+        fetchedRecipes = await db.recipes.where('category').anyOf(selectedCategories).toArray()
       } else {
         fetchedRecipes = await db.recipes.toArray()
       }
@@ -107,7 +107,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
       return { recipes, stockItems, viewHistory, favorites, weeklyMenus, calendarEvents }
     },
-    [category, deviceFilter, !!deferredSearch],
+    [selectedCategories, deviceFilter, !!deferredSearch],
     { recipes: [], stockItems: [], viewHistory: [], favorites: [], weeklyMenus: [], calendarEvents: [] }
   )
 
@@ -129,7 +129,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
     const filtered = applyUiRecipeFilters(
       scored.map((entry) => entry.recipe),
-      { category, quickFilter, seasonalFilter }
+      { selectedCategories, quickFilter, seasonalFilter }
     )
 
     const scoreById = new Map(scored.map((entry) => [entry.recipe.id!, entry.queryScore]))
@@ -162,7 +162,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     data.calendarEvents,
     deferredSearch,
     stockNames,
-    category,
+    selectedCategories,
     quickFilter,
     seasonalFilter,
   ])
@@ -182,8 +182,12 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   )
 
   // When user picks a category tag, clear device/quick/seasonal filters
-  const handleCategorySelect = useCallback((cat: RecipeCategory) => {
-    setCategory(cat)
+  const handleCategoryToggle = useCallback((cat: RecipeCategory) => {
+    setSelectedCategories((prev) => {
+      if (cat === 'すべて') return []
+      if (prev.includes(cat)) return prev.filter((value) => value !== cat)
+      return [...prev, cat]
+    })
     setDeviceFilter(null)
     setQuickFilter(false)
     setSeasonalFilter(false)
@@ -225,7 +229,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         onSubmit={handleSubmitSearch}
         onSelectHistory={handleSelectHistory}
       />
-      <CategoryTags selected={category} onSelect={handleCategorySelect} />
+      <CategoryTags selectedCategories={selectedCategories} onToggle={handleCategoryToggle} />
 
       {/* Active special filter badge */}
       {activeFilterLabel && (
