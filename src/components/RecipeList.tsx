@@ -17,6 +17,26 @@ import { computeKitchenAppPreferenceScore } from '../utils/preferenceRanker'
 const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
 const seasonalIngredients = getCurrentSeasonalIngredients()
 const SEARCH_HISTORY_KEY = 'recipe_search_history'
+const QUERY_SCORE_WEIGHT = 4.2
+
+interface BaseRecipeScore {
+  matchRate: number
+  isDeli: boolean
+  baseScore: number
+}
+
+function computeBaseRecipeScore(recipe: Recipe, stockNames: Set<string>, preferenceScore: number): BaseRecipeScore {
+  const matchRate = calculateMatchRate(recipe.ingredients, stockNames)
+  const stockScore = (matchRate / 100) * 1.4
+  const isDeli = isHelsioDeli(recipe)
+  const deliPenalty = isDeli ? 2.2 : 0
+
+  return {
+    matchRate,
+    isDeli,
+    baseScore: preferenceScore + stockScore - deliPenalty,
+  }
+}
 
 interface RecipeListProps {
   onSelectRecipe: (id: number) => void
@@ -114,16 +134,30 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
   const stockNames = useMemo(() => new Set(data.stockItems.map((s) => s.name)), [data.stockItems])
 
+  const preferenceProfile = useMemo(
+    () =>
+      buildPreferenceProfile({
+        recipes: data.recipes,
+        viewHistory: data.viewHistory,
+        favorites: data.favorites,
+        weeklyMenus: data.weeklyMenus,
+        calendarEvents: data.calendarEvents,
+      }),
+    [data.recipes, data.viewHistory, data.favorites, data.weeklyMenus, data.calendarEvents]
+  )
+
+  const baseScoreByRecipeId = useMemo(() => {
+    const scoreMap = new Map<number, BaseRecipeScore>()
+    for (const recipe of data.recipes) {
+      if (recipe.id == null) continue
+      const preferenceScore = computeKitchenAppPreferenceScore(recipe, preferenceProfile)
+      scoreMap.set(recipe.id, computeBaseRecipeScore(recipe, stockNames, preferenceScore))
+    }
+    return scoreMap
+  }, [data.recipes, stockNames, preferenceProfile])
+
   // T-01 + T-22: Fuzzy search + filters wrapped in transition for smooth typing
   const withRates = useMemo(() => {
-    const profile = buildPreferenceProfile({
-      recipes: data.recipes,
-      viewHistory: data.viewHistory,
-      favorites: data.favorites,
-      weeklyMenus: data.weeklyMenus,
-      calendarEvents: data.calendarEvents,
-    })
-
     const scored = deferredSearch
       ? searchRecipesWithScores(data.recipes, deferredSearch)
       : data.recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
@@ -148,17 +182,19 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
     return filtered
       .map((r) => {
-        const matchRate = calculateMatchRate(r.ingredients, stockNames)
         const queryScore = scoreById.get(r.id!) ?? 0.5
-        const preferenceScore = computeKitchenAppPreferenceScore(r, profile)
-        const stockScore = (matchRate / 100) * 1.4
-        const deliPenalty = isHelsioDeli(r) ? 2.2 : 0
-        const finalScore = queryScore * 4.2 + preferenceScore + stockScore - deliPenalty
+        const cachedScore = r.id != null ? baseScoreByRecipeId.get(r.id) : undefined
+        const resolvedScore = cachedScore ?? computeBaseRecipeScore(
+          r,
+          stockNames,
+          computeKitchenAppPreferenceScore(r, preferenceProfile)
+        )
+        const finalScore = queryScore * QUERY_SCORE_WEIGHT + resolvedScore.baseScore
 
         return {
           recipe: r,
-          matchRate,
-          isDeli: isHelsioDeli(r),
+          matchRate: resolvedScore.matchRate,
+          isDeli: resolvedScore.isDeli,
           finalScore,
         }
       })
@@ -168,14 +204,12 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       })
   }, [
     data.recipes,
-    data.viewHistory,
-    data.favorites,
-    data.weeklyMenus,
-    data.calendarEvents,
     deferredSearch,
-    stockNames,
     quickFilter,
     seasonalFilter,
+    baseScoreByRecipeId,
+    stockNames,
+    preferenceProfile,
   ])
 
   // T-04: Virtual scrolling

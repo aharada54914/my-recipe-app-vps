@@ -37,6 +37,13 @@ import { ShareMenuModal } from '../components/weekly/ShareMenuModal'
 import { ServingsStepper } from '../components/weekly/ServingsStepper'
 import jsQR from 'jsqr'
 import { WEEKLY_MENU_IMPORT_PARAM } from '../utils/weeklyMenuQr'
+import { analyzeWeeklyMenuNutrition } from '../utils/weeklyMenuNutritionInsights'
+
+const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', string> = {
+  'heuristic-3': '3段階推定',
+  'nutrition-5': '5段階栄養',
+  'nutrition-7': '7段階栄養',
+}
 
 export function WeeklyMenuPage() {
   const navigate = useNavigate()
@@ -219,6 +226,8 @@ export function WeeklyMenuPage() {
     if (!menu) return [] as Recipe[]
     return buildWeeklyMenuRecipesWithServings(menu, recipes)
   }, [menu, recipes])
+
+  const nutritionInsights = useMemo(() => analyzeWeeklyMenuNutrition(selectedRecipes), [selectedRecipes])
 
   const handleAdjustServings = useCallback((dayIndex: number, type: 'main' | 'side', delta: number) => {
     if (!menu) return
@@ -487,6 +496,26 @@ export function WeeklyMenuPage() {
           </div>
         ) : (
           <>
+            <div className="rounded-2xl bg-bg-card p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-sm font-bold text-text-secondary">栄養バランス評価</h4>
+                <span className="rounded-lg bg-accent/20 px-2 py-0.5 text-xs font-bold text-accent">
+                  {BALANCE_TIER_LABEL[nutritionInsights.tierDecision.tier]}
+                </span>
+              </div>
+              <p className="text-xs text-text-secondary">
+                データ充足率: 5段階 {Math.round(nutritionInsights.tierDecision.nutrition5Coverage * 100)}% / 7段階 {Math.round(nutritionInsights.tierDecision.nutrition7Coverage * 100)}%
+              </p>
+              <div className="mt-3 space-y-1.5 text-sm">
+                {nutritionInsights.gaps.map((gap) => (
+                  <p key={gap} className="text-amber-300">・{gap}</p>
+                ))}
+                {nutritionInsights.highlights.map((highlight) => (
+                  <p key={highlight} className="text-emerald-300">・{highlight}</p>
+                ))}
+              </div>
+            </div>
+
             {/* Daily menu cards */}
             <div className="space-y-3">
               {menu.items.map((item, i) => {

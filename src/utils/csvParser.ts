@@ -207,6 +207,128 @@ function generateCsvRecipeNumber(device: DeviceType, index: number): string {
     return `${prefix}-${String(index + 1).padStart(3, '0')}`
 }
 
+function normalizeHeaderName(value: string): string {
+    return value.replace(/\s+/g, '').trim()
+}
+
+function buildHeaderLookup(header: string[]): Map<string, number> {
+    const map = new Map<string, number>()
+    for (let i = 0; i < header.length; i++) {
+        const normalized = normalizeHeaderName(header[i] ?? '')
+        if (!normalized) continue
+        map.set(normalized, i)
+    }
+    return map
+}
+
+function getCellByHeader(row: string[], headerLookup: Map<string, number>, names: string[], fallbackIndex?: number): string {
+    for (const name of names) {
+        const idx = headerLookup.get(normalizeHeaderName(name))
+        if (typeof idx === 'number' && row[idx] != null) return row[idx]
+    }
+    if (typeof fallbackIndex === 'number') return row[fallbackIndex] ?? ''
+    return ''
+}
+
+function normalizeNumberText(raw: string): string {
+    return raw
+        .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+        .replace(/，/g, ',')
+        .replace(/．/g, '.')
+}
+
+export function parseNumberFromText(raw: string): number | undefined {
+    const normalized = normalizeNumberText(raw)
+    const match = normalized.match(/(\d+(?:\.\d+)?)/)
+    if (!match) return undefined
+    const value = Number.parseFloat(match[1].replace(/,/g, ''))
+    return Number.isFinite(value) ? value : undefined
+}
+
+export function buildNutritionPerServing(
+    caloriesText: string,
+    saltText: string,
+    totalWeightG: number,
+    baseServings: number,
+): Recipe['nutritionPerServing'] | undefined {
+    const energyKcal = parseNumberFromText(caloriesText)
+    const saltValue = parseNumberFromText(saltText)
+    const hasMg = /mg/i.test(normalizeNumberText(saltText))
+    const servingSizeG = Number.isFinite(totalWeightG) && Number.isFinite(baseServings) && baseServings > 0
+        ? Math.round((totalWeightG / baseServings) * 10) / 10
+        : undefined
+
+    const nutrition: Recipe['nutritionPerServing'] = {}
+    if (typeof servingSizeG === 'number') nutrition.servingSizeG = servingSizeG
+    if (typeof energyKcal === 'number') nutrition.energyKcal = energyKcal
+    if (typeof saltValue === 'number') {
+        if (hasMg) nutrition.sodiumMg = saltValue
+        else nutrition.saltEquivalentG = saltValue
+    }
+
+    const keys = Object.keys(nutrition)
+    return keys.length > 0 ? nutrition : undefined
+}
+
+function buildNutritionPerServingFromRow(
+    row: string[],
+    headerLookup: Map<string, number>,
+    totalWeightG: number,
+    baseServings: number,
+    fallbackCaloriesText: string,
+    fallbackSaltText: string,
+): Recipe['nutritionPerServing'] | undefined {
+    const base = buildNutritionPerServing(fallbackCaloriesText, fallbackSaltText, totalWeightG, baseServings) ?? {}
+    const pick = (names: string[]) => parseNumberFromText(getCellByHeader(row, headerLookup, names))
+
+    const servingSizeFromColumn = pick(['1人分重量(g)', '一人分重量(g)', '1人分重量', '一人分重量', 'servingsizeg'])
+    const energyFromColumn = pick(['カロリー', 'エネルギー', 'kcal', 'energykcal'])
+    const protein = pick(['たんぱく質', 'タンパク質', 'protein', 'proteing'])
+    const fat = pick(['脂質', 'fat', 'fatg'])
+    const carb = pick(['炭水化物', '糖質+食物繊維', 'carb', 'carbg'])
+    const sodiumMg = pick(['ナトリウム(mg)', 'ナトリウム', 'sodiummg'])
+    const saltEquivalent = pick(['食塩相当量', '塩分', 'salt', 'saltequivalentg'])
+    const fiber = pick(['食物繊維', '食物繊維総量', 'fiberg'])
+    const sugar = pick(['糖質', 'sugarg'])
+    const saturatedFat = pick(['飽和脂肪酸', 'saturatedfatg'])
+    const potassium = pick(['カリウム(mg)', 'カリウム', 'potassiummg'])
+    const calcium = pick(['カルシウム(mg)', 'カルシウム', 'calciummg'])
+    const iron = pick(['鉄(mg)', '鉄', 'ironmg'])
+    const vitaminC = pick(['ビタミンC(mg)', 'ビタミンC', 'vitamincmg'])
+
+    if (typeof servingSizeFromColumn === 'number') base.servingSizeG = servingSizeFromColumn
+    if (typeof energyFromColumn === 'number') base.energyKcal = energyFromColumn
+    if (typeof protein === 'number') base.proteinG = protein
+    if (typeof fat === 'number') base.fatG = fat
+    if (typeof carb === 'number') base.carbG = carb
+    if (typeof sodiumMg === 'number') base.sodiumMg = sodiumMg
+    if (typeof saltEquivalent === 'number') base.saltEquivalentG = saltEquivalent
+    if (typeof fiber === 'number') base.fiberG = fiber
+    if (typeof sugar === 'number') base.sugarG = sugar
+    if (typeof saturatedFat === 'number') base.saturatedFatG = saturatedFat
+    if (typeof potassium === 'number') base.potassiumMg = potassium
+    if (typeof calcium === 'number') base.calciumMg = calcium
+    if (typeof iron === 'number') base.ironMg = iron
+    if (typeof vitaminC === 'number') base.vitaminCMg = vitaminC
+
+    return Object.keys(base).length > 0 ? base : undefined
+}
+
+function buildNutritionMeta(nutrition: Recipe['nutritionPerServing'] | undefined): Recipe['nutritionMeta'] | undefined {
+    if (!nutrition) return undefined
+    let score = 0
+    if (typeof nutrition.energyKcal === 'number') score += 0.2
+    if (typeof nutrition.saltEquivalentG === 'number' || typeof nutrition.sodiumMg === 'number') score += 0.2
+    if (typeof nutrition.servingSizeG === 'number') score += 0.2
+
+    return {
+        source: 'csv',
+        confidence: Math.min(0.9, 0.3 + score),
+        schemaVersion: 1,
+        updatedAt: new Date(),
+    }
+}
+
 // --- Main import functions ---
 
 export async function importHealsioCSV(csvText: string): Promise<{ imported: number; skipped: number }> {
@@ -216,6 +338,7 @@ export async function importHealsioCSV(csvText: string): Promise<{ imported: num
     if (!header || !header[0]?.includes('メニュー名')) {
         throw new Error('ヘルシオCSVのヘッダーが不正です')
     }
+    const headerLookup = buildHeaderLookup(header)
 
     const dataRows = rows.slice(1).filter((r) => r.length >= 9 && r[0]?.trim())
 
@@ -234,14 +357,14 @@ export async function importHealsioCSV(csvText: string): Promise<{ imported: num
             continue
         }
 
-        const servings = row[1]?.trim() || ''
-        const calories = row[2]?.trim() || ''
-        const saltContent = row[3]?.trim() || ''
-        const cookingTime = row[4]?.trim() || ''
-        const imageUrl = row[5]?.trim() || ''
-        const ingredientsText = row[6] || ''
-        const stepsText = row[7] || ''
-        const sourceUrl = row[8]?.trim() || ''
+        const servings = getCellByHeader(row, headerLookup, ['分量', '人数'], 1).trim()
+        const calories = getCellByHeader(row, headerLookup, ['カロリー', 'エネルギー'], 2).trim()
+        const saltContent = getCellByHeader(row, headerLookup, ['塩分', '食塩相当量'], 3).trim()
+        const cookingTime = getCellByHeader(row, headerLookup, ['調理時間'], 4).trim()
+        const imageUrl = getCellByHeader(row, headerLookup, ['画像URL', '画像'], 5).trim()
+        const ingredientsText = getCellByHeader(row, headerLookup, ['材料'], 6)
+        const stepsText = getCellByHeader(row, headerLookup, ['作り方', '手順'], 7)
+        const sourceUrl = getCellByHeader(row, headerLookup, ['URL', 'リンク'], 8).trim()
 
         const ingredients = ingredientsText
             .split('\n')
@@ -254,13 +377,23 @@ export async function importHealsioCSV(csvText: string): Promise<{ imported: num
 
         // Estimate total weight from ingredients
         const totalWeightG = estimateTotalWeight(ingredients)
+        const baseServings = parseServings(servings)
+        const nutritionPerServing = buildNutritionPerServingFromRow(
+            row,
+            headerLookup,
+            totalWeightG,
+            baseServings,
+            calories,
+            saltContent,
+        )
+        const nutritionMeta = buildNutritionMeta(nutritionPerServing)
 
         recipesToAdd.push({
             title,
             recipeNumber: generateCsvRecipeNumber('healsio', i),
             device: 'healsio',
             category: guessCategory(title),
-            baseServings: parseServings(servings),
+            baseServings,
             totalWeightG,
             ingredients,
             steps,
@@ -272,6 +405,8 @@ export async function importHealsioCSV(csvText: string): Promise<{ imported: num
             cookingTime: cookingTime || undefined,
             rawSteps: rawSteps.length > 0 ? rawSteps : undefined,
             imageUrl: imageUrl || undefined,
+            ...(nutritionPerServing ? { nutritionPerServing } : {}),
+            ...(nutritionMeta ? { nutritionMeta } : {}),
         })
 
         existingTitles.add(title)
@@ -292,6 +427,7 @@ export async function importHotcookCSV(csvText: string): Promise<{ imported: num
     if (!header || !header[0]?.includes('メニュー名')) {
         throw new Error('ホットクックCSVのヘッダーが不正です')
     }
+    const headerLookup = buildHeaderLookup(header)
 
     const dataRows = rows.slice(1).filter((r) => r.length >= 9 && r[0]?.trim())
 
@@ -309,14 +445,14 @@ export async function importHotcookCSV(csvText: string): Promise<{ imported: num
             continue
         }
 
-        const menuNumber = row[1]?.trim() || ''
-        const servings = row[2]?.trim() || ''
-        const calories = row[3]?.trim() || ''
-        const cookingTime = row[4]?.trim() || ''
-        const imageUrl = row[5]?.trim() || ''
-        const ingredientsText = row[6] || ''
-        const stepsText = row[7] || ''
-        const sourceUrl = row[8]?.trim() || ''
+        const menuNumber = getCellByHeader(row, headerLookup, ['メニュー番号', 'メニューNo'], 1).trim()
+        const servings = getCellByHeader(row, headerLookup, ['分量', '人数'], 2).trim()
+        const calories = getCellByHeader(row, headerLookup, ['カロリー', 'エネルギー'], 3).trim()
+        const cookingTime = getCellByHeader(row, headerLookup, ['調理時間'], 4).trim()
+        const imageUrl = getCellByHeader(row, headerLookup, ['画像URL', '画像'], 5).trim()
+        const ingredientsText = getCellByHeader(row, headerLookup, ['材料'], 6)
+        const stepsText = getCellByHeader(row, headerLookup, ['作り方', '手順'], 7)
+        const sourceUrl = getCellByHeader(row, headerLookup, ['URL', 'リンク'], 8).trim()
 
         const ingredients = ingredientsText
             .split('\n')
@@ -328,13 +464,23 @@ export async function importHotcookCSV(csvText: string): Promise<{ imported: num
         const totalTimeMinutes = steps.reduce((sum, s) => sum + s.durationMinutes, 0)
 
         const totalWeightG = estimateTotalWeight(ingredients)
+        const baseServings = parseServings(servings)
+        const nutritionPerServing = buildNutritionPerServingFromRow(
+            row,
+            headerLookup,
+            totalWeightG,
+            baseServings,
+            calories,
+            '',
+        )
+        const nutritionMeta = buildNutritionMeta(nutritionPerServing)
 
         recipesToAdd.push({
             title,
             recipeNumber: menuNumber || generateCsvRecipeNumber('hotcook', i),
             device: 'hotcook',
             category: guessCategory(title),
-            baseServings: parseServings(servings),
+            baseServings,
             totalWeightG,
             ingredients,
             steps,
@@ -345,6 +491,8 @@ export async function importHotcookCSV(csvText: string): Promise<{ imported: num
             cookingTime: cookingTime || undefined,
             rawSteps: rawSteps.length > 0 ? rawSteps : undefined,
             imageUrl: imageUrl || undefined,
+            ...(nutritionPerServing ? { nutritionPerServing } : {}),
+            ...(nutritionMeta ? { nutritionMeta } : {}),
         })
 
         existingTitles.add(title)

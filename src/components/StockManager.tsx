@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Search } from 'lucide-react'
 import { db } from '../db/db'
@@ -29,11 +29,8 @@ function StockRow({
 }) {
   const [draft, setDraft] = useState(() => (typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''))
   const [isEditing, setIsEditing] = useState(false)
-
-  useEffect(() => {
-    if (isEditing) return
-    setDraft(typeof quantity === 'number' && quantity > 0 ? String(quantity) : '')
-  }, [quantity, isEditing])
+  const currentQuantityText = typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''
+  const inputValue = isEditing ? draft : currentQuantityText
 
   const commit = () => {
     const normalized = draft.trim()
@@ -54,14 +51,17 @@ function StockRow({
       <input
         type="text"
         inputMode="decimal"
-        value={draft}
+        value={inputValue}
         onChange={(e) => {
           const next = e.target.value
           if (next === '' || /^\d*\.?\d*$/.test(next)) {
             setDraft(next)
           }
         }}
-        onFocus={() => setIsEditing(true)}
+        onFocus={() => {
+          setDraft(currentQuantityText)
+          setIsEditing(true)
+        }}
         onBlur={() => {
           setIsEditing(false)
           commit()
