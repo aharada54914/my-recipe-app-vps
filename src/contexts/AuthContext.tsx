@@ -145,13 +145,25 @@ function OAuthEnabledAuthProvider({
   setProviderToken,
   children,
 }: OAuthEnabledAuthProviderProps) {
+  // Silent refresh: no UI prompt, uses existing Google session cookie
+  const silentGoogleLogin = useGoogleLogin({
+    scope: SCOPES,
+    prompt: 'none',
+    onSuccess: (tokenResponse) => {
+      storeToken(tokenResponse.access_token, tokenResponse.expires_in)
+    },
+    onError: () => {
+      // Silent refresh failed (Google session expired) — clear token so login button appears
+      setProviderToken(null)
+      try {
+        localStorage.removeItem(TOKEN_KEY)
+        localStorage.removeItem(TOKEN_EXPIRY_KEY)
+      } catch { /* ignore */ }
+    },
+  })
+
   const googleLogin = useGoogleLogin({
     scope: SCOPES,
-    // Note: Since useGoogleLogin does not take clientId directly here in all react-oauth/google versions (it takes it from GoogleOAuthProvider wrapper usually),
-    // we make sure to wrap the app with GoogleOAuthProvider properly in main.tsx or App.tsx using this exported ClientId if needed, 
-    // but the underlying googleLogin relies on the nearest context. 
-    // This file assumes the outer tree provides it correctly. We will pass it to AuthContext if we needed to initialize it manually.
-
     onSuccess: async (tokenResponse) => {
       storeToken(tokenResponse.access_token, tokenResponse.expires_in)
       try {
@@ -185,6 +197,41 @@ function OAuthEnabledAuthProvider({
       localStorage.removeItem(TOKEN_EXPIRY_KEY)
     } catch { /* ignore */ }
   }, [setProviderToken, setUser])
+
+  // On mount and whenever token disappears: attempt silent refresh if user is known
+  useEffect(() => {
+    if (user && !providerToken) {
+      silentGoogleLogin()
+    }
+  }, [user, providerToken, silentGoogleLogin])
+
+  // Schedule silent refresh 5 minutes before token expires
+  useEffect(() => {
+    if (!providerToken) return
+    const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
+    if (!expiry) return
+    const msUntilRefresh = new Date(expiry).getTime() - Date.now() - 5 * 60 * 1000
+    if (msUntilRefresh <= 0) {
+      silentGoogleLogin()
+      return
+    }
+    const timer = setTimeout(silentGoogleLogin, msUntilRefresh)
+    return () => clearTimeout(timer)
+  }, [providerToken, silentGoogleLogin])
+
+  // iOS PWA: refresh when app comes back to foreground after being backgrounded
+  useEffect(() => {
+    if (!user) return
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
+      if (!expiry || new Date(expiry) <= new Date()) {
+        silentGoogleLogin()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [user, silentGoogleLogin])
 
   return (
     <AuthContext.Provider value={{ user, loading, isOAuthAvailable: true, providerToken, signInWithGoogle, signOut }}>
