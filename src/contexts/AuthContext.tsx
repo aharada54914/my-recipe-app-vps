@@ -153,9 +153,11 @@ function OAuthEnabledAuthProvider({
       storeToken(tokenResponse.access_token, tokenResponse.expires_in)
     },
     onError: () => {
-      // Silent refresh failed (Google session expired) — clear token so login button appears
+      // Silent refresh failed (Google session expired) — clear auth state so login UI reappears
+      setUser(null)
       setProviderToken(null)
       try {
+        localStorage.removeItem(USER_KEY)
         localStorage.removeItem(TOKEN_KEY)
         localStorage.removeItem(TOKEN_EXPIRY_KEY)
       } catch { /* ignore */ }
