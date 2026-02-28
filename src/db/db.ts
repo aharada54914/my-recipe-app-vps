@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { estimateRecipeNutrition } from '../utils/nutritionEstimator'
 
 // --- Type Definitions ---
 
@@ -386,6 +387,54 @@ class RecipeDB extends Dexie {
         if (typeof meta.schemaVersion !== 'number') meta.schemaVersion = 1
         if (!meta.updatedAt) meta.updatedAt = new Date()
         migratable.nutritionMeta = meta
+      })
+    })
+    // v11: Estimate full nutrition (PFC + 7段階 micronutrients) for all recipes
+    // using ingredient-based estimation with Japanese Food Composition Table 2020.
+    // Preserves existing CSV-parsed energyKcal / saltEquivalentG when present.
+    this.version(11).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+    }).upgrade(async (tx) => {
+      await tx.table('recipes').toCollection().modify((recipe) => {
+        const r = recipe as Recipe
+        const existing = r.nutritionPerServing ?? {}
+
+        const estimated = estimateRecipeNutrition(r)
+
+        // Merge: existing CSV-parsed fields take priority over estimates
+        const merged: RecipeNutritionPerServing = {
+          servingSizeG: existing.servingSizeG ?? estimated.servingSizeG,
+          energyKcal: existing.energyKcal ?? estimated.energyKcal,
+          proteinG: existing.proteinG ?? estimated.proteinG,
+          fatG: existing.fatG ?? estimated.fatG,
+          carbG: existing.carbG ?? estimated.carbG,
+          saltEquivalentG: existing.saltEquivalentG ?? estimated.saltEquivalentG,
+          sodiumMg: existing.sodiumMg ?? estimated.sodiumMg,
+          fiberG: existing.fiberG ?? estimated.fiberG,
+          sugarG: existing.sugarG ?? estimated.sugarG,
+          saturatedFatG: existing.saturatedFatG ?? estimated.saturatedFatG,
+          potassiumMg: existing.potassiumMg ?? estimated.potassiumMg,
+          calciumMg: existing.calciumMg ?? estimated.calciumMg,
+          ironMg: existing.ironMg ?? estimated.ironMg,
+          vitaminCMg: existing.vitaminCMg ?? estimated.vitaminCMg,
+        }
+
+        r.nutritionPerServing = merged
+        r.nutritionMeta = {
+          source: r.nutritionMeta?.source === 'jsonld' || r.nutritionMeta?.source === 'gemini'
+            ? r.nutritionMeta.source
+            : 'estimated',
+          confidence: r.nutritionMeta?.confidence ?? 0.35,
+          schemaVersion: 1,
+          updatedAt: new Date(),
+        }
       })
     })
   }

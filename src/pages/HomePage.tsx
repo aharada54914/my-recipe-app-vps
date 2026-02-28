@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { Search, Leaf, Sparkles, ChevronRight, Package } from 'lucide-react'
@@ -103,6 +103,9 @@ export function HomePage() {
     return () => { cancelled = true }
   }, [data?.hasStock])
 
+  const stockSectionRef = useRef<HTMLDivElement>(null)
+  const seasonalSectionRef = useRef<HTMLDivElement>(null)
+
   if (!data) return null
 
   const { seasonal, stockNames } = data
@@ -134,6 +137,24 @@ export function HomePage() {
           <Package className="h-4 w-4" />
           在庫管理
         </button>
+        {displayRecs.length > 0 && (
+          <button
+            onClick={() => stockSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="ui-btn ui-btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm font-semibold transition-colors hover:text-accent active:scale-95"
+          >
+            <Sparkles className="h-4 w-4 text-accent" />
+            在庫レシピ
+          </button>
+        )}
+        {seasonal.length > 0 && (
+          <button
+            onClick={() => seasonalSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="ui-btn ui-btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm font-semibold transition-colors hover:text-accent active:scale-95"
+          >
+            <Leaf className="h-4 w-4 text-green-400" />
+            旬のレシピ
+          </button>
+        )}
       </div>
 
       {/* Login banner — non-intrusive, only when not logged in */}
@@ -173,19 +194,21 @@ export function HomePage() {
 
       {/* Stock-based recommendations — 2-column grid */}
       {displayRecs.length > 0 && (
-        <TwoColRecipeSection
-          icon={<Sparkles className="h-5 w-5 text-accent" />}
-          title="在庫でつくれるレシピ"
-          recipes={displayRecs.map(r => r.recipe)}
-          stockNames={stockNames}
-          matchRates={recMatchRates}
-          onSelect={(id) => navigate(`/recipe/${id}`)}
-        />
+        <div ref={stockSectionRef}>
+          <TwoColRecipeSection
+            icon={<Sparkles className="h-5 w-5 text-accent" />}
+            title="在庫でつくれるレシピ"
+            recipes={displayRecs.map(r => r.recipe)}
+            stockNames={stockNames}
+            matchRates={recMatchRates}
+            onSelect={(id) => navigate(`/recipe/${id}`)}
+          />
+        </div>
       )}
 
       {/* Seasonal recipes — 2-column grid */}
       {seasonal.length > 0 && (
-        <>
+        <div ref={seasonalSectionRef}>
           <div className="mb-3 flex flex-wrap gap-1.5">
             {seasonalIngredients.map((name) => (
               <span
@@ -204,7 +227,7 @@ export function HomePage() {
             onMore={() => navigate('/search?filter=seasonal')}
             onSelect={(id) => navigate(`/recipe/${id}`)}
           />
-        </>
+        </div>
       )}
     </div>
   )
