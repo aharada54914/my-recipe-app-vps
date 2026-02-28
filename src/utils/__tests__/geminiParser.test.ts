@@ -119,4 +119,21 @@ describe('validateParsedRecipe', () => {
     const result = validateParsedRecipe(data)
     expect(result.steps[0].isDeviceStep).toBe(true)
   })
+
+  it('preserves nutritionPerServing when provided', () => {
+    const data = {
+      ...validData,
+      nutritionPerServing: {
+        servingSizeG: 280,
+        energyKcal: 420,
+        proteinG: 24,
+        fatG: 16,
+        carbG: 38,
+        saltEquivalentG: 2.1,
+      },
+    }
+    const result = validateParsedRecipe(data)
+    expect(result.nutritionPerServing?.energyKcal).toBe(420)
+    expect(result.nutritionPerServing?.proteinG).toBe(24)
+  })
 })

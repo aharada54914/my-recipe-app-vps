@@ -20,6 +20,23 @@ export const CookingStepSchema = z.object({
     isDeviceStep: z.boolean().catch(false).optional(),
 })
 
+export const NutritionPerServingSchema = z.object({
+    servingSizeG: z.number().optional(),
+    energyKcal: z.number().optional(),
+    proteinG: z.number().optional(),
+    fatG: z.number().optional(),
+    carbG: z.number().optional(),
+    sodiumMg: z.number().optional(),
+    saltEquivalentG: z.number().optional(),
+    fiberG: z.number().optional(),
+    sugarG: z.number().optional(),
+    saturatedFatG: z.number().optional(),
+    potassiumMg: z.number().optional(),
+    calciumMg: z.number().optional(),
+    ironMg: z.number().optional(),
+    vitaminCMg: z.number().optional(),
+})
+
 export const ParsedRecipeSchema = z.object({
     title: z.string().min(1, 'タイトルは必須です'),
     device: DeviceTypeSchema.catch('manual'),
@@ -28,5 +45,6 @@ export const ParsedRecipeSchema = z.object({
     totalWeightG: z.number().catch(500),
     ingredients: z.array(IngredientSchema).min(1, '材料は1つ以上必要です'),
     steps: z.array(CookingStepSchema).min(1, '工程は1つ以上必要です'),
+    nutritionPerServing: NutritionPerServingSchema.optional(),
     totalTimeMinutes: z.number().optional().catch(undefined),
 })
