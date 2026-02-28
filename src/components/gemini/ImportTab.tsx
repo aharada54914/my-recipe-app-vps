@@ -8,6 +8,7 @@ import { GeminiIcon } from '../GeminiIcon'
 import { RecipeEditorModal } from '../RecipeEditorModal'
 import { SUPPORTED_RECIPE_SITES } from '../../constants/supportedRecipeSites'
 import { resolveGeminiApiKey } from '../../lib/geminiClient'
+import { formatMissingNutritionMessage, validateRequiredNutrition } from '../../utils/nutritionValidation'
 
 function getApiKey(): string {
   return resolveGeminiApiKey() ?? ''
@@ -55,12 +56,19 @@ export function ImportTab() {
   }
 
   const handleSaveEditedRecipe = async (recipe: Omit<Recipe, 'id'>) => {
+    const nutritionCheck = validateRequiredNutrition(recipe)
+    if (!nutritionCheck.ok) {
+      setResultMessage(null)
+      setError(formatMissingNutritionMessage(nutritionCheck.missingFields))
+      return
+    }
+
     const existing = await db.recipes.where('title').equals(recipe.title).first()
     if (existing) {
       if (!window.confirm(`「${recipe.title}」は既に登録されています。重複して保存しますか？`)) return
     }
     setEditorSaving(true)
-    await db.recipes.add(recipe as Recipe)
+    await db.recipes.add({ ...recipe, isUserAdded: true } as Recipe)
     setEditorSaving(false)
     setResultMessage(`「${recipe.title}」を保存しました。`)
     navigate('/search')

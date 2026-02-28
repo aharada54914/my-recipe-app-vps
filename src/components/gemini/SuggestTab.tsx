@@ -11,6 +11,7 @@ import { extractIngredientsFromPhotoCollage } from '../../utils/geminiIngredient
 import { generateRecipesFromIngredients } from '../../utils/geminiMenuGenerator'
 import { RecipeEditorModal } from '../RecipeEditorModal'
 import { useGeminiStore } from '../../stores/geminiStore'
+import { formatMissingNutritionMessage, validateRequiredNutrition } from '../../utils/nutritionValidation'
 
 const INGREDIENT_CACHE_KEY = 'photo_ingredients_cache_v1'
 
@@ -139,13 +140,19 @@ export function SuggestTab() {
   }
 
   const handleSaveGeneratedRecipe = async (recipe: Omit<Recipe, 'id'>) => {
+    const nutritionCheck = validateRequiredNutrition(recipe)
+    if (!nutritionCheck.ok) {
+      setStatusMessage(formatMissingNutritionMessage(nutritionCheck.missingFields))
+      return
+    }
+
     const existing = await db.recipes.where('title').equals(recipe.title).first()
     if (existing) {
       const allowDuplicate = window.confirm(`「${recipe.title}」は既に登録されています。重複して保存しますか？`)
       if (!allowDuplicate) return
     }
     setEditorSaving(true)
-    await db.recipes.add(recipe as Recipe)
+    await db.recipes.add({ ...recipe, isUserAdded: true } as Recipe)
     setEditorSaving(false)
     setStatusMessage(`「${recipe.title}」を保存しました。`)
   }

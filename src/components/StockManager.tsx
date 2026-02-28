@@ -30,6 +30,7 @@ function StockRow({
   const currentQuantityText = typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''
   const [draft, setDraft] = useState(currentQuantityText)
   const [isEditing, setIsEditing] = useState(false)
+  const inputValue = isEditing ? draft : currentQuantityText
 
   const commit = () => {
     const normalized = draft.trim()
@@ -50,7 +51,7 @@ function StockRow({
       <input
         type="text"
         inputMode="decimal"
-        value={isEditing ? draft : currentQuantityText}
+        value={inputValue}
         onChange={(e) => {
           const next = e.target.value
           if (next === '' || /^\d*\.?\d*$/.test(next)) {

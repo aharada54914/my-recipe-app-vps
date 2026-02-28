@@ -10,7 +10,12 @@ import { calculateMatchRate, isHelsioDeli } from './recipeUtils'
 import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { format, addDays } from 'date-fns'
 import { filterRecipesByRole, isRecipeAllowedForRole, type MealRole } from './mealRoleRules'
-import { SEASONAL_WEIGHT } from '../constants/recipeConstants'
+import { DEFAULT_BALANCE_SCORING_MODE, SEASONAL_WEIGHT } from '../constants/recipeConstants'
+import { inferMealBalance } from './mealBalanceHeuristics'
+import { computeMainScore, computeSideScore } from './mealBalanceScoring'
+import type { MealBalanceInference } from './mealBalanceTypes'
+import { resolveBalanceScoringTier } from './mealBalanceTier'
+import type { BalanceTierDecision } from './mealBalanceTier'
 
 export interface MenuSelectionConfig {
   seasonalPriority: SeasonalPriority
@@ -28,6 +33,9 @@ interface SelectionContext {
   scoredMains: ScoredRecipe[]
   scoredSides: ScoredRecipe[]
   mainEligible: Recipe[]
+  byRecipeId: Map<number, Recipe>
+  byInferenceId: Map<number, MealBalanceInference>
+  balanceTier: BalanceTierDecision
 }
 
 const SEASONAL_WEIGHTS: Record<SeasonalPriority, number> = {
@@ -37,36 +45,8 @@ const SEASONAL_WEIGHTS: Record<SeasonalPriority, number> = {
 }
 
 const TARGET_DAYS = 7
-const DEVICE_BALANCE_BONUS = 12
-const DEVICE_OVER_TARGET_PENALTY = 8
 
 const DEVICE_TYPES: DeviceType[] = ['hotcook', 'healsio', 'manual']
-
-type CuisineGenre = 'japanese' | 'western' | 'chinese' | 'other'
-
-function guessGenre(recipe: Recipe): CuisineGenre {
-  const text = recipe.title + ' ' + recipe.ingredients.map(i => i.name).join(' ')
-
-  const jpKeywords = ['醤油', 'しょうゆ', '味噌', 'みそ', 'だし', 'みりん', '和風', '照り', '煮', '酒', 'かつお', '昆布', '梅', '大根おろし', '白だし', 'めんつゆ']
-  const westernKeywords = ['トマト', 'チーズ', 'オリーブ', 'パスタ', '洋風', 'グラタン', 'シチュー', 'バター', 'ワイン', 'コンソメ', 'ベーコン', 'パン粉', '牛乳']
-  const chineseKeywords = ['豆板醤', 'オイスター', '中華', '麻婆', 'ごま油', '鶏ガラスープ', 'オイスターソース', '甜麺醤', '八角', 'ラー油']
-
-  let jpScore = 0; let wsScore = 0; let cnScore = 0
-  for (const w of jpKeywords) if (text.includes(w)) jpScore++
-  for (const w of westernKeywords) if (text.includes(w)) wsScore++
-  for (const w of chineseKeywords) if (text.includes(w)) cnScore++
-
-  if (jpScore > wsScore && jpScore > cnScore) return 'japanese'
-  if (wsScore > jpScore && wsScore > cnScore) return 'western'
-  if (cnScore > jpScore && cnScore > wsScore) return 'chinese'
-  return 'other'
-}
-
-function isHeavy(recipe: Recipe): boolean {
-  const text = recipe.title + ' ' + recipe.ingredients.map(i => i.name).join(' ')
-  const heavyKeywords = ['豚', '牛', '鶏', '肉', '揚げ', 'マヨネーズ', 'チーズ', 'バラ', 'ひき肉', 'カルビ', 'ベーコン', 'ウインナー', 'ソーセージ']
-  return heavyKeywords.some(w => text.includes(w))
-}
 
 function shuffleRecipes<T>(items: T[]): T[] {
   const out = [...items]
@@ -201,7 +181,18 @@ async function buildSelectionContext(config: MenuSelectionConfig): Promise<Selec
     recentViewIds,
   ).sort((a, b) => b.baseScore - a.baseScore)
 
-  return { scoredMains, scoredSides, mainEligible }
+  const byRecipeId = new Map<number, Recipe>()
+  const byInferenceId = new Map<number, MealBalanceInference>()
+
+  for (const recipe of eligible) {
+    if (recipe.id == null) continue
+    byRecipeId.set(recipe.id, recipe)
+    byInferenceId.set(recipe.id, inferMealBalance(recipe))
+  }
+
+  const balanceTier = resolveBalanceScoringTier(mainEligible, DEFAULT_BALANCE_SCORING_MODE)
+
+  return { scoredMains, scoredSides, mainEligible, byRecipeId, byInferenceId, balanceTier }
 }
 
 /**
@@ -234,6 +225,8 @@ export async function selectWeeklyMenu(
   const usedRecipeIds = new Set<number>()
   const selectedCategories: string[] = []
   const selectedDevices: DeviceType[] = []
+  const selectedMainInferences: MealBalanceInference[] = []
+  const selectedMainRecipes: Recipe[] = []
 
   for (let day = 0; day < TARGET_DAYS; day++) {
     const dateStr = format(addDays(weekStartDate, day), 'yyyy-MM-dd')
@@ -245,6 +238,9 @@ export async function selectWeeklyMenu(
         usedRecipeIds.add(lockedRecipeId)
         selectedCategories.push(lockedRecipe.category)
         selectedDevices.push(lockedRecipe.device)
+        const lockedInference = context.byInferenceId.get(lockedRecipeId)
+        if (lockedInference) selectedMainInferences.push(lockedInference)
+        selectedMainRecipes.push(lockedRecipe)
         result.push({ recipeId: lockedRecipeId, date: dateStr, mealType: 'dinner', locked: true })
         continue
       }
@@ -255,22 +251,20 @@ export async function selectWeeklyMenu(
 
     for (const { recipe, baseScore } of context.scoredMains) {
       if (usedRecipeIds.has(recipe.id!)) continue
+      const candidateInference = context.byInferenceId.get(recipe.id!)
+      if (!candidateInference) continue
 
-      let score = baseScore
-
-      const catCount = selectedCategories.filter(c => c === recipe.category).length
-      if (catCount >= 2) score -= (catCount - 1) * 10
-
-      const devCount = selectedDevices.filter(d => d === recipe.device).length
-      const devTarget = mainDeviceTargets[recipe.device]
-      const deficit = Math.max(0, devTarget - devCount)
-      const overTarget = Math.max(0, devCount - devTarget)
-      score += deficit * DEVICE_BALANCE_BONUS
-      score -= overTarget * DEVICE_OVER_TARGET_PENALTY
-
-      if (selectedDevices.length > 0 && selectedDevices[selectedDevices.length - 1] !== recipe.device) {
-        score += 3
-      }
+      const score = computeMainScore({
+        recipe,
+        baseScore,
+        selectedCategories,
+        selectedDevices,
+        mainDeviceTargets,
+        candidateInference,
+        selectedMainInferences,
+        selectedMainRecipes,
+        balanceTier: context.balanceTier.tier,
+      })
 
       if (score > bestScore) {
         bestScore = score
@@ -283,6 +277,9 @@ export async function selectWeeklyMenu(
     usedRecipeIds.add(bestRecipe.id!)
     selectedCategories.push(bestRecipe.category)
     selectedDevices.push(bestRecipe.device)
+    const selectedInference = context.byInferenceId.get(bestRecipe.id!)
+    if (selectedInference) selectedMainInferences.push(selectedInference)
+    selectedMainRecipes.push(bestRecipe)
     result.push({
       recipeId: bestRecipe.id!,
       date: dateStr,
@@ -293,32 +290,31 @@ export async function selectWeeklyMenu(
 
   if (context.scoredSides.length > 0) {
     const usedSideIds = new Set<number>()
+    const usedSideCategories: string[] = []
 
     for (const item of result) {
       let bestSide: Recipe | null = null
       let bestSideScore = -Infinity
 
-      const mainRecipe = context.mainEligible.find(r => r.id === item.recipeId)
-      const mainGenre = mainRecipe ? guessGenre(mainRecipe) : 'other'
-      const mainIsHeavy = mainRecipe ? isHeavy(mainRecipe) : false
+      const mainInference = context.byInferenceId.get(item.recipeId)
+      const mainRecipe = context.byRecipeId.get(item.recipeId)
+      if (!mainInference || !mainRecipe) continue
 
       for (const { recipe, baseScore } of context.scoredSides) {
         if (usedSideIds.has(recipe.id!)) continue
         if (recipe.id === item.recipeId) continue
+        const candidateInference = context.byInferenceId.get(recipe.id!)
+        if (!candidateInference) continue
 
-        let score = baseScore
-        const subCatCount = [...usedSideIds]
-          .map(id => context.scoredSides.find(({ recipe: side }) => side.id === id)?.recipe.category ?? '')
-          .filter(c => c === recipe.category).length
-        if (subCatCount >= 3) score -= (subCatCount - 2) * 8
-
-        const sideGenre = guessGenre(recipe)
-        if (mainGenre !== 'other' && sideGenre === mainGenre) score += 15
-
-        const sideIsHeavy = isHeavy(recipe)
-        if (mainIsHeavy && !sideIsHeavy) score += 10
-        else if (!mainIsHeavy && sideIsHeavy) score += 5
-        else if (mainIsHeavy && sideIsHeavy) score -= 10
+        const score = computeSideScore({
+          recipe,
+          mainRecipe,
+          baseScore,
+          candidateInference,
+          mainInference,
+          usedSideCategories,
+          balanceTier: context.balanceTier.tier,
+        })
 
         if (score > bestSideScore) {
           bestSideScore = score
@@ -328,6 +324,7 @@ export async function selectWeeklyMenu(
 
       if (!bestSide) continue
       usedSideIds.add(bestSide.id!)
+      usedSideCategories.push(bestSide.category)
       item.sideRecipeId = bestSide.id!
     }
   }

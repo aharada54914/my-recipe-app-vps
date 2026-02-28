@@ -3,6 +3,7 @@ import type { Recipe, ParseStatus } from '../db/db'
 import { db } from '../db/db'
 import { parseRecipeText, parseRecipeFromUrl } from '../utils/geminiParser'
 import { toUserFriendlyGeminiError } from '../utils/geminiError'
+import { formatMissingNutritionMessage, validateRequiredNutrition } from '../utils/nutritionValidation'
 
 export interface UseRecipeImportOptions {
     /** Called when a duplicate title is detected. Should resolve to true to confirm overwrite, false to cancel.
@@ -37,6 +38,13 @@ export function useRecipeImport(options?: UseRecipeImportOptions) {
     const handleSave = async (onSuccess?: () => void) => {
         if (!parsed) return
 
+        const nutritionCheck = validateRequiredNutrition(parsed)
+        if (!nutritionCheck.ok) {
+            setError(formatMissingNutritionMessage(nutritionCheck.missingFields))
+            setStatus('error')
+            return
+        }
+
         const existing = await db.recipes.where('title').equals(parsed.title).first()
         if (existing) {
             // M2: Delegate confirmation to caller when possible (enables testability)
@@ -47,7 +55,7 @@ export function useRecipeImport(options?: UseRecipeImportOptions) {
         }
 
         setStatus('saving')
-        await db.recipes.add(parsed as Recipe)
+        await db.recipes.add({ ...parsed, isUserAdded: true } as Recipe)
         if (onSuccess) onSuccess()
     }
 

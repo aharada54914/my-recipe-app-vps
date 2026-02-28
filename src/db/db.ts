@@ -22,6 +22,32 @@ export interface CookingStep {
   isDeviceStep?: boolean
 }
 
+export interface RecipeNutritionPerServing {
+  servingSizeG?: number
+  energyKcal?: number
+  proteinG?: number
+  fatG?: number
+  carbG?: number
+  sodiumMg?: number
+  saltEquivalentG?: number
+  fiberG?: number
+  sugarG?: number
+  saturatedFatG?: number
+  potassiumMg?: number
+  calciumMg?: number
+  ironMg?: number
+  vitaminCMg?: number
+}
+
+export interface RecipeNutritionMeta {
+  source?: 'csv' | 'jsonld' | 'gemini' | 'estimated'
+  confidence?: number
+  schemaVersion?: number
+  updatedAt?: Date
+}
+
+export type BalanceScoringTier = 'heuristic-3' | 'nutrition-5' | 'nutrition-7'
+
 export interface Recipe {
   id?: number
   title: string
@@ -44,8 +70,13 @@ export interface Recipe {
   saltContent?: string
   cookingTime?: string
   rawSteps?: string[]
+  // Phase F: future nutrition-based balance scoring support
+  nutritionPerServing?: RecipeNutritionPerServing
+  nutritionMeta?: RecipeNutritionMeta
   // Metadata fields
   updatedAt?: Date
+  // True for recipes added by the user (AI import, manual entry) — backed up to Drive
+  isUserAdded?: boolean
 }
 
 export interface StockItem {
@@ -185,6 +216,24 @@ export type ViewState =
   | { view: 'ai-parse' }
   | { view: 'multi-schedule' }
 
+function parseLegacyNutritionNumber(raw: unknown): number | undefined {
+  if (typeof raw !== 'string') return undefined
+  const normalized = raw
+    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+    .replace(/，/g, ',')
+    .replace(/．/g, '.')
+  const match = normalized.match(/(\d+(?:\.\d+)?)/)
+  if (!match) return undefined
+  const parsed = Number.parseFloat(match[1].replace(/,/g, ''))
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function estimateServingSizeG(totalWeightG: unknown, baseServings: unknown): number | undefined {
+  if (typeof totalWeightG !== 'number' || !Number.isFinite(totalWeightG) || totalWeightG <= 0) return undefined
+  if (typeof baseServings !== 'number' || !Number.isFinite(baseServings) || baseServings <= 0) return undefined
+  return Math.round((totalWeightG / baseServings) * 10) / 10
+}
+
 // --- Dexie Database ---
 
 class RecipeDB extends Dexie {
@@ -280,6 +329,63 @@ class RecipeDB extends Dexie {
         } else if (migratable.category === 'デザート') {
           migratable.category = 'スイーツ'
         }
+      })
+    })
+    // v10: Backfill structured nutrition fields from legacy CSV string columns
+    this.version(10).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+    }).upgrade(async (tx) => {
+      await tx.table('recipes').toCollection().modify((recipe) => {
+        const migratable = recipe as Recipe & {
+          calories?: string
+          saltContent?: string
+        }
+
+        const nutrition = { ...(migratable.nutritionPerServing ?? {}) }
+        let changed = false
+
+        if (typeof nutrition.servingSizeG !== 'number') {
+          const servingSizeG = estimateServingSizeG(migratable.totalWeightG, migratable.baseServings)
+          if (typeof servingSizeG === 'number') {
+            nutrition.servingSizeG = servingSizeG
+            changed = true
+          }
+        }
+
+        if (typeof nutrition.energyKcal !== 'number') {
+          const energy = parseLegacyNutritionNumber(migratable.calories)
+          if (typeof energy === 'number') {
+            nutrition.energyKcal = energy
+            changed = true
+          }
+        }
+
+        if (typeof nutrition.saltEquivalentG !== 'number' && typeof nutrition.sodiumMg !== 'number') {
+          const saltValue = parseLegacyNutritionNumber(migratable.saltContent)
+          if (typeof saltValue === 'number') {
+            const isMg = typeof migratable.saltContent === 'string' && /mg/i.test(migratable.saltContent)
+            if (isMg) nutrition.sodiumMg = saltValue
+            else nutrition.saltEquivalentG = saltValue
+            changed = true
+          }
+        }
+
+        if (!changed) return
+        migratable.nutritionPerServing = nutrition
+
+        const meta = migratable.nutritionMeta ?? {}
+        if (!meta.source) meta.source = 'estimated'
+        if (typeof meta.confidence !== 'number') meta.confidence = 0.45
+        if (typeof meta.schemaVersion !== 'number') meta.schemaVersion = 1
+        if (!meta.updatedAt) meta.updatedAt = new Date()
+        migratable.nutritionMeta = meta
       })
     })
   }

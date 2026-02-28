@@ -1,6 +1,7 @@
 import type { Recipe } from '../db/db'
 import { extractJsonObjectText, generateGeminiText } from '../lib/geminiClient'
 import { validateParsedRecipe } from './geminiParser'
+import { formatMissingNutritionMessage, validateRequiredNutrition } from './nutritionValidation'
 
 interface GeneratedRecipeEnvelope {
   recipes?: unknown[]
@@ -32,16 +33,63 @@ ${ingredientNames.join('、')}
   "steps": [
     { "name": string, "durationMinutes": number, "isDeviceStep": boolean }
   ],
+  "nutritionPerServing": {
+    "servingSizeG": number,
+    "energyKcal": number,
+    "proteinG": number,
+    "fatG": number,
+    "carbG": number,
+    "saltEquivalentG": number
+  },
   "totalTimeMinutes": number
 }
 - ingredients は最低3件、steps は最低2件
 - baseServings は 2〜4 の整数
 - quantity は必ず数値
+- nutritionPerServing の各項目は必ず数値で埋める（推定可）
 
 出力形式:
 {
   "recipes": [<recipe1>, <recipe2>, <recipe3>]
 }`
+}
+
+function buildRepairPrompt(rawJson: string, reason: string): string {
+  return `あなたはレシピJSON修正AIです。
+次のJSONの recipes 配列について、nutritionPerServing 必須項目をすべて埋めて修正してください。
+
+必須項目:
+- servingSizeG
+- energyKcal
+- proteinG
+- fatG
+- carbG
+- saltEquivalentG
+
+不足理由:
+${reason}
+
+元JSON:
+${rawJson}
+
+JSONのみ出力してください。`
+}
+
+function validateRecipeWithRequiredNutrition(recipe: unknown): Omit<Recipe, 'id'> {
+  const parsed = validateParsedRecipe(recipe)
+  const check = validateRequiredNutrition(parsed)
+  if (!check.ok) {
+    throw new Error(formatMissingNutritionMessage(check.missingFields))
+  }
+  return parsed
+}
+
+function parseAndValidateEnvelope(json: string): Omit<Recipe, 'id'>[] {
+  const parsed = JSON.parse(json) as GeneratedRecipeEnvelope
+  if (!Array.isArray(parsed.recipes) || parsed.recipes.length === 0) {
+    throw new Error('献立の生成結果が空でした。')
+  }
+  return parsed.recipes.map((recipe) => validateRecipeWithRequiredNutrition(recipe))
 }
 
 export async function generateRecipesFromIngredients(
@@ -55,12 +103,12 @@ export async function generateRecipesFromIngredients(
   const prompt = buildPrompt(ingredientNames)
   const text = await generateGeminiText(prompt, apiKey, { feature: 'stock_recipe_suggest' })
   const json = extractJsonObjectText(text)
-  const parsed = JSON.parse(json) as GeneratedRecipeEnvelope
-
-  if (!Array.isArray(parsed.recipes) || parsed.recipes.length === 0) {
-    throw new Error('献立の生成結果が空でした。')
+  try {
+    return parseAndValidateEnvelope(json)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : '栄養項目が不足しています'
+    const repairedText = await generateGeminiText(buildRepairPrompt(json, reason), apiKey, { feature: 'stock_recipe_suggest' })
+    const repairedJson = extractJsonObjectText(repairedText)
+    return parseAndValidateEnvelope(repairedJson)
   }
-
-  const normalized = parsed.recipes.map((recipe) => validateParsedRecipe(recipe))
-  return normalized
 }

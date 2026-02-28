@@ -8,14 +8,24 @@
  */
 
 import { db } from '../db/db'
-import type { StockItem, Favorite, UserNote, ViewHistory, WeeklyMenu, CalendarEventRecord, UserPreferences } from '../db/db'
+import type { Recipe, StockItem, Favorite, UserNote, ViewHistory, WeeklyMenu, CalendarEventRecord, UserPreferences } from '../db/db'
 
 const BACKUP_FILENAME = 'my-recipe-app-backup.json'
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files'
 const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files'
 
+const GEMINI_ENCRYPTED_KEY = 'gemini_api_key_encrypted_v1'
+const GEMINI_LEGACY_KEY = 'gemini_api_key'
+
+interface GeminiApiKeyBackup {
+  /** AES-256-GCM encrypted payload (JSON string) — safe to store */
+  encryptedPayload: string | null
+  /** Legacy plaintext key — included for completeness (Drive appdata is private) */
+  legacyPlaintext: string | null
+}
+
 interface BackupData {
-  version: 3
+  version: 4
   exportedAt: string
   stock: StockItem[]
   favorites: Favorite[]
@@ -24,6 +34,10 @@ interface BackupData {
   weeklyMenus: WeeklyMenu[]
   calendarEvents: CalendarEventRecord[]
   preferences: UserPreferences | null
+  /** Recipes added by the user (AI import / manual). Pre-built recipes are excluded. */
+  customRecipes: Recipe[]
+  /** Gemini API key from localStorage */
+  geminiApiKey: GeminiApiKeyBackup
 }
 
 export type PreferencesRestoreStrategy = 'preserve-local' | 'prefer-newer' | 'prefer-drive'
@@ -63,7 +77,7 @@ async function findBackupFile(token: string): Promise<string | null> {
  * Collect all user-generated data from IndexedDB and back it up to Drive.
  */
 export async function backupToGoogleDrive(token: string): Promise<void> {
-  const [stock, favorites, userNotes, viewHistory, weeklyMenus, calendarEvents] =
+  const [stock, favorites, userNotes, viewHistory, weeklyMenus, calendarEvents, customRecipes] =
     await Promise.all([
       db.stock.toArray(),
       db.favorites.toArray(),
@@ -71,11 +85,17 @@ export async function backupToGoogleDrive(token: string): Promise<void> {
       db.viewHistory.orderBy('viewedAt').reverse().limit(200).toArray(),
       db.weeklyMenus.toArray(),
       db.calendarEvents.toArray(),
+      db.recipes.filter(r => r.isUserAdded === true).toArray(),
     ])
   const preferences = (await db.userPreferences.toCollection().first()) ?? null
 
+  const geminiApiKey: GeminiApiKeyBackup = {
+    encryptedPayload: localStorage.getItem(GEMINI_ENCRYPTED_KEY),
+    legacyPlaintext: localStorage.getItem(GEMINI_LEGACY_KEY),
+  }
+
   const backup: BackupData = {
-    version: 3,
+    version: 4,
     exportedAt: new Date().toISOString(),
     stock,
     favorites,
@@ -84,6 +104,8 @@ export async function backupToGoogleDrive(token: string): Promise<void> {
     weeklyMenus,
     calendarEvents,
     preferences,
+    customRecipes,
+    geminiApiKey,
   }
 
   const body = JSON.stringify(backup)
@@ -148,14 +170,36 @@ export async function restoreFromGoogleDrive(
   )
   await assertDriveOk(res, 'Google Drive backup download')
 
-  let backup: BackupData
+  let backup: Partial<BackupData> & { version?: number }
   try {
-    backup = (await res.json()) as BackupData
+    backup = (await res.json()) as Partial<BackupData> & { version?: number }
   } catch {
     return false
   }
 
-  // Restore stock (merge by name to avoid duplicates)
+  // --- Step 1: Restore custom recipes and build oldId → newId map ---
+  // This must happen first so recipeId references in other tables can be remapped.
+  const recipeIdMap = new Map<number, number>()
+  if (backup.customRecipes?.length) {
+    for (const recipe of backup.customRecipes) {
+      const oldId = recipe.id
+      if (oldId == null) continue
+      // Check if a recipe with the same title already exists
+      const existing = await db.recipes.where('title').equals(recipe.title).first()
+      if (existing) {
+        recipeIdMap.set(oldId, existing.id!)
+      } else {
+        const { id: _id, ...rest } = recipe
+        const newId = await db.recipes.add({ ...rest, isUserAdded: true } as Recipe)
+        recipeIdMap.set(oldId, newId as number)
+      }
+    }
+  }
+
+  // Helper: remap a recipeId if it was a custom recipe with a different ID on the source device
+  const remapId = (id: number): number => recipeIdMap.get(id) ?? id
+
+  // --- Step 2: Restore stock (merge by name to avoid duplicates) ---
   if (backup.stock?.length) {
     for (const item of backup.stock) {
       const existing = await db.stock.where('name').equals(item.name).first()
@@ -166,47 +210,55 @@ export async function restoreFromGoogleDrive(
     }
   }
 
-  // Restore favorites (merge by recipeId)
+  // --- Step 3: Restore favorites (merge by recipeId) ---
   if (backup.favorites?.length) {
     for (const fav of backup.favorites) {
-      const existing = await db.favorites.where('recipeId').equals(fav.recipeId).first()
+      const mappedRecipeId = remapId(fav.recipeId)
+      const existing = await db.favorites.where('recipeId').equals(mappedRecipeId).first()
       if (!existing) {
         const { id: _id, ...rest } = fav
-        await db.favorites.add({ ...rest, addedAt: new Date(fav.addedAt) } as Favorite)
+        await db.favorites.add({ ...rest, recipeId: mappedRecipeId, addedAt: new Date(fav.addedAt) } as Favorite)
       }
     }
   }
 
-  // Restore user notes (merge by recipeId)
+  // --- Step 4: Restore user notes (merge by recipeId) ---
   if (backup.userNotes?.length) {
     for (const note of backup.userNotes) {
-      const existing = await db.userNotes.where('recipeId').equals(note.recipeId).first()
+      const mappedRecipeId = remapId(note.recipeId)
+      const existing = await db.userNotes.where('recipeId').equals(mappedRecipeId).first()
       if (!existing) {
         const { id: _id, ...rest } = note
-        await db.userNotes.add({ ...rest, updatedAt: new Date(note.updatedAt) } as UserNote)
+        await db.userNotes.add({ ...rest, recipeId: mappedRecipeId, updatedAt: new Date(note.updatedAt) } as UserNote)
       }
     }
   }
 
-  // Restore view history (add all missing)
+  // --- Step 5: Restore view history ---
   if (backup.viewHistory?.length) {
     const existingCount = await db.viewHistory.count()
     if (existingCount === 0) {
       for (const vh of backup.viewHistory) {
         const { id: _id, ...rest } = vh
-        await db.viewHistory.add({ ...rest, viewedAt: new Date(vh.viewedAt) } as ViewHistory)
+        await db.viewHistory.add({ ...rest, recipeId: remapId(vh.recipeId), viewedAt: new Date(vh.viewedAt) } as ViewHistory)
       }
     }
   }
 
-  // Restore weekly menus (merge by weekStartDate)
+  // --- Step 6: Restore weekly menus (merge by weekStartDate) ---
   if (backup.weeklyMenus?.length) {
     for (const menu of backup.weeklyMenus) {
       const existing = await db.weeklyMenus.where('weekStartDate').equals(menu.weekStartDate).first()
       if (!existing) {
         const { id: _id, ...rest } = menu
+        const remappedItems = rest.items.map(item => ({
+          ...item,
+          recipeId: remapId(item.recipeId),
+          sideRecipeId: item.sideRecipeId != null ? remapId(item.sideRecipeId) : undefined,
+        }))
         await db.weeklyMenus.add({
           ...rest,
+          items: remappedItems,
           createdAt: new Date(menu.createdAt),
           updatedAt: new Date(menu.updatedAt),
         } as WeeklyMenu)
@@ -214,7 +266,7 @@ export async function restoreFromGoogleDrive(
     }
   }
 
-  // Restore calendar events
+  // --- Step 7: Restore calendar events ---
   if (backup.calendarEvents?.length) {
     const existingCount = await db.calendarEvents.count()
     if (existingCount === 0) {
@@ -222,6 +274,7 @@ export async function restoreFromGoogleDrive(
         const { id: _id, ...rest } = event
         await db.calendarEvents.add({
           ...rest,
+          recipeId: remapId(event.recipeId),
           startTime: new Date(event.startTime),
           endTime: new Date(event.endTime),
           createdAt: new Date(event.createdAt),
@@ -230,7 +283,7 @@ export async function restoreFromGoogleDrive(
     }
   }
 
-  // Restore preferences (only if none exist locally)
+  // --- Step 8: Restore preferences ---
   if (backup.preferences) {
     const strategy = options.preferencesStrategy ?? 'prefer-newer'
     const existing = await db.userPreferences.toCollection().first()
@@ -255,6 +308,19 @@ export async function restoreFromGoogleDrive(
           updatedAt: new Date(backup.preferences.updatedAt),
         } as Partial<UserPreferences>)
       }
+    }
+  }
+
+  // --- Step 9: Restore Gemini API key (only if not already set) ---
+  if (backup.geminiApiKey) {
+    const { encryptedPayload, legacyPlaintext } = backup.geminiApiKey
+    const hasEncrypted = !!localStorage.getItem(GEMINI_ENCRYPTED_KEY)
+    const hasLegacy = !!localStorage.getItem(GEMINI_LEGACY_KEY)
+    if (!hasEncrypted && encryptedPayload) {
+      localStorage.setItem(GEMINI_ENCRYPTED_KEY, encryptedPayload)
+    }
+    if (!hasEncrypted && !hasLegacy && legacyPlaintext) {
+      localStorage.setItem(GEMINI_LEGACY_KEY, legacyPlaintext)
     }
   }
 

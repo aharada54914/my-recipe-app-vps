@@ -2,9 +2,12 @@ import { useState } from 'react'
 import {
   Eye, EyeOff, Lock, Unlock,
   LogIn, LogOut, User, HardDriveUpload, RefreshCw, Cloud,
+  Package, Star, FileText, Clock, CalendarDays, CalendarClock,
 } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '../../hooks/useAuth'
 import { useGoogleDriveSync } from '../../hooks/useGoogleDriveSync'
+import { db } from '../../db/db'
 
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
@@ -21,6 +24,18 @@ function formatTimeAgo(date: Date): string {
 export function AccountTab() {
   const { user, loading: authLoading, isOAuthAvailable, signInWithGoogle, signOut } = useAuth()
   const { isBackingUp, isRestoring, lastBackupAt, backupNow, error: backupError } = useGoogleDriveSync()
+
+  const backupCounts = useLiveQuery(async () => {
+    const [stock, favorites, userNotes, viewHistory, weeklyMenus, calendarEvents] = await Promise.all([
+      db.stock.count(),
+      db.favorites.count(),
+      db.userNotes.count(),
+      db.viewHistory.count(),
+      db.weeklyMenus.count(),
+      db.calendarEvents.count(),
+    ])
+    return { stock, favorites, userNotes, viewHistory: Math.min(viewHistory, 200), weeklyMenus, calendarEvents }
+  }, [])
 
   const [googleClientId, setGoogleClientId] = useState(
     () => localStorage.getItem(GOOGLE_CLIENT_ID_KEY) ?? ''
@@ -100,6 +115,32 @@ export function AccountTab() {
               {backupError && (
                 <p className="text-xs text-red-400 mt-0.5">{backupError}</p>
               )}
+            </div>
+          </div>
+
+          {/* Backup contents */}
+          <div className="rounded-xl bg-white/5 px-4 py-3 space-y-2">
+            <p className="text-xs font-medium text-text-secondary mb-2">バックアップ対象データ</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { icon: Package, label: '在庫', count: backupCounts?.stock },
+                { icon: Star, label: 'お気に入り', count: backupCounts?.favorites },
+                { icon: FileText, label: 'メモ', count: backupCounts?.userNotes },
+                { icon: Clock, label: '履歴', count: backupCounts?.viewHistory, suffix: '件（最大200）' },
+                { icon: CalendarDays, label: '献立', count: backupCounts?.weeklyMenus },
+                { icon: CalendarClock, label: 'カレンダー', count: backupCounts?.calendarEvents },
+              ].map(({ icon: Icon, label, count, suffix }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <Icon className="h-3.5 w-3.5 text-text-secondary shrink-0" />
+                  <span className="text-xs text-text-secondary truncate">{label}</span>
+                  <span className="ml-auto text-xs font-bold text-text-primary tabular-nums">
+                    {count === undefined ? '…' : count}
+                    <span className="text-text-secondary font-normal">
+                      {count !== undefined && (suffix ?? '件')}
+                    </span>
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 

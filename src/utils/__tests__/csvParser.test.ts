@@ -5,6 +5,8 @@ import {
   estimateCookingSteps,
   detectCSVType,
   parseRawSteps,
+  parseNumberFromText,
+  buildNutritionPerServing,
 } from '../csvParser'
 
 describe('parseCSV', () => {
@@ -144,5 +146,30 @@ describe('parseRawSteps', () => {
   it('filters out empty lines', () => {
     const result = parseRawSteps('切る\n\n煮る')
     expect(result).toEqual(['切る', '煮る'])
+  })
+})
+
+describe('nutrition parsing helpers', () => {
+  it('parses numeric values from localized strings', () => {
+    expect(parseNumberFromText('２５４kcal')).toBe(254)
+    expect(parseNumberFromText('食塩相当量 2.3g')).toBe(2.3)
+  })
+
+  it('builds nutritionPerServing from CSV fields', () => {
+    const nutrition = buildNutritionPerServing('254kcal', '2.3g', 600, 2)
+    expect(nutrition).toEqual({
+      servingSizeG: 300,
+      energyKcal: 254,
+      saltEquivalentG: 2.3,
+    })
+  })
+
+  it('stores sodiumMg when salt text is in mg', () => {
+    const nutrition = buildNutritionPerServing('300kcal', '870mg', 500, 2)
+    expect(nutrition).toEqual({
+      servingSizeG: 250,
+      energyKcal: 300,
+      sodiumMg: 870,
+    })
   })
 })

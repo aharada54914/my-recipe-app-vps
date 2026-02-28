@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockRecipesToArray } = vi.hoisted(() => ({
   mockRecipesToArray: vi.fn<() => Promise<import('../../db/db').Recipe[]>>(),
@@ -23,16 +23,22 @@ vi.mock('../../data/seasonalIngredients', () => ({
 import { getWeekStartDate, selectWeeklyMenu } from '../weeklyMenuSelector'
 import type { Recipe } from '../../db/db'
 
-function makeRecipe(id: number, device: Recipe['device'], category: Recipe['category'] = '主菜'): Recipe {
+function makeRecipe(
+  id: number,
+  device: Recipe['device'],
+  category: Recipe['category'] = '主菜',
+  title?: string,
+  ingredients?: string[],
+): Recipe {
   return {
     id,
-    title: `${device}-${id}`,
+    title: title ?? `${device}-${id}`,
     recipeNumber: `R-${id}`,
     device,
     category,
     baseServings: 2,
     totalWeightG: 500,
-    ingredients: [{ name: '玉ねぎ', quantity: 1, unit: '個', category: 'main' }],
+    ingredients: (ingredients ?? ['玉ねぎ']).map((name) => ({ name, quantity: 1, unit: '個', category: 'main' })),
     steps: [{ name: '調理', durationMinutes: 10 }],
     totalTimeMinutes: 10,
   }
@@ -82,6 +88,11 @@ describe('getWeekStartDate', () => {
 describe('selectWeeklyMenu device balance', () => {
   beforeEach(() => {
     mockRecipesToArray.mockReset()
+    vi.spyOn(Math, 'random').mockReturnValue(0.9999)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('keeps hotcook in the weekly main dishes even when healsio candidates are dominant', async () => {
@@ -106,5 +117,73 @@ describe('selectWeeklyMenu device balance', () => {
 
     expect(menu).toHaveLength(7)
     expect(hotcookCount).toBeGreaterThan(0)
+  })
+
+  it('avoids repeating the same primary ingredient right after a locked day when alternatives exist', async () => {
+    const porkMains = Array.from(
+      { length: 6 },
+      (_, i) => makeRecipe(i + 1, 'manual', '主菜', `豚肉メイン${i + 1}`, ['豚肉', '玉ねぎ'])
+    )
+    const fishMains = Array.from(
+      { length: 6 },
+      (_, i) => makeRecipe(i + 101, 'manual', '主菜', `鮭メイン${i + 1}`, ['鮭', '大根'])
+    )
+
+    mockRecipesToArray.mockResolvedValue([...porkMains, ...fishMains])
+
+    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    }, [
+      { recipeId: porkMains[0].id!, date: '2026-02-22', mealType: 'dinner', locked: true },
+    ])
+
+    const secondDayMain = [...porkMains, ...fishMains].find((r) => r.id === menu[1]?.recipeId)
+    expect(secondDayMain?.title).toContain('鮭')
+  })
+
+  it('prefers soup-style side dishes for heavy mains when base scores are tied', async () => {
+    const mains = Array.from(
+      { length: 7 },
+      (_, i) => makeRecipe(i + 1, 'manual', '主菜', `豚バラ主菜${i + 1}`, ['豚バラ肉', '玉ねぎ'])
+    )
+    const sides = [
+      makeRecipe(201, 'manual', '副菜', 'ほうれん草の和え物', ['ほうれん草']),
+      makeRecipe(202, 'manual', 'スープ', 'わかめスープ', ['わかめ', 'ねぎ']),
+      ...Array.from({ length: 6 }, (_, i) => makeRecipe(203 + i, 'manual', '副菜', `副菜${i + 1}`, ['キャベツ'])),
+    ]
+
+    mockRecipesToArray.mockResolvedValue([...mains, ...sides])
+
+    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    })
+
+    expect(menu[0]?.sideRecipeId).toBe(202)
+  })
+
+  it('prefers color-diverse main dish after a locked red main dish', async () => {
+    const lockedRed = makeRecipe(1, 'manual', '主菜', 'トマトチキン', ['鶏肉', 'トマト'])
+    const redCandidate = makeRecipe(2, 'manual', '主菜', '赤パプリカチキン', ['鶏肉', '赤パプリカ'])
+    const greenCandidate = makeRecipe(3, 'manual', '主菜', 'ブロッコリーチキン', ['鶏肉', 'ブロッコリー'])
+    const fillers = Array.from({ length: 6 }, (_, i) => makeRecipe(10 + i, 'manual', '主菜', `鶏の塩焼き${i + 1}`, ['鶏肉', '塩']))
+
+    mockRecipesToArray.mockResolvedValue([lockedRed, redCandidate, greenCandidate, ...fillers])
+
+    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    }, [
+      { recipeId: 1, date: '2026-02-22', mealType: 'dinner', locked: true },
+    ])
+
+    expect(menu[1]?.recipeId).toBe(3)
   })
 })
