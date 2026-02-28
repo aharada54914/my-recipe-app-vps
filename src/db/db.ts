@@ -1,5 +1,4 @@
 import Dexie, { type Table } from 'dexie'
-import { estimateRecipeNutrition } from '../utils/nutritionEstimator'
 
 // --- Type Definitions ---
 
@@ -402,6 +401,8 @@ class RecipeDB extends Dexie {
       userPreferences: '++id',
       weeklyMenus: '++id, weekStartDate',
     }).upgrade(async (tx) => {
+      // Dynamic import: only loaded during this one-time migration, excluded from the main bundle
+      const { estimateRecipeNutrition } = await import('../utils/nutritionEstimator')
       await tx.table('recipes').toCollection().modify((recipe) => {
         const r = recipe as Recipe
         const existing = r.nutritionPerServing ?? {}
