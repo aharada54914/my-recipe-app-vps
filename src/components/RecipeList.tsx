@@ -7,15 +7,14 @@ import type { Recipe, RecipeCategory, DeviceType } from '../db/db'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { searchRecipesWithScores } from '../utils/searchUtils'
 import { useDebounce } from '../hooks/useDebounce'
-import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { SearchBar } from './SearchBar'
 import { CategoryTags } from './CategoryTags'
 import { RecipeCard } from './RecipeCard'
 import { buildPreferenceProfile } from '../utils/preferenceSignals'
 import { computeKitchenAppPreferenceScore } from '../utils/preferenceRanker'
+import { applyUiRecipeFilters } from '../utils/recipeFilters'
 
 const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
-const seasonalIngredients = getCurrentSeasonalIngredients()
 const SEARCH_HISTORY_KEY = 'recipe_search_history'
 const QUERY_SCORE_WEIGHT = 4.2
 
@@ -44,7 +43,7 @@ interface RecipeListProps {
 
 export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState<RecipeCategory>('すべて')
+  const [selectedCategories, setSelectedCategories] = useState<RecipeCategory[]>([])
   const [deviceFilter, setDeviceFilter] = useState<DeviceType | null>(null)
   const [quickFilter, setQuickFilter] = useState(false)
   const [seasonalFilter, setSeasonalFilter] = useState(false)
@@ -74,21 +73,22 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     if (filterParam.startsWith('device:')) {
       const device = filterParam.replace('device:', '') as DeviceType
       setDeviceFilter(device)
-      setCategory('すべて')
+      setSelectedCategories([])
       setQuickFilter(false)
       setSeasonalFilter(false)
     } else if (filterParam === 'quick') {
       setQuickFilter(true)
-      setCategory('すべて')
+      setSelectedCategories([])
       setDeviceFilter(null)
       setSeasonalFilter(false)
     } else if (filterParam === 'seasonal') {
       setSeasonalFilter(true)
-      setCategory('すべて')
+      setSelectedCategories([])
       setDeviceFilter(null)
       setQuickFilter(false)
     } else if (filterParam && (RECIPE_CATEGORIES as string[]).includes(filterParam)) {
-      setCategory(filterParam as RecipeCategory)
+      const parsedCategory = filterParam as RecipeCategory
+      setSelectedCategories(parsedCategory === 'すべて' ? [] : [parsedCategory])
       setDeviceFilter(null)
       setQuickFilter(false)
       setSeasonalFilter(false)
@@ -101,9 +101,8 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       let fetchedRecipes: Recipe[] = []
       if (deviceFilter) {
         fetchedRecipes = await db.recipes.where('device').equals(deviceFilter).toArray()
-      } else if (category !== 'すべて') {
-        // Keep category filtering active even while searching
-        fetchedRecipes = await db.recipes.where('category').equals(category).toArray()
+      } else if (selectedCategories.length > 0) {
+        fetchedRecipes = await db.recipes.where('category').anyOf(selectedCategories).toArray()
       } else {
         fetchedRecipes = await db.recipes.toArray()
       }
@@ -128,7 +127,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
       return { recipes, stockItems, viewHistory, favorites, weeklyMenus, calendarEvents }
     },
-    [category, deviceFilter, !!deferredSearch],
+    [selectedCategories, deviceFilter, !!deferredSearch],
     { recipes: [], stockItems: [], viewHistory: [], favorites: [], weeklyMenus: [], calendarEvents: [] }
   )
 
@@ -162,21 +161,10 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       ? searchRecipesWithScores(data.recipes, deferredSearch)
       : data.recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
 
-    let filtered = scored.map((entry) => entry.recipe)
-
-    // JS-side filters (no DB index available for these)
-    if (quickFilter) {
-      filtered = filtered.filter((r) => r.totalTimeMinutes <= 30)
-    }
-    if (seasonalFilter) {
-      filtered = filtered.filter(
-        (r) =>
-          !isHelsioDeli(r) &&
-          r.ingredients.some((ing) =>
-            seasonalIngredients.some((s) => ing.name.includes(s))
-          )
-      )
-    }
+    const filtered = applyUiRecipeFilters(
+      scored.map((entry) => entry.recipe),
+      { selectedCategories, quickFilter, seasonalFilter }
+    )
 
     const scoreById = new Map(scored.map((entry) => [entry.recipe.id!, entry.queryScore]))
 
@@ -205,6 +193,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   }, [
     data.recipes,
     deferredSearch,
+    selectedCategories,
     quickFilter,
     seasonalFilter,
     baseScoreByRecipeId,
@@ -227,8 +216,12 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   )
 
   // When user picks a category tag, clear device/quick/seasonal filters
-  const handleCategorySelect = useCallback((cat: RecipeCategory) => {
-    setCategory(cat)
+  const handleCategoryToggle = useCallback((cat: RecipeCategory) => {
+    setSelectedCategories((prev) => {
+      if (cat === 'すべて') return []
+      if (prev.includes(cat)) return prev.filter((value) => value !== cat)
+      return [...prev, cat]
+    })
     setDeviceFilter(null)
     setQuickFilter(false)
     setSeasonalFilter(false)
@@ -270,7 +263,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         onSubmit={handleSubmitSearch}
         onSelectHistory={handleSelectHistory}
       />
-      <CategoryTags selected={category} onSelect={handleCategorySelect} />
+      <CategoryTags selectedCategories={selectedCategories} onToggle={handleCategoryToggle} />
 
       {/* Active special filter badge */}
       {activeFilterLabel && (

@@ -27,9 +27,9 @@ function StockRow({
   quantity?: number
   onCommitQuantity: (quantity: number) => void
 }) {
-  const [draft, setDraft] = useState(() => (typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''))
-  const [isEditing, setIsEditing] = useState(false)
   const currentQuantityText = typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''
+  const [draft, setDraft] = useState(currentQuantityText)
+  const [isEditing, setIsEditing] = useState(false)
   const inputValue = isEditing ? draft : currentQuantityText
 
   const commit = () => {
