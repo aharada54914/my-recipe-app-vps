@@ -3,7 +3,7 @@
  * Estimates RecipeNutritionPerServing from a recipe's ingredient list.
  * source='estimated', confidence=0.35
  */
-import type { Ingredient, Recipe, RecipeNutritionPerServing } from '../db/db'
+import type { Recipe, RecipeNutritionPerServing } from '../db/db'
 import { NUTRITION_PATTERNS, type NutritionPer100g } from '../data/nutritionLookup'
 
 // ─── Unit → grams conversion (Japanese cooking units) ───────────────────────
@@ -11,7 +11,7 @@ import { NUTRITION_PATTERNS, type NutritionPer100g } from '../data/nutritionLook
 function unitToGrams(
   quantity: number,
   unit: string,
-  ingredientName: string,
+  _ingredientName: string,
   oosajiG: number,
   kosajiG: number,
   unitGrams: Partial<Record<string, number>>,
