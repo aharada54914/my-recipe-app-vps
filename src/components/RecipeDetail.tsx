@@ -147,15 +147,17 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   return (
     <div className="min-h-dvh bg-bg-primary">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md flex items-center gap-3 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]">
+      <header className="sticky top-0 z-50 flex items-start gap-2 bg-bg-primary/95 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] backdrop-blur-md sm:items-center sm:gap-3">
         <button
           onClick={onBack}
-          className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+          className="rounded-xl bg-bg-card p-2.5 transition-colors hover:bg-bg-card-hover sm:p-3"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <div className="flex-1">
-          <h1 className="text-lg font-bold">{recipe.title}</h1>
+        <div className="min-w-0 flex-1 pt-0.5 sm:pt-0">
+          <h1 className="overflow-hidden text-lg font-bold leading-snug [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+            {recipe.title}
+          </h1>
           <div className="flex items-center gap-2 text-xs text-text-secondary">
             <span className="rounded-lg bg-accent/20 px-2 py-0.5 font-medium text-accent">
               {deviceLabels[recipe.device]}
@@ -168,20 +170,20 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             href={recipe.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+            className="rounded-xl bg-bg-card p-2.5 transition-colors hover:bg-bg-card-hover sm:p-3"
           >
             <ExternalLink className="h-5 w-5 text-accent" />
           </a>
         )}
         <button
           onClick={() => setShowCalendarModal(true)}
-          className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+          className="rounded-xl bg-bg-card p-2.5 transition-colors hover:bg-bg-card-hover sm:p-3"
         >
           <Calendar className="h-5 w-5 text-text-secondary" />
         </button>
         <button
           onClick={() => toggleFavorite(recipeId)}
-          className="rounded-xl bg-bg-card p-3 transition-colors hover:bg-bg-card-hover"
+          className="rounded-xl bg-bg-card p-2.5 transition-colors hover:bg-bg-card-hover sm:p-3"
         >
           <Star className={`h-5 w-5 ${favorited ? 'fill-accent text-accent' : 'text-text-secondary'}`} />
         </button>
