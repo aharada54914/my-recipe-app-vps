@@ -31,6 +31,17 @@ function unitToGrams(
   if (u === 'カップ' || u === 'cup' || u === 'c') return quantity * 200
   if (u === '合') return quantity * 150 // rice: 1合 ≈ 150g uncooked
 
+  // Person / serving / dish-based units
+  const servingUnits: Array<[string, number]> = [
+    ['人前', 150], ['人分', 150], ['膳', 160],
+    ['皿分', 180], ['皿', 180],
+  ]
+  for (const [su, defaultG] of servingUnits) {
+    if (u === su || u.endsWith(su)) {
+      return quantity * (unitGrams[su] ?? defaultG)
+    }
+  }
+
   // Piece-based units — check ingredient-specific overrides first
   const pieceUnits = ['個', '本', '枚', '切れ', 'パック', '袋', '缶', '丁', '片', '尾', '束', '腹', '玉', '株', '房']
   for (const pu of pieceUnits) {
