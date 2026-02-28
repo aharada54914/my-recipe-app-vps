@@ -1,4 +1,11 @@
-import type { DeviceType, IngredientCategory, Recipe, RecipeCategory } from '../db/db'
+import type {
+  DeviceType,
+  IngredientCategory,
+  Recipe,
+  RecipeCategory,
+  RecipeNutritionMeta,
+  RecipeNutritionPerServing,
+} from '../db/db'
 
 export interface RecipeDraftIngredient {
   name: string
@@ -26,6 +33,8 @@ export interface RecipeDraft {
   totalTimeMinutes: number
   imageUrl?: string
   sourceUrl?: string
+  nutritionPerServing?: RecipeNutritionPerServing
+  nutritionMeta?: RecipeNutritionMeta
 }
 
 const VALID_DEVICES: DeviceType[] = ['hotcook', 'healsio', 'manual']
@@ -76,6 +85,8 @@ export function toRecipeDraft(recipe: Omit<Recipe, 'id'>): RecipeDraft {
       : recipe.steps.reduce((sum, step) => sum + normalizeDuration(step.durationMinutes), 0),
     ...(recipe.imageUrl ? { imageUrl: recipe.imageUrl } : {}),
     ...(recipe.sourceUrl ? { sourceUrl: recipe.sourceUrl } : {}),
+    ...(recipe.nutritionPerServing ? { nutritionPerServing: recipe.nutritionPerServing } : {}),
+    ...(recipe.nutritionMeta ? { nutritionMeta: recipe.nutritionMeta } : {}),
   }
 }
 
@@ -127,5 +138,7 @@ export function normalizeRecipeDraft(draft: RecipeDraft): Omit<Recipe, 'id'> {
     totalTimeMinutes,
     ...(draft.imageUrl ? { imageUrl: draft.imageUrl } : {}),
     ...(draft.sourceUrl ? { sourceUrl: draft.sourceUrl } : {}),
+    ...(draft.nutritionPerServing ? { nutritionPerServing: draft.nutritionPerServing } : {}),
+    ...(draft.nutritionMeta ? { nutritionMeta: draft.nutritionMeta } : {}),
   }
 }
