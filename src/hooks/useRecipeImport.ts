@@ -55,7 +55,7 @@ export function useRecipeImport(options?: UseRecipeImportOptions) {
         }
 
         setStatus('saving')
-        await db.recipes.add(parsed as Recipe)
+        await db.recipes.add({ ...parsed, isUserAdded: true } as Recipe)
         if (onSuccess) onSuccess()
     }
 

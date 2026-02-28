@@ -68,7 +68,7 @@ export function ImportTab() {
       if (!window.confirm(`「${recipe.title}」は既に登録されています。重複して保存しますか？`)) return
     }
     setEditorSaving(true)
-    await db.recipes.add(recipe as Recipe)
+    await db.recipes.add({ ...recipe, isUserAdded: true } as Recipe)
     setEditorSaving(false)
     setResultMessage(`「${recipe.title}」を保存しました。`)
     navigate('/search')

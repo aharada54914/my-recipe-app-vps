@@ -39,6 +39,7 @@ async function saveCustomRecipe(data: DecodedMenuEntry['mainRecipeData']): Promi
         saltContent: data.saltContent,
         recipeNumber: '',
         updatedAt: new Date(),
+        isUserAdded: true,
     })
     return id
 }
