@@ -228,6 +228,14 @@ export function WeeklyMenuPage() {
   }, [menu, recipes])
 
   const nutritionInsights = useMemo(() => analyzeWeeklyMenuNutrition(selectedRecipes), [selectedRecipes])
+  const lowConfidenceNutritionCount = useMemo(
+    () => selectedRecipes.filter((r) => r.nutritionMeta?.source === 'estimated' && r.nutritionMeta?.lowConfidence).length,
+    [selectedRecipes]
+  )
+  const fallbackNutritionCount = useMemo(
+    () => selectedRecipes.filter((r) => r.nutritionMeta?.source === 'estimated' && r.nutritionMeta?.usedFallback).length,
+    [selectedRecipes]
+  )
 
   const handleAdjustServings = useCallback((dayIndex: number, type: 'main' | 'side', delta: number) => {
     if (!menu) return
@@ -513,6 +521,16 @@ export function WeeklyMenuPage() {
                 {nutritionInsights.highlights.map((highlight) => (
                   <p key={highlight} className="text-emerald-300">・{highlight}</p>
                 ))}
+                {lowConfidenceNutritionCount > 0 && (
+                  <p className="text-amber-300">
+                    ・推定精度注意: {lowConfidenceNutritionCount} 品は栄養推定の信頼度が低めです
+                  </p>
+                )}
+                {fallbackNutritionCount > 0 && (
+                  <p className="text-amber-300">
+                    ・補完推定: {fallbackNutritionCount} 品でエネルギー基準の補完計算を使用
+                  </p>
+                )}
               </div>
             </div>
 

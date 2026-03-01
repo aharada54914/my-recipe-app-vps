@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { estimateRecipeNutrition } from '../nutritionEstimator'
+import {
+  deriveEstimationConfidence,
+  estimateRecipeNutrition,
+  estimateRecipeNutritionDetailed,
+} from '../nutritionEstimator'
 import type { Recipe, Ingredient } from '../../db/db'
 
 function makeRecipe(overrides: {
@@ -149,6 +153,181 @@ describe('serving units — exact match only', () => {
     }))
     // うどん 200g/人前: 105 kcal/100g * 2 = 210 kcal
     expect(r.energyKcal).toBeGreaterThan(0)
+  })
+})
+
+describe('unit normalization and fractions', () => {
+  it('treats 1L as 1000mL', () => {
+    const byLiter = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: '牛乳', quantity: 1, unit: 'L' }],
+    }))
+    const byMilli = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: '牛乳', quantity: 1000, unit: 'mL' }],
+    }))
+    expect(byLiter.energyKcal).toBe(byMilli.energyKcal)
+  })
+
+  it('handles spoon fractions in unit text (大さじ/2)', () => {
+    const half = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'ご飯', quantity: 4, unit: '大さじ/2' }],
+    }))
+    const one = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'ご飯', quantity: 2, unit: '大さじ' }],
+    }))
+    expect(half.energyKcal).toBeCloseTo(one.energyKcal ?? 0, 0)
+  })
+
+  it('handles prefixed fractions in unit text (/2個)', () => {
+    const half = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'ご飯', quantity: 4, unit: '/2個' }],
+    }))
+    const one = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'ご飯', quantity: 2, unit: '個' }],
+    }))
+    expect(half.energyKcal).toBeCloseTo(one.energyKcal ?? 0, 0)
+  })
+
+  it('handles quantity string fractions (1/2)', () => {
+    const half = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'ご飯', quantity: '3/2', unit: '個' }],
+    }))
+    const one = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'ご飯', quantity: 1.5, unit: '個' }],
+    }))
+    expect(half.energyKcal).toBeCloseTo(one.energyKcal ?? 0, 0)
+  })
+
+  it('handles multiplier notation (人前×2パック)', () => {
+    const multiplied = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'うどん', quantity: 1, unit: '人前×2パック' }],
+    }))
+    const direct = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'うどん', quantity: 2, unit: '人前' }],
+    }))
+    expect(multiplied.energyKcal).toBeCloseTo(direct.energyKcal ?? 0, 0)
+  })
+})
+
+describe('category defaults', () => {
+  it('uses soup-specific fallback kcal for スープ category', () => {
+    const soup = estimateRecipeNutrition(makeRecipe({
+      category: 'スープ',
+      totalWeightG: 0,
+      ingredients: [{ name: '謎食材XYZ', quantity: 1, unit: '個' }],
+    }))
+    expect(soup.energyKcal).toBe(80)
+  })
+})
+
+describe('lookup coverage extensions', () => {
+  it('matches 生ざけ as salmon instead of fallback default', () => {
+    const r = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      category: '主菜',
+      ingredients: [{ name: '生ざけ', quantity: 1, unit: '切れ' }],
+    }))
+    expect((r.energyKcal ?? 0)).toBeLessThan(250)
+  })
+
+  it('matches 白身魚 and returns lean-fish-like calories', () => {
+    const r = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      category: '主菜',
+      ingredients: [{ name: '白身魚', quantity: 1, unit: '切れ' }],
+    }))
+    expect((r.energyKcal ?? 0)).toBeLessThan(200)
+  })
+
+  it('matches マッシュルーム as mushroom category', () => {
+    const r = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      category: '副菜',
+      ingredients: [{ name: 'マッシュルーム', quantity: 1, unit: 'パック' }],
+    }))
+    expect((r.energyKcal ?? 0)).toBeLessThan(80)
+  })
+
+  it('matches アンチョビ as fish-based ingredient', () => {
+    const result = estimateRecipeNutritionDetailed(makeRecipe({
+      baseServings: 1,
+      category: '副菜',
+      ingredients: [{ name: 'アンチョビ', quantity: 100, unit: 'g' }],
+    }))
+    expect(result.diagnostics.usedFallback).toBe(false)
+    expect((result.nutrition.saltEquivalentG ?? 0)).toBeGreaterThan(0)
+  })
+
+  it('matches 菜の花 as leafy vegetable', () => {
+    const result = estimateRecipeNutritionDetailed(makeRecipe({
+      baseServings: 1,
+      category: '副菜',
+      ingredients: [{ name: '菜の花', quantity: 1, unit: '袋' }],
+    }))
+    expect(result.diagnostics.usedFallback).toBe(false)
+    expect((result.nutrition.vitaminCMg ?? 0)).toBeGreaterThan(50)
+  })
+
+  it('normalizes branded hotcake mix names before lookup', () => {
+    const result = estimateRecipeNutritionDetailed(makeRecipe({
+      baseServings: 1,
+      category: 'スイーツ',
+      ingredients: [{ name: 'SHOWAまんまるおおきなホットケーキのもと', quantity: 1, unit: '袋' }],
+    }))
+    expect(result.diagnostics.usedFallback).toBe(false)
+    expect((result.nutrition.energyKcal ?? 0)).toBeGreaterThan(200)
+  })
+})
+
+describe('estimation diagnostics', () => {
+  it('returns diagnostics with matched food codes', () => {
+    const result = estimateRecipeNutritionDetailed(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: 'ささ身', quantity: 1, unit: '本' }],
+    }))
+    expect(result.diagnostics.totalIngredientCount).toBeGreaterThan(0)
+    expect(result.diagnostics.matchedIngredientCount).toBeGreaterThan(0)
+    expect(result.diagnostics.matchedFoodCodes.length).toBeGreaterThan(0)
+  })
+
+  it('assigns lower confidence when fallback is used', () => {
+    const fallback = estimateRecipeNutritionDetailed(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: '未知食材XYZ', quantity: 1, unit: '個' }],
+    }))
+    const matched = estimateRecipeNutritionDetailed(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: '鶏むね肉', quantity: 100, unit: 'g' }],
+    }))
+    expect(deriveEstimationConfidence(fallback.diagnostics)).toBeLessThan(
+      deriveEstimationConfidence(matched.diagnostics)
+    )
+  })
+})
+
+describe('non-edible ingredient filtering', () => {
+  it('ignores container-like ingredients in estimation', () => {
+    const withContainer = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [
+        { name: '牛乳', quantity: 200, unit: 'mL' },
+        { name: '容器サイズ', quantity: 1, unit: 'L以上' },
+      ],
+    }))
+    const withoutContainer = estimateRecipeNutrition(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: '牛乳', quantity: 200, unit: 'mL' }],
+    }))
+    expect(withContainer.energyKcal).toBeCloseTo(withoutContainer.energyKcal ?? 0, 0)
   })
 })
 

@@ -23,6 +23,8 @@ export const RecipeCard = memo(function RecipeCard({
   onClick,
   variant = 'list',
 }: RecipeCardProps) {
+  const isLowConfidenceNutrition = recipe.nutritionMeta?.source === 'estimated' && recipe.nutritionMeta?.lowConfidence
+
   // Compact tile for weekly menu 2-column layout
   if (variant === 'menu') {
     return (
@@ -36,9 +38,16 @@ export const RecipeCard = memo(function RecipeCard({
           className="w-full rounded-none rounded-t-xl"
         />
         <div className="p-2">
-          <span className="mb-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium text-accent" style={{ backgroundColor: 'rgba(249,115,22,0.15)' }}>
-            {deviceLabels[recipe.device]}
-          </span>
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className="inline-block rounded px-1.5 py-0.5 text-[11px] font-medium text-accent" style={{ backgroundColor: 'rgba(249,115,22,0.15)' }}>
+              {deviceLabels[recipe.device]}
+            </span>
+            {isLowConfidenceNutrition && (
+              <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-bold text-amber-300" style={{ backgroundColor: 'rgba(252,211,77,0.14)' }}>
+                栄養推定
+              </span>
+            )}
+          </div>
           <h3 className="mb-1.5 line-clamp-2 text-[13px] font-bold leading-snug">
             {recipe.title}
           </h3>
@@ -83,6 +92,11 @@ export const RecipeCard = memo(function RecipeCard({
             <span className="inline-block rounded-md bg-accent/20 px-2 py-0.5 text-[11px] font-medium text-accent">
               {deviceLabels[recipe.device]}
             </span>
+            {isLowConfidenceNutrition && (
+              <span className="inline-block rounded-md bg-amber-300/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                栄養推定
+              </span>
+            )}
           </div>
           <h3 className="mb-2 line-clamp-2 text-sm font-bold leading-snug">
             {recipe.title}
@@ -122,6 +136,11 @@ export const RecipeCard = memo(function RecipeCard({
           <span className="inline-block rounded-md bg-accent/20 px-2 py-0.5 text-[11px] font-medium text-accent">
             {deviceLabels[recipe.device]}
           </span>
+          {isLowConfidenceNutrition && (
+            <span className="inline-block rounded-md bg-amber-300/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+              栄養推定
+            </span>
+          )}
           <span className="text-[11px] text-text-secondary">
             No.{recipe.recipeNumber}
           </span>

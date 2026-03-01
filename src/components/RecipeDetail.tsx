@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, Clock, Hash, Calendar, MessageCircleQuestion } from 'lucide-react'
+import { ArrowLeft, Star, ShoppingCart, Copy, Check, ExternalLink, Clock, Hash, Calendar, MessageCircleQuestion, AlertTriangle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
 import type { DeviceType } from '../db/db'
@@ -140,6 +140,12 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   const mainIngredients = adjusted.filter((i) => i.category === 'main')
   const subIngredients = adjusted.filter((i) => i.category === 'sub')
   const favorited = (isFav ?? 0) > 0
+  const nutritionMeta = recipe.nutritionMeta
+  const isEstimatedNutrition = nutritionMeta?.source === 'estimated'
+  const isLowConfidenceNutrition = isEstimatedNutrition && nutritionMeta?.lowConfidence
+  const nutritionConfidencePct = typeof nutritionMeta?.confidence === 'number'
+    ? Math.round(nutritionMeta.confidence * 100)
+    : undefined
 
   // T-18: Shopping list calculations
   const missing = stockItems ? getMissingIngredients(recipe.ingredients, stockItems) : []
@@ -222,6 +228,32 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             </div>
           )}
         </div>
+
+        {isEstimatedNutrition && (
+          <div
+            className={`rounded-xl border px-3 py-2 text-xs ${isLowConfidenceNutrition
+              ? 'border-amber-400/40 bg-amber-500/10 text-amber-200'
+              : 'border-white/10 bg-white/5 text-text-secondary'
+              }`}
+          >
+            <div className="flex items-center gap-1.5">
+              {isLowConfidenceNutrition && <AlertTriangle className="h-3.5 w-3.5 text-amber-300" />}
+              <span className="font-semibold">
+                栄養は {nutritionMeta?.referenceLabel ?? '成分表'} を基に推定
+              </span>
+              {nutritionConfidencePct !== undefined && (
+                <span className="ml-auto rounded-md bg-black/20 px-1.5 py-0.5 text-[10px]">
+                  信頼度 {nutritionConfidencePct}%
+                </span>
+              )}
+            </div>
+            {isLowConfidenceNutrition && (
+              <p className="mt-1 leading-relaxed">
+                未マッチ食材や補完推定を含むため精度が低めです。食材名を具体化すると改善します。
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Servings */}
         <div className="flex justify-center">

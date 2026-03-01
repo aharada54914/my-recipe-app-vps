@@ -8,12 +8,13 @@
   },
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/prebuild-recipes.mjs",
-    "build": "node scripts/prebuild-recipes.mjs && tsc -b && vite build",
+    "prebuild": "tsx scripts/prebuild-recipes.mjs",
+    "build": "tsx scripts/prebuild-recipes.mjs && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "nutrition:audit": "tsx scripts/nutrition-audit.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -54,6 +55,7 @@
     "jimp": "^0.22.12",
     "jsdom": "^28.1.0",
     "sharp": "^0.34.5",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.1",

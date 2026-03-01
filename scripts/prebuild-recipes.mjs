@@ -469,16 +469,58 @@ function convertHotcookCSV(csvText) {
   return recipes
 }
 
+function attachEstimatedNutrition(
+  recipes,
+  estimateRecipeNutritionDetailed,
+  deriveEstimationConfidence,
+  nutritionReference
+) {
+  return recipes.map((recipe) => {
+    const { nutrition: nutritionPerServing, diagnostics } = estimateRecipeNutritionDetailed(recipe)
+    return {
+      ...recipe,
+      nutritionPerServing,
+      nutritionMeta: {
+        source: 'estimated',
+        confidence: deriveEstimationConfidence(diagnostics),
+        schemaVersion: 3,
+        referenceDataset: nutritionReference.dataset,
+        referenceLabel: nutritionReference.label,
+        estimatorVersion: nutritionReference.estimatorVersion,
+        totalIngredientCount: diagnostics.totalIngredientCount,
+        matchedIngredientCount: diagnostics.matchedIngredientCount,
+        ingredientMatchRatio: diagnostics.ingredientMatchRatio,
+        matchedWeightRatio: diagnostics.matchedWeightRatio,
+        usedFallback: diagnostics.usedFallback,
+        lowConfidence: diagnostics.lowConfidence,
+        officialFoodCodeCount: diagnostics.officialFoodCodeCount,
+        derivedFoodCodeCount: diagnostics.derivedFoodCodeCount,
+        matchedFoodCodes: diagnostics.matchedFoodCodes,
+      },
+    }
+  })
+}
+
 // ─── Main ───
 
-function main() {
+async function main() {
+  const {
+    estimateRecipeNutritionDetailed,
+    deriveEstimationConfidence,
+  } = await import('../src/utils/nutritionEstimator.ts')
+  const { NUTRITION_REFERENCE } = await import('../src/data/nutritionLookup.ts')
   const outDir = join(ROOT, 'src', 'data')
   mkdirSync(outDir, { recursive: true })
 
   // Healsio
   console.log('📖 Reading Healsio CSV...')
   const healsioCsv = readFileSync(join(ROOT, 'AX-XA20_recipes_complete.csv'), 'utf-8')
-  const healsioRecipes = convertHealsioCSV(healsioCsv)
+  const healsioRecipes = attachEstimatedNutrition(
+    convertHealsioCSV(healsioCsv),
+    estimateRecipeNutritionDetailed,
+    deriveEstimationConfidence,
+    NUTRITION_REFERENCE
+  )
   const healsioOut = join(outDir, 'recipes-healsio.json')
   writeFileSync(healsioOut, JSON.stringify(healsioRecipes, null, 2), 'utf-8')
   console.log(`✅ Healsio: ${healsioRecipes.length} recipes → ${healsioOut}`)
@@ -486,7 +528,12 @@ function main() {
   // Hotcook
   console.log('📖 Reading Hotcook CSV...')
   const hotcookCsv = readFileSync(join(ROOT, 'KN-HW24H_recipes_complete_complete.csv'), 'utf-8')
-  const hotcookRecipes = convertHotcookCSV(hotcookCsv)
+  const hotcookRecipes = attachEstimatedNutrition(
+    convertHotcookCSV(hotcookCsv),
+    estimateRecipeNutritionDetailed,
+    deriveEstimationConfidence,
+    NUTRITION_REFERENCE
+  )
   const hotcookOut = join(outDir, 'recipes-hotcook.json')
   writeFileSync(hotcookOut, JSON.stringify(hotcookRecipes, null, 2), 'utf-8')
   console.log(`✅ Hotcook: ${hotcookRecipes.length} recipes → ${hotcookOut}`)
@@ -494,4 +541,7 @@ function main() {
   console.log(`\n🎉 Total: ${healsioRecipes.length + hotcookRecipes.length} recipes pre-built`)
 }
 
-main()
+main().catch((error) => {
+  console.error('❌ Failed to prebuild recipes:', error)
+  process.exitCode = 1
+})

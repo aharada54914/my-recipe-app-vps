@@ -82,6 +82,8 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 ## ドキュメント
 
 - `docs/FEATURES.md` 機能詳細
+- `docs/PWA_REQUIREMENTS.md` 0から作る場合の要件定義書
+- `docs/PWA_SPECIFICATION.md` 0から作る場合の仕様書
 - `docs/SETUP.md` セットアップ・デプロイ
 - `docs/ALGORITHMS.md` アルゴリズム仕様
 - `docs/ARCHITECTURE.md` アーキテクチャ仕様

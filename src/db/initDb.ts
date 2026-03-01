@@ -3,11 +3,30 @@ import type { Recipe, RecipeNutritionPerServing } from './db'
 import hotcookRecipes from '../data/recipes-hotcook.json'
 import healsioRecipes from '../data/recipes-healsio.json'
 import { STOCK_MASTER } from '../data/stockMaster'
+import { NUTRITION_REFERENCE } from '../data/nutritionLookup'
 
 // Increment this version string when the estimation logic changes significantly,
 // to force re-estimation on next launch for existing users.
-const NUTRITION_ESTIMATION_VERSION = 'v1'
+const NUTRITION_ESTIMATION_VERSION = 'v6'
 const NUTRITION_ESTIMATION_KEY = 'nutritionEstimationApplied'
+
+function hasNutrition5Coverage(nutrition: RecipeNutritionPerServing | undefined): boolean {
+  if (!nutrition) return false
+  const required: Array<keyof RecipeNutritionPerServing> = [
+    'servingSizeG',
+    'energyKcal',
+    'proteinG',
+    'fatG',
+    'carbG',
+  ]
+  for (const key of required) {
+    const value = nutrition[key]
+    if (typeof value !== 'number' || !Number.isFinite(value)) return false
+  }
+  const hasSalt = typeof nutrition.saltEquivalentG === 'number' && Number.isFinite(nutrition.saltEquivalentG)
+  const hasSodium = typeof nutrition.sodiumMg === 'number' && Number.isFinite(nutrition.sodiumMg)
+  return hasSalt || hasSodium
+}
 
 function normalizeCategory(category: string): string {
   if (category === 'ご飯もの') return '一品料理'
@@ -28,14 +47,31 @@ function normalizeRecipeCategory<T extends { category?: string }>(recipe: T): T 
  * Preserves existing CSV-parsed energyKcal / saltEquivalentG when present.
  */
 async function applyNutritionEstimation(): Promise<void> {
-  const { estimateRecipeNutrition } = await import('../utils/nutritionEstimator')
+  const {
+    estimateRecipeNutritionDetailed,
+    deriveEstimationConfidence,
+  } = await import('../utils/nutritionEstimator')
   await db.recipes.toCollection().modify((recipe) => {
     const r = recipe as Recipe
-    // Skip recipes already estimated at this schema version
-    if (r.nutritionPerServing?.energyKcal != null && r.nutritionMeta?.schemaVersion === 1) return
+    const metaSchemaVersion = typeof r.nutritionMeta?.schemaVersion === 'number'
+      ? r.nutritionMeta.schemaVersion
+      : 0
+    const metaEstimatorVersion = typeof r.nutritionMeta?.estimatorVersion === 'string'
+      ? r.nutritionMeta.estimatorVersion
+      : undefined
+    const isEstimatedOrUnknown = !r.nutritionMeta?.source || r.nutritionMeta.source === 'estimated'
+    const hasCurrentEstimatedSchema = !isEstimatedOrUnknown || (
+      metaSchemaVersion >= 3 &&
+      metaEstimatorVersion === NUTRITION_REFERENCE.estimatorVersion
+    )
+    // Skip only when required nutrition coverage is already present.
+    if (
+      hasNutrition5Coverage(r.nutritionPerServing) &&
+      hasCurrentEstimatedSchema
+    ) return
 
     const existing = r.nutritionPerServing ?? {}
-    const estimated = estimateRecipeNutrition(r)
+    const { nutrition: estimated, diagnostics } = estimateRecipeNutritionDetailed(r)
 
     // Merge: existing CSV-parsed fields take priority over estimates
     const merged: RecipeNutritionPerServing = {
@@ -60,8 +96,20 @@ async function applyNutritionEstimation(): Promise<void> {
       source: r.nutritionMeta?.source === 'jsonld' || r.nutritionMeta?.source === 'gemini'
         ? r.nutritionMeta.source
         : 'estimated',
-      confidence: r.nutritionMeta?.confidence ?? 0.35,
-      schemaVersion: 1,
+      confidence: r.nutritionMeta?.confidence ?? deriveEstimationConfidence(diagnostics),
+      schemaVersion: 3,
+      referenceDataset: NUTRITION_REFERENCE.dataset,
+      referenceLabel: NUTRITION_REFERENCE.label,
+      estimatorVersion: NUTRITION_REFERENCE.estimatorVersion,
+      totalIngredientCount: diagnostics.totalIngredientCount,
+      matchedIngredientCount: diagnostics.matchedIngredientCount,
+      ingredientMatchRatio: diagnostics.ingredientMatchRatio,
+      matchedWeightRatio: diagnostics.matchedWeightRatio,
+      usedFallback: diagnostics.usedFallback,
+      lowConfidence: diagnostics.lowConfidence,
+      officialFoodCodeCount: diagnostics.officialFoodCodeCount,
+      derivedFoodCodeCount: diagnostics.derivedFoodCodeCount,
+      matchedFoodCodes: diagnostics.matchedFoodCodes,
       updatedAt: new Date(),
     }
   })
@@ -77,7 +125,7 @@ export async function initDb() {
       ...healsioRecipes,
     ].map((recipe) => normalizeRecipeCategory(recipe)) as Omit<Recipe, 'id'>[]
     await db.recipes.bulkAdd(allRecipes)
-    // Apply nutrition estimation for fresh installs (JSON files don't include nutritionPerServing)
+    // Apply nutrition estimation on first launch to ensure current estimator schema is applied.
     await applyNutritionEstimation()
   } else {
     // Safety migration for users whose DB was initialized before category rename was applied at import time.

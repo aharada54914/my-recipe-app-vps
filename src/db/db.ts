@@ -43,6 +43,18 @@ export interface RecipeNutritionMeta {
   source?: 'csv' | 'jsonld' | 'gemini' | 'estimated'
   confidence?: number
   schemaVersion?: number
+  referenceDataset?: 'japanese-food-composition-table-2020-8th'
+  referenceLabel?: string
+  estimatorVersion?: string
+  totalIngredientCount?: number
+  matchedIngredientCount?: number
+  ingredientMatchRatio?: number
+  matchedWeightRatio?: number
+  usedFallback?: boolean
+  lowConfidence?: boolean
+  officialFoodCodeCount?: number
+  derivedFoodCodeCount?: number
+  matchedFoodCodes?: string[]
   updatedAt?: Date
 }
 
@@ -434,6 +446,140 @@ class RecipeDB extends Dexie {
             : 'estimated',
           confidence: r.nutritionMeta?.confidence ?? 0.35,
           schemaVersion: 1,
+          updatedAt: new Date(),
+        }
+      })
+    })
+    // v12: Upgrade estimated nutrition metadata with detailed diagnostics and
+    // reference dataset tracking for Japanese Food Composition Table 2020 (8th).
+    this.version(12).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+    }).upgrade(async (tx) => {
+      const {
+        estimateRecipeNutritionDetailed,
+        deriveEstimationConfidence,
+      } = await import('../utils/nutritionEstimator')
+      const { NUTRITION_REFERENCE } = await import('../data/nutritionLookup')
+      await tx.table('recipes').toCollection().modify((recipe) => {
+        const r = recipe as Recipe
+        const existing = r.nutritionPerServing ?? {}
+        const { nutrition: estimated, diagnostics } = estimateRecipeNutritionDetailed(r)
+
+        r.nutritionPerServing = {
+          servingSizeG: existing.servingSizeG ?? estimated.servingSizeG,
+          energyKcal: existing.energyKcal ?? estimated.energyKcal,
+          proteinG: existing.proteinG ?? estimated.proteinG,
+          fatG: existing.fatG ?? estimated.fatG,
+          carbG: existing.carbG ?? estimated.carbG,
+          saltEquivalentG: existing.saltEquivalentG ?? estimated.saltEquivalentG,
+          sodiumMg: existing.sodiumMg ?? estimated.sodiumMg,
+          fiberG: existing.fiberG ?? estimated.fiberG,
+          sugarG: existing.sugarG ?? estimated.sugarG,
+          saturatedFatG: existing.saturatedFatG ?? estimated.saturatedFatG,
+          potassiumMg: existing.potassiumMg ?? estimated.potassiumMg,
+          calciumMg: existing.calciumMg ?? estimated.calciumMg,
+          ironMg: existing.ironMg ?? estimated.ironMg,
+          vitaminCMg: existing.vitaminCMg ?? estimated.vitaminCMg,
+        }
+
+        r.nutritionMeta = {
+          source: r.nutritionMeta?.source === 'jsonld' || r.nutritionMeta?.source === 'gemini'
+            ? r.nutritionMeta.source
+            : 'estimated',
+          confidence: r.nutritionMeta?.confidence ?? deriveEstimationConfidence(diagnostics),
+          schemaVersion: 3,
+          referenceDataset: NUTRITION_REFERENCE.dataset,
+          referenceLabel: NUTRITION_REFERENCE.label,
+          estimatorVersion: NUTRITION_REFERENCE.estimatorVersion,
+          totalIngredientCount: diagnostics.totalIngredientCount,
+          matchedIngredientCount: diagnostics.matchedIngredientCount,
+          ingredientMatchRatio: diagnostics.ingredientMatchRatio,
+          matchedWeightRatio: diagnostics.matchedWeightRatio,
+          usedFallback: diagnostics.usedFallback,
+          lowConfidence: diagnostics.lowConfidence,
+          officialFoodCodeCount: diagnostics.officialFoodCodeCount,
+          derivedFoodCodeCount: diagnostics.derivedFoodCodeCount,
+          matchedFoodCodes: diagnostics.matchedFoodCodes,
+          updatedAt: new Date(),
+        }
+      })
+    })
+    // v13: Re-estimate estimated/unknown nutrition rows when estimator version changes.
+    this.version(13).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+    }).upgrade(async (tx) => {
+      const {
+        estimateRecipeNutritionDetailed,
+        deriveEstimationConfidence,
+      } = await import('../utils/nutritionEstimator')
+      const { NUTRITION_REFERENCE } = await import('../data/nutritionLookup')
+      await tx.table('recipes').toCollection().modify((recipe) => {
+        const r = recipe as Recipe
+        const source = r.nutritionMeta?.source
+        const isEstimatedOrUnknown = !source || source === 'estimated'
+        if (!isEstimatedOrUnknown) return
+
+        const schemaVersion = typeof r.nutritionMeta?.schemaVersion === 'number'
+          ? r.nutritionMeta.schemaVersion
+          : 0
+        const estimatorVersion = typeof r.nutritionMeta?.estimatorVersion === 'string'
+          ? r.nutritionMeta.estimatorVersion
+          : undefined
+        const alreadyCurrent =
+          schemaVersion >= 3 &&
+          estimatorVersion === NUTRITION_REFERENCE.estimatorVersion
+        if (alreadyCurrent) return
+
+        const existing = r.nutritionPerServing ?? {}
+        const { nutrition: estimated, diagnostics } = estimateRecipeNutritionDetailed(r)
+
+        r.nutritionPerServing = {
+          servingSizeG: existing.servingSizeG ?? estimated.servingSizeG,
+          energyKcal: existing.energyKcal ?? estimated.energyKcal,
+          proteinG: existing.proteinG ?? estimated.proteinG,
+          fatG: existing.fatG ?? estimated.fatG,
+          carbG: existing.carbG ?? estimated.carbG,
+          saltEquivalentG: existing.saltEquivalentG ?? estimated.saltEquivalentG,
+          sodiumMg: existing.sodiumMg ?? estimated.sodiumMg,
+          fiberG: existing.fiberG ?? estimated.fiberG,
+          sugarG: existing.sugarG ?? estimated.sugarG,
+          saturatedFatG: existing.saturatedFatG ?? estimated.saturatedFatG,
+          potassiumMg: existing.potassiumMg ?? estimated.potassiumMg,
+          calciumMg: existing.calciumMg ?? estimated.calciumMg,
+          ironMg: existing.ironMg ?? estimated.ironMg,
+          vitaminCMg: existing.vitaminCMg ?? estimated.vitaminCMg,
+        }
+
+        r.nutritionMeta = {
+          source: 'estimated',
+          confidence: deriveEstimationConfidence(diagnostics),
+          schemaVersion: 3,
+          referenceDataset: NUTRITION_REFERENCE.dataset,
+          referenceLabel: NUTRITION_REFERENCE.label,
+          estimatorVersion: NUTRITION_REFERENCE.estimatorVersion,
+          totalIngredientCount: diagnostics.totalIngredientCount,
+          matchedIngredientCount: diagnostics.matchedIngredientCount,
+          ingredientMatchRatio: diagnostics.ingredientMatchRatio,
+          matchedWeightRatio: diagnostics.matchedWeightRatio,
+          usedFallback: diagnostics.usedFallback,
+          lowConfidence: diagnostics.lowConfidence,
+          officialFoodCodeCount: diagnostics.officialFoodCodeCount,
+          derivedFoodCodeCount: diagnostics.derivedFoodCodeCount,
+          matchedFoodCodes: diagnostics.matchedFoodCodes,
           updatedAt: new Date(),
         }
       })
