@@ -458,7 +458,7 @@ export function WeeklyMenuPage() {
     <div>
       <h2 className="pt-4 pb-3 text-lg font-bold">週間献立</h2>
 
-      <div className="space-y-4 pb-44">
+      <div className={`space-y-4 ${showShoppingList ? 'pb-[65vh]' : 'pb-44'}`}>
         {/* Week navigation */}
         <div className="flex items-center justify-center gap-3">
           <button
@@ -659,19 +659,6 @@ export function WeeklyMenuPage() {
               })}
             </div>
 
-            {/* Shopping list section */}
-            {showShoppingList && stockItems && (
-              <div className="rounded-2xl bg-bg-card p-4">
-                <h4 className="mb-3 text-sm font-bold text-text-secondary">買い物リスト</h4>
-                <EditableShoppingList
-                  weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
-                  ingredients={aggregateIngredients(selectedRecipes, stockItems)}
-                  storageKey={`shopping_checked_${weekStartStr}`}
-                  includeSeasonings={includeSeasonings}
-                  onToggleIncludeSeasonings={() => setIncludeSeasonings((v) => !v)}
-                />
-              </div>
-            )}
           </>
         )}
 
@@ -720,6 +707,7 @@ export function WeeklyMenuPage() {
       {/* Bottom action bar — always visible in Weekly tab, above BottomNav */}
       {!isOverlayOpen && (
         <div className="fixed left-0 right-0 z-40 border-t border-border bg-bg-primary/90 backdrop-blur-xl" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}>
+          {/* 3 action buttons — always at top of panel */}
           <div className="grid grid-cols-3 gap-2 px-4 py-2">
             <button
               type="button"
@@ -749,6 +737,23 @@ export function WeeklyMenuPage() {
               {registering ? '登録中...' : providerToken ? 'カレンダー登録' : 'ログインして登録'}
             </button>
           </div>
+
+          {/* Shopping list — below the buttons, scrollable */}
+          {showShoppingList && stockItems && menu && (
+            <div
+              className="max-h-[55vh] overflow-y-auto border-t border-border p-4"
+              style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+            >
+              <h4 className="mb-3 text-sm font-bold text-text-secondary">買い物リスト</h4>
+              <EditableShoppingList
+                weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
+                ingredients={aggregateIngredients(selectedRecipes, stockItems)}
+                storageKey={`shopping_checked_${weekStartStr}`}
+                includeSeasonings={includeSeasonings}
+                onToggleIncludeSeasonings={() => setIncludeSeasonings((v) => !v)}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
