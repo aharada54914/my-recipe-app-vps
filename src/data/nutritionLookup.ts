@@ -562,6 +562,14 @@ export const NUTRITION_PATTERNS: PatternEntry[] = [
 
   // ──────────────── 穀類 ────────────────
   {
+    // 炊飯後の白飯（生米より前に配置して優先マッチ）
+    keywords: ['白飯', 'ご飯', 'ごはん', '炊きたて', '炊いたご飯'],
+    entry: {
+      per100g: { energyKcal: 168, proteinG: 2.5, fatG: 0.3, carbG: 37.1, saltEquivalentG: 0.0, fiberG: 0.3, sugarG: 0.3, saturatedFatG: 0.1, potassiumMg: 29, calciumMg: 3, ironMg: 0.1, vitaminCMg: 0 },
+      unitGrams: { 人前: 160, 人分: 160, 膳: 160, 皿: 160, 茶碗: 160, 杯: 160, 丼杯分: 350, お茶碗杯分: 160 },
+    },
+  },
+  {
     keywords: ['米', 'こめ', '白米', '精白米'],
     entry: {
       per100g: { energyKcal: 358, proteinG: 6.1, fatG: 0.9, carbG: 77.6, saltEquivalentG: 0.0, fiberG: 0.5, sugarG: 0.3, saturatedFatG: 0.3, potassiumMg: 89, calciumMg: 5, ironMg: 0.8, vitaminCMg: 0 },
@@ -572,18 +580,28 @@ export const NUTRITION_PATTERNS: PatternEntry[] = [
     keywords: ['うどん', 'ウドン', '饂飩'],
     entry: {
       per100g: { energyKcal: 105, proteinG: 2.6, fatG: 0.4, carbG: 24.2, saltEquivalentG: 0.3, fiberG: 0.8, sugarG: 0.4, saturatedFatG: 0.1, potassiumMg: 15, calciumMg: 8, ironMg: 0.2, vitaminCMg: 0 },
+      unitGrams: { 人前: 200, 人分: 200, 玉: 200 },
     },
   },
   {
     keywords: ['そば', 'ソバ', '蕎麦'],
     entry: {
       per100g: { energyKcal: 132, proteinG: 4.8, fatG: 0.7, carbG: 28.4, saltEquivalentG: 0.0, fiberG: 1.5, sugarG: 0.4, saturatedFatG: 0.2, potassiumMg: 37, calciumMg: 6, ironMg: 0.7, vitaminCMg: 0 },
+      unitGrams: { 人前: 200, 人分: 200 },
     },
   },
   {
     keywords: ['パスタ', 'スパゲッティ', 'スパゲティ', 'ペンネ'],
     entry: {
       per100g: { energyKcal: 165, proteinG: 5.8, fatG: 0.9, carbG: 34.5, saltEquivalentG: 0.0, fiberG: 1.7, sugarG: 0.5, saturatedFatG: 0.2, potassiumMg: 65, calciumMg: 10, ironMg: 0.6, vitaminCMg: 0 },
+      unitGrams: { 人前: 100, 人分: 100 },
+    },
+  },
+  {
+    keywords: ['ラーメン', 'らーめん', '中華麺', '中華そば', 'ちゅうかめん'],
+    entry: {
+      per100g: { energyKcal: 149, proteinG: 4.9, fatG: 0.6, carbG: 33.6, saltEquivalentG: 0.4, fiberG: 1.3, sugarG: 0.5, saturatedFatG: 0.1, potassiumMg: 45, calciumMg: 9, ironMg: 0.4, vitaminCMg: 0 },
+      unitGrams: { 人前: 120, 人分: 120, 玉: 130 },
     },
   },
   {

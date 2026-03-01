@@ -313,6 +313,8 @@ function estimateTotalWeight(ingredients) {
   for (const ing of ingredients) {
     if (ing.unit === 'g' || ing.unit === 'ml' || ing.unit === 'mL') {
       weight += ing.quantity
+    } else if (ing.unit === 'kg') {
+      weight += ing.quantity * 1000
     } else if (ing.unit === '個' || ing.unit === '本' || ing.unit === '株') {
       weight += ing.quantity * 150
     } else if (ing.unit === '片') {
@@ -321,6 +323,28 @@ function estimateTotalWeight(ingredients) {
       weight += ing.quantity * 15
     } else if (ing.unit === '小さじ') {
       weight += ing.quantity * 5
+    } else if (ing.unit === 'カップ' || ing.unit === 'cup') {
+      weight += ing.quantity * 200
+    } else if (ing.unit === '合') {
+      weight += ing.quantity * 150
+    } else if (ing.unit === '人前' || ing.unit === '人分') {
+      weight += ing.quantity * 150
+    } else if (ing.unit === '膳') {
+      weight += ing.quantity * 160
+    } else if (ing.unit === '皿分' || ing.unit === '皿') {
+      weight += ing.quantity * 180
+    } else if (ing.unit === '大皿') {
+      weight += ing.quantity * 300
+    } else if (ing.unit === '中皿') {
+      weight += ing.quantity * 200
+    } else if (ing.unit === '小皿') {
+      weight += ing.quantity * 120
+    } else if (ing.unit === '深皿') {
+      weight += ing.quantity * 250
+    } else if (ing.unit === '丼' || ing.unit === '丼杯分') {
+      weight += ing.quantity * 350
+    } else if (ing.unit === '茶碗' || ing.unit === 'お茶碗' || ing.unit === 'お茶碗杯分') {
+      weight += ing.quantity * 160
     } else if (ing.unit === '適量') {
       // skip
     } else {

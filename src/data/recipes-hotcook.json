@@ -631,7 +631,7 @@
     "device": "hotcook",
     "category": "ご飯もの",
     "baseServings": 4,
-    "totalWeightG": 500,
+    "totalWeightG": 750,
     "ingredients": [
       {
         "name": "あさり",
@@ -702,7 +702,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 700,
+    "totalWeightG": 800,
     "ingredients": [
       {
         "name": "豚バラかたまり肉",
@@ -2882,7 +2882,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 800,
+    "totalWeightG": 1050,
     "ingredients": [
       {
         "name": "真鯛（下処理済み）",
@@ -2977,7 +2977,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 400,
+    "totalWeightG": 550,
     "ingredients": [
       {
         "name": "にんじん",
@@ -3093,7 +3093,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 1200,
+    "totalWeightG": 2150,
     "ingredients": [
       {
         "name": "里いも",
@@ -4185,7 +4185,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 450,
+    "totalWeightG": 700,
     "ingredients": [
       {
         "name": "たこ",
@@ -4347,7 +4347,7 @@
     "device": "hotcook",
     "category": "スープ",
     "baseServings": 4,
-    "totalWeightG": 350,
+    "totalWeightG": 900,
     "ingredients": [
       {
         "name": "えのきだけ",
@@ -5470,7 +5470,7 @@
     "device": "hotcook",
     "category": "ご飯もの",
     "baseServings": 3,
-    "totalWeightG": 600,
+    "totalWeightG": 850,
     "ingredients": [
       {
         "name": "うなぎ（たれ入り）",
@@ -5704,7 +5704,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 1250,
+    "totalWeightG": 1800,
     "ingredients": [
       {
         "name": "米",
@@ -8900,7 +8900,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 650,
+    "totalWeightG": 900,
     "ingredients": [
       {
         "name": "米",
@@ -9564,7 +9564,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 500,
+    "totalWeightG": 750,
     "ingredients": [
       {
         "name": "栗",
@@ -9634,7 +9634,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 400,
+    "totalWeightG": 650,
     "ingredients": [
       {
         "name": "たけのこ",
@@ -10765,7 +10765,7 @@
     "device": "hotcook",
     "category": "ご飯もの",
     "baseServings": 4,
-    "totalWeightG": 750,
+    "totalWeightG": 850,
     "ingredients": [
       {
         "name": "米",
@@ -11493,7 +11493,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 850,
+    "totalWeightG": 1500,
     "ingredients": [
       {
         "name": "トマト",
@@ -13186,7 +13186,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 400,
+    "totalWeightG": 650,
     "ingredients": [
       {
         "name": "米",
@@ -13526,7 +13526,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 400,
+    "totalWeightG": 600,
     "ingredients": [
       {
         "name": "米",
@@ -14453,7 +14453,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 1600,
+    "totalWeightG": 2350,
     "ingredients": [
       {
         "name": "玄米",
@@ -15836,7 +15836,7 @@
     "device": "hotcook",
     "category": "スープ",
     "baseServings": 4,
-    "totalWeightG": 800,
+    "totalWeightG": 900,
     "ingredients": [
       {
         "name": "米",
@@ -16163,7 +16163,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 200,
+    "totalWeightG": 450,
     "ingredients": [
       {
         "name": "かぼちゃ",
@@ -16380,7 +16380,7 @@
     "device": "hotcook",
     "category": "ご飯もの",
     "baseServings": 3,
-    "totalWeightG": 850,
+    "totalWeightG": 1250,
     "ingredients": [
       {
         "name": "ヒレカツ",
@@ -16790,7 +16790,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 950,
+    "totalWeightG": 1500,
     "ingredients": [
       {
         "name": "緑豆春雨",
@@ -18835,7 +18835,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 200,
+    "totalWeightG": 350,
     "ingredients": [
       {
         "name": "大根",
@@ -18974,7 +18974,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 550,
+    "totalWeightG": 800,
     "ingredients": [
       {
         "name": "有頭海老",
@@ -19054,7 +19054,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 850,
+    "totalWeightG": 900,
     "ingredients": [
       {
         "name": "鶏",
@@ -19333,7 +19333,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 450,
+    "totalWeightG": 700,
     "ingredients": [
       {
         "name": "もち米",
@@ -21085,7 +21085,7 @@
     "device": "hotcook",
     "category": "スープ",
     "baseServings": 4,
-    "totalWeightG": 700,
+    "totalWeightG": 1250,
     "ingredients": [
       {
         "name": "しょうが",
@@ -21536,7 +21536,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 3,
-    "totalWeightG": 400,
+    "totalWeightG": 650,
     "ingredients": [
       {
         "name": "鶏肉（たれ入り）",
@@ -21998,7 +21998,7 @@
     "device": "hotcook",
     "category": "ご飯もの",
     "baseServings": 4,
-    "totalWeightG": 1700,
+    "totalWeightG": 1800,
     "ingredients": [
       {
         "name": "米",
@@ -22373,7 +22373,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 1150,
+    "totalWeightG": 1250,
     "ingredients": [
       {
         "name": "じゃがいも",
@@ -25484,7 +25484,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 400,
+    "totalWeightG": 650,
     "ingredients": [
       {
         "name": "もち米",
@@ -26074,7 +26074,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 2,
-    "totalWeightG": 500,
+    "totalWeightG": 750,
     "ingredients": [
       {
         "name": "米",
@@ -27493,7 +27493,7 @@
     "device": "hotcook",
     "category": "主菜",
     "baseServings": 4,
-    "totalWeightG": 200,
+    "totalWeightG": 400,
     "ingredients": [
       {
         "name": "米",
