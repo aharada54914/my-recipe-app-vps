@@ -84,24 +84,35 @@ function findNutritionEntry(name: string): { per100g: NutritionPer100g; oosajiG:
 
 // ─── Energy-based PFC fallback ───────────────────────────────────────────────
 // When ingredient matching fails, estimate macros from known kcal using
-// typical Japanese home-cooking PFC distribution.
+// category-aware Japanese home-cooking PFC distribution. (C)
 
-function energyBasedFallback(energyKcal: number, saltG: number | undefined, isSweets: boolean): NutritionPer100g {
-  // Sweets have higher carbs; savory dishes have more protein
-  const pRatio = isSweets ? 0.07 : 0.16
-  const fRatio = isSweets ? 0.30 : 0.28
-  const cRatio = isSweets ? 0.63 : 0.56
+function energyBasedFallback(energyKcal: number, saltG: number | undefined, category: string): NutritionPer100g {
+  const isSweets = category === 'スイーツ'
+  const isMainDish = category === '主菜'
+  const isSoup = category === '汁物'
+
+  // PFC caloric ratios by category (must sum to 1.0)
+  let pRatio: number, fRatio: number, cRatio: number
+  if (isSweets) {
+    pRatio = 0.07; fRatio = 0.30; cRatio = 0.63 // high carb, moderate fat
+  } else if (isMainDish) {
+    pRatio = 0.22; fRatio = 0.32; cRatio = 0.46 // protein-rich
+  } else if (isSoup) {
+    pRatio = 0.14; fRatio = 0.22; cRatio = 0.64 // light, higher carb
+  } else {
+    pRatio = 0.16; fRatio = 0.28; cRatio = 0.56 // 副菜 / その他
+  }
 
   return {
     energyKcal,
     proteinG: Math.round((energyKcal * pRatio / 4) * 10) / 10,
     fatG: Math.round((energyKcal * fRatio / 9) * 10) / 10,
     carbG: Math.round((energyKcal * cRatio / 4) * 10) / 10,
-    saltEquivalentG: saltG ?? (isSweets ? 0.3 : 1.2),
-    fiberG: isSweets ? 1.0 : 3.0,
+    saltEquivalentG: saltG ?? (isSweets ? 0.3 : isSoup ? 1.5 : 1.2),
+    fiberG: isSweets ? 1.0 : isSoup ? 1.5 : 3.0,
     sugarG: isSweets ? Math.round(energyKcal * cRatio / 4 * 0.6 * 10) / 10 : 6.0,
     saturatedFatG: Math.round((energyKcal * fRatio / 9 * 0.35) * 10) / 10,
-    potassiumMg: isSweets ? 120 : 380,
+    potassiumMg: isSweets ? 120 : isSoup ? 280 : 380,
     calciumMg: isSweets ? 60 : 90,
     ironMg: isSweets ? 0.8 : 1.8,
     vitaminCMg: isSweets ? 2 : 15,
@@ -118,9 +129,18 @@ function parseCaloriesString(raw: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+// Category-based default kcal per serving when no calorie data is available. (D)
+const CATEGORY_DEFAULT_KCAL: Record<string, number> = {
+  'スイーツ': 350,
+  '主菜': 450,
+  '副菜': 150,
+  '汁物': 80,
+}
+
 export function estimateRecipeNutrition(recipe: Recipe): RecipeNutritionPerServing {
-  const servings = (recipe.baseServings > 0 ? recipe.baseServings : 2)
-  const isSweets = recipe.category === 'スイーツ'
+  // E: clamp baseServings to a sane range (1–12) to guard against data anomalies
+  const servings = Math.min(Math.max(recipe.baseServings > 0 ? recipe.baseServings : 2, 1), 12)
+  const category = recipe.category ?? ''
 
   // Accumulators
   let totalE = 0, totalP = 0, totalF = 0, totalC = 0, totalSalt = 0
@@ -163,21 +183,30 @@ export function estimateRecipeNutrition(recipe: Recipe): RecipeNutritionPerServi
       ? Math.round((matchedWeightG / servings) * 10) / 10
       : undefined
 
-  // If insufficient match, fall back to calorie-based estimation
+  // B: when totalWeightG is unknown, also fall back if matched weight is thin per serving
   const matchRatio = recipe.totalWeightG > 0 ? matchedWeightG / recipe.totalWeightG : 1
-  const useFallback = matchRatio < 0.15 || matchedWeightG < 20
+  const useFallback =
+    matchRatio < 0.15 ||
+    matchedWeightG < 20 ||
+    (recipe.totalWeightG === 0 && matchedWeightG < servings * 50)
 
   if (useFallback) {
-    // Use existing energyKcal from CSV if available; otherwise estimate from totalWeightG
+    // D: category-aware default kcal when no calorie data exists
     const csvEnergy = recipe.nutritionPerServing?.energyKcal
       ?? parseCaloriesString(recipe.calories)
-      ?? (recipe.totalWeightG > 0 ? Math.round(recipe.totalWeightG / servings * 1.5) : 400)
-    const csvSalt = recipe.nutritionPerServing?.saltEquivalentG
-      ?? recipe.nutritionPerServing?.sodiumMg !== undefined
-        ? (recipe.nutritionPerServing.sodiumMg! / 393)
-        : undefined
+      ?? (recipe.totalWeightG > 0
+        ? Math.round(recipe.totalWeightG / servings * 1.5)
+        : (CATEGORY_DEFAULT_KCAL[category] ?? 400))
 
-    const fb = energyBasedFallback(csvEnergy, csvSalt, isSweets)
+    // A: fix ?? / ?: precedence bug; parenthesise ternary explicitly
+    const csvSalt = recipe.nutritionPerServing?.saltEquivalentG
+      ?? (recipe.nutritionPerServing?.sodiumMg !== undefined
+        ? recipe.nutritionPerServing.sodiumMg / 393
+        : undefined)
+    // A: prefer ingredient-computed salt when we matched enough weight
+    const saltForFallback = (matchedWeightG >= 20 ? totalSalt / servings : undefined) ?? csvSalt
+
+    const fb = energyBasedFallback(csvEnergy, saltForFallback, category)
     return {
       servingSizeG,
       energyKcal: fb.energyKcal,
