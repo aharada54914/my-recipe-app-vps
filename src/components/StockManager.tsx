@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search } from 'lucide-react'
+import { ChevronDown, Search, Trash2 } from 'lucide-react'
 import { db } from '../db/db'
 import { useDebounce } from '../hooks/useDebounce'
 import { expandSynonyms } from '../data/synonyms'
@@ -21,60 +21,158 @@ function StockRow({
   unit,
   quantity,
   onCommitQuantity,
+  onDelete,
+  allowZeroCommit = true,
 }: {
   name: string
   unit: string
   quantity?: number
   onCommitQuantity: (quantity: number) => void
+  onDelete?: () => void
+  allowZeroCommit?: boolean
 }) {
   const currentQuantityText = typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''
   const [draft, setDraft] = useState(currentQuantityText)
   const [isEditing, setIsEditing] = useState(false)
+  const [offsetX, setOffsetX] = useState(0)
+  const dragStartX = useRef(0)
+  const isDragging = useRef(false)
+  const deleteWidth = 84
   const inputValue = isEditing ? draft : currentQuantityText
 
   const commit = () => {
     const normalized = draft.trim()
     if (!normalized) {
-      onCommitQuantity(0)
+      if (allowZeroCommit) {
+        onCommitQuantity(0)
+      } else {
+        setDraft(currentQuantityText)
+      }
       return
     }
 
     const parsed = Number(normalized)
-    onCommitQuantity(Number.isFinite(parsed) && parsed >= 0 ? parsed : 0)
+    if (!Number.isFinite(parsed)) {
+      setDraft(currentQuantityText)
+      return
+    }
+    if (!allowZeroCommit && parsed <= 0) {
+      setDraft(currentQuantityText)
+      return
+    }
+    onCommitQuantity(parsed >= 0 ? parsed : 0)
+  }
+
+  const clampOffset = (value: number) => Math.max(-deleteWidth, Math.min(0, value))
+
+  const handleDragStart = (clientX: number) => {
+    if (!onDelete) return
+    isDragging.current = true
+    dragStartX.current = clientX - offsetX
+  }
+
+  const handleDragMove = (clientX: number) => {
+    if (!onDelete || !isDragging.current) return
+    setOffsetX(clampOffset(clientX - dragStartX.current))
+  }
+
+  const handleDragEnd = () => {
+    if (!onDelete || !isDragging.current) return
+    isDragging.current = false
+    setOffsetX((prev) => (prev < -deleteWidth / 2 ? -deleteWidth : 0))
   }
 
   return (
-    <div className="flex min-h-[52px] items-center gap-2 rounded-xl bg-bg-card px-4 py-3 ring-1 ring-white/10">
-      <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
-        {name}
-      </span>
-      <input
-        type="text"
-        inputMode="decimal"
-        value={inputValue}
-        onChange={(e) => {
-          const next = e.target.value
-          if (next === '' || /^\d*\.?\d*$/.test(next)) {
-            setDraft(next)
-          }
-        }}
-        onFocus={() => {
-          setDraft(currentQuantityText)
-          setIsEditing(true)
-        }}
-        onBlur={() => {
-          setIsEditing(false)
-          commit()
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.currentTarget.blur()
-          }
-        }}
-        placeholder="0"
-        className="w-16 rounded-lg bg-white/5 px-2 py-2 text-sm text-text-primary text-right outline-none"
-      />
-      <span className="w-10 text-sm font-medium text-text-secondary">{unit}</span>
+    <div className="relative overflow-hidden rounded-xl">
+      {onDelete && (
+        <div className="absolute inset-y-0 right-0 flex w-[84px] items-center justify-center rounded-r-xl bg-red-500/80">
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex h-full w-full items-center justify-center gap-1 text-sm font-semibold text-white"
+            aria-label={`${name}を削除`}
+          >
+            <Trash2 className="h-4 w-4" />
+            削除
+          </button>
+        </div>
+      )}
+      <div
+        className="flex min-h-[52px] touch-pan-y items-center gap-2 rounded-xl bg-bg-card px-4 py-3 ring-1 ring-white/10 transition-transform"
+        style={{ transform: `translateX(${offsetX}px)` }}
+        onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
+        onTouchMove={(e) => handleDragMove(e.touches[0].clientX)}
+        onTouchEnd={handleDragEnd}
+        onMouseDown={(e) => handleDragStart(e.clientX)}
+        onMouseMove={(e) => handleDragMove(e.clientX)}
+        onMouseUp={handleDragEnd}
+        onMouseLeave={handleDragEnd}
+      >
+        <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+          {name}
+        </span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={inputValue}
+          onChange={(e) => {
+            const next = e.target.value
+            if (next === '' || /^\d*\.?\d*$/.test(next)) {
+              setDraft(next)
+            }
+          }}
+          onFocus={() => {
+            setDraft(currentQuantityText)
+            setIsEditing(true)
+            setOffsetX(0)
+          }}
+          onBlur={() => {
+            setIsEditing(false)
+            commit()
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur()
+            }
+          }}
+          placeholder="0"
+          className="w-16 rounded-lg bg-white/5 px-2 py-2 text-sm text-text-primary text-right outline-none"
+        />
+        <span className="w-10 text-sm font-medium text-text-secondary">{unit}</span>
+      </div>
+    </div>
+  )
+}
+
+function CollapsibleCard({
+  title,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  title: string
+  description?: string
+  defaultOpen?: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <div className="rounded-2xl bg-bg-card p-4 ring-1 ring-white/10">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <div>
+          <h3 className="text-sm font-bold text-text-primary">{title}</h3>
+          {description && <p className="mt-1 text-xs text-text-secondary">{description}</p>}
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-text-secondary transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && <div className="mt-3">{children}</div>}
     </div>
   )
 }
@@ -119,6 +217,13 @@ export function StockManager() {
     })
   }
 
+  const handleDeleteStock = async (name: string) => {
+    const existing = await db.stock.where('name').equals(name).first()
+    if (existing?.id != null) {
+      await db.stock.delete(existing.id)
+    }
+  }
+
   // Build a map of current stock quantities
   const stockMap = useMemo(
     () => new Map((stockItems ?? []).map((s) => [s.name, s])),
@@ -153,6 +258,26 @@ export function StockManager() {
     [stockMap]
   )
 
+  const basicSeasoningPreset = useMemo(
+    () => SEASONING_PRESETS.find((preset) => preset.id === 'basic-japanese'),
+    []
+  )
+
+  const basicSeasoningNames = useMemo(
+    () => new Set((basicSeasoningPreset?.items ?? []).map((item) => item.name)),
+    [basicSeasoningPreset]
+  )
+
+  const inStockBasicSeasonings = useMemo(
+    () => inStockItems.filter((item) => basicSeasoningNames.has(item.name)),
+    [inStockItems, basicSeasoningNames]
+  )
+
+  const inStockOtherItems = useMemo(
+    () => inStockItems.filter((item) => !basicSeasoningNames.has(item.name)),
+    [inStockItems, basicSeasoningNames]
+  )
+
   const searchResults = useMemo(() => {
     if (!debouncedQuery.trim()) return []
     const synonyms = expandSynonyms(debouncedQuery.trim())
@@ -173,29 +298,30 @@ export function StockManager() {
     <div>
       <h2 className="mb-4 text-xl font-extrabold">在庫管理</h2>
 
-      <div className="mb-6 rounded-2xl bg-bg-card p-4 ring-1 ring-white/10">
-        <h3 className="text-sm font-bold text-text-primary">調味料をまとめて登録</h3>
-        <p className="mt-1 text-xs text-text-secondary">
-          日本の家庭で使う定番調味料を、在庫あり・数量1（本/袋/個）で一括登録できます。
-        </p>
-        <div className="mt-3 grid gap-2">
-          {presetAvailability.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => handleRegisterSeasoningPreset(preset.items)}
-              className="rounded-xl bg-white/5 px-3 py-3 text-left ring-1 ring-white/10 transition hover:bg-white/10"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-text-primary">{preset.label}</span>
-                <span className="shrink-0 text-[11px] text-text-secondary">
-                  追加候補 {preset.addableCount}/{preset.items.length}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-text-secondary">{preset.description}</p>
-            </button>
-          ))}
-        </div>
+      <div className="mb-4">
+        <CollapsibleCard
+          title="調味料をまとめて登録"
+          description="日本の家庭で使う定番調味料を、在庫あり・数量1（本/袋/個）で一括登録できます。"
+        >
+          <div className="grid gap-2">
+            {presetAvailability.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => handleRegisterSeasoningPreset(preset.items)}
+                className="rounded-xl bg-white/5 px-3 py-3 text-left ring-1 ring-white/10 transition hover:bg-white/10"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-text-primary">{preset.label}</span>
+                  <span className="shrink-0 text-[11px] text-text-secondary">
+                    追加候補 {preset.addableCount}/{preset.items.length}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-text-secondary">{preset.description}</p>
+              </button>
+            ))}
+          </div>
+        </CollapsibleCard>
       </div>
 
       {/* Search bar */}
@@ -212,19 +338,46 @@ export function StockManager() {
 
       {/* In-stock section */}
       {inStockItems.length > 0 && (
-        <div className="mb-6">
-          <h3 className="mb-2 text-sm font-bold text-text-secondary">在庫あり ({inStockItems.length})</h3>
-          <div className="space-y-2">
-            {inStockItems.map((item) => (
-              <StockRow
-                key={item.name}
-                name={item.name}
-                unit={item.defaultUnit}
-                quantity={item.quantity}
-                onCommitQuantity={(q) => handleUpdateQuantity(item.name, item.defaultUnit, q)}
-              />
-            ))}
-          </div>
+        <div className="mb-6 space-y-3">
+          <h3 className="text-sm font-bold text-text-secondary">在庫あり ({inStockItems.length})</h3>
+
+          {inStockBasicSeasonings.length > 0 && (
+            <CollapsibleCard
+              title="基本的な調味料"
+              description={`在庫登録済み ${inStockBasicSeasonings.length} 品（初期状態は折りたたみ）`}
+              defaultOpen={false}
+            >
+              <div className="space-y-2">
+                {inStockBasicSeasonings.map((item) => (
+                  <StockRow
+                    key={item.name}
+                    name={item.name}
+                    unit={item.defaultUnit}
+                    quantity={item.quantity}
+                    onDelete={() => handleDeleteStock(item.name)}
+                    allowZeroCommit={false}
+                    onCommitQuantity={(q) => handleUpdateQuantity(item.name, item.defaultUnit, q)}
+                  />
+                ))}
+              </div>
+            </CollapsibleCard>
+          )}
+
+          {inStockOtherItems.length > 0 && (
+            <div className="space-y-2">
+              {inStockOtherItems.map((item) => (
+                <StockRow
+                  key={item.name}
+                  name={item.name}
+                  unit={item.defaultUnit}
+                  quantity={item.quantity}
+                  onDelete={() => handleDeleteStock(item.name)}
+                  allowZeroCommit={false}
+                  onCommitQuantity={(q) => handleUpdateQuantity(item.name, item.defaultUnit, q)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
