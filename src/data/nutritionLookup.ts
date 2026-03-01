@@ -566,7 +566,7 @@ export const NUTRITION_PATTERNS: PatternEntry[] = [
     keywords: ['白飯', 'ご飯', 'ごはん', '炊きたて', '炊いたご飯'],
     entry: {
       per100g: { energyKcal: 168, proteinG: 2.5, fatG: 0.3, carbG: 37.1, saltEquivalentG: 0.0, fiberG: 0.3, sugarG: 0.3, saturatedFatG: 0.1, potassiumMg: 29, calciumMg: 3, ironMg: 0.1, vitaminCMg: 0 },
-      unitGrams: { 人前: 160, 人分: 160, 膳: 160, 皿: 160, 茶碗: 160, 杯: 160 },
+      unitGrams: { 人前: 160, 人分: 160, 膳: 160, 皿: 160, 茶碗: 160, 杯: 160, 丼杯分: 350, お茶碗杯分: 160 },
     },
   },
   {
