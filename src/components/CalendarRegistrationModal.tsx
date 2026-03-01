@@ -16,6 +16,7 @@ import {
 } from '../lib/googleCalendar'
 import { formatQuantityVibe } from '../utils/recipeUtils'
 import { getMissingIngredients } from '../utils/shoppingUtils'
+import { formatShoppingDisplay } from '../utils/shoppingUnitConverter'
 
 interface CalendarRegistrationModalProps {
   recipe: Recipe
@@ -109,7 +110,7 @@ export function CalendarRegistrationModal({
       } else {
         const missing = getMissingIngredients(recipe.ingredients, stockItems)
         const missingText = missing
-          .map((ing) => `・${ing.name} ${formatQuantityVibe(ing.quantity, ing.unit)}`)
+          .map((ing) => `・${ing.name} ${formatShoppingDisplay(ing.name, ing.quantity, ing.unit)}`)
           .join('\n')
         event = buildShoppingListEventInput(recipe.title, missingText, startTime)
       }

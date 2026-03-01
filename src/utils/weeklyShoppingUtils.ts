@@ -5,7 +5,8 @@
  */
 
 import type { Recipe, StockItem, WeeklyMenu } from '../db/db'
-import { adjustIngredients, formatQuantityVibe } from './recipeUtils'
+import { adjustIngredients } from './recipeUtils'
+import { formatShoppingDisplay } from './shoppingUnitConverter'
 
 export interface AggregatedIngredient {
   name: string
@@ -54,7 +55,7 @@ function classifyStoreSection(name: string): StoreSection {
 function formatItemLine(item: AggregatedIngredient): string {
   const qty = item.totalQuantity === '適量' || item.unit === '適量'
     ? '適量'
-    : formatQuantityVibe(item.totalQuantity, item.unit)
+    : formatShoppingDisplay(item.name, item.totalQuantity, item.unit)
   return `・${item.name} ${qty}`
 }
 
@@ -199,7 +200,7 @@ export function formatWeeklyShoppingList(
     for (const item of mainItems) {
       const qty = item.totalQuantity === '適量' || item.unit === '適量'
         ? '適量'
-        : formatQuantityVibe(item.totalQuantity, item.unit)
+        : formatShoppingDisplay(item.name, item.totalQuantity, item.unit)
       text += `・${item.name} ${qty}\n`
     }
   }
@@ -209,7 +210,7 @@ export function formatWeeklyShoppingList(
     for (const item of subItems) {
       const qty = item.totalQuantity === '適量' || item.unit === '適量'
         ? '適量'
-        : formatQuantityVibe(item.totalQuantity, item.unit)
+        : formatShoppingDisplay(item.name, item.totalQuantity, item.unit)
       text += `・${item.name} ${qty}\n`
     }
   }
