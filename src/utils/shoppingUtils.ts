@@ -1,4 +1,5 @@
 import type { Ingredient, StockItem } from '../db/db'
+import { formatShoppingDisplay } from './shoppingUnitConverter'
 
 /**
  * T-18: Get missing ingredients by comparing recipe ingredients against stock
@@ -21,8 +22,9 @@ export function formatShoppingListForLine(
     if (missing.length === 0) return `📋 ${recipeTitle}\n全ての材料が揃っています！`
     const items = missing
         .map(ing => {
-            const qty = typeof ing.quantity === 'number' && ing.quantity > 0 ? ` ${ing.quantity}${ing.unit}` : ''
-            return `・${ing.name}${qty}`
+            if (!ing.quantity || ing.quantity === 0) return `・${ing.name}`
+            const qty = formatShoppingDisplay(ing.name, ing.quantity, ing.unit)
+            return `・${ing.name} ${qty}`
         })
         .join('\n')
     return `📋 ${recipeTitle} の買い物リスト\n${items}`

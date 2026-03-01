@@ -8,6 +8,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Check, Copy, CheckCheck, Plus, Trash2 } from 'lucide-react'
 import { copyToClipboard } from '../utils/shoppingUtils'
+import { convertToShoppingUnit } from '../utils/shoppingUnitConverter'
 
 export interface ShoppingIngredient {
   name: string
@@ -32,13 +33,15 @@ interface EditableItem {
   unit: string
   inStock: boolean
   ingredientCategory: 'main' | 'sub'
+  shoppingNote?: string  // original recipe amount, e.g. "約150g分"
 }
 
-function formatQty(ing: ShoppingIngredient): string {
+function formatQty(ing: EditableItem): string {
   if (ing.unit === '適量') return '適量'
-  if (typeof ing.totalQuantity !== 'number') return `${ing.totalQuantity}${ing.unit}`
-  const qty = Math.round(ing.totalQuantity * 10) / 10
-  return `${qty}${ing.unit}`
+  const qty = typeof ing.quantity === 'number'
+    ? String(Math.round(ing.quantity * 10) / 10)
+    : String(ing.quantity)
+  return `${qty}${ing.unit}${ing.shoppingNote ? `（${ing.shoppingNote}）` : ''}`
 }
 
 export function EditableShoppingList({
@@ -66,14 +69,19 @@ export function EditableShoppingList({
       ? ingredients
       : ingredients.filter((i) => (i.ingredientCategory ?? 'main') === 'main')
 
-    return filtered.map((i) => ({
-      id: `${i.name}__${i.unit}`,
-      name: i.name,
-      quantity: typeof i.totalQuantity === 'number' ? i.totalQuantity : 0,
-      unit: i.unit,
-      inStock: i.inStock,
-      ingredientCategory: i.ingredientCategory ?? 'main',
-    }))
+    return filtered.map((i) => {
+      const rawQty = typeof i.totalQuantity === 'number' ? i.totalQuantity : 0
+      const converted = convertToShoppingUnit(i.name, rawQty, i.unit)
+      return {
+        id: `${i.name}__${i.unit}`,
+        name: i.name,
+        quantity: converted.quantity,
+        unit: converted.unit,
+        inStock: i.inStock,
+        ingredientCategory: i.ingredientCategory ?? 'main',
+        shoppingNote: converted.note,
+      }
+    })
   }, [ingredients, includeSeasonings])
 
   const [items, setItems] = useState<EditableItem[]>([])
@@ -111,13 +119,7 @@ export function EditableShoppingList({
 
   const handleCopy = async () => {
     const unchecked = missing.filter(i => !checked.has(i.name))
-    const lines = [`【買い物リスト】${weekLabel}`, ...unchecked.map(i => `・${i.name} ${formatQty({
-      name: i.name,
-      totalQuantity: i.quantity,
-      unit: i.unit,
-      inStock: i.inStock,
-      ingredientCategory: i.ingredientCategory,
-    })}`)]
+    const lines = [`【買い物リスト】${weekLabel}`, ...unchecked.map(i => `・${i.name} ${formatQty(i)}`)]
     const ok = await copyToClipboard(lines.join('\n'))
     if (ok) {
       setCopied(true)
@@ -226,19 +228,24 @@ export function EditableShoppingList({
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-2 pl-6 sm:grid-cols-[minmax(0,1fr)_72px]">
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={Number.isFinite(ing.quantity) ? ing.quantity : 0}
-                      onChange={(e) => updateItem(ing.id, { quantity: Number(e.target.value) })}
-                      className="min-w-0 rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none"
-                    />
-                    <input
-                      value={ing.unit}
-                      onChange={(e) => updateItem(ing.id, { unit: e.target.value })}
-                      className="w-full rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none sm:w-auto"
-                    />
+                  <div className="pl-6 space-y-1">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_72px]">
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={Number.isFinite(Number(ing.quantity)) ? ing.quantity : 0}
+                        onChange={(e) => updateItem(ing.id, { quantity: Number(e.target.value) })}
+                        className="min-w-0 rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none"
+                      />
+                      <input
+                        value={ing.unit}
+                        onChange={(e) => updateItem(ing.id, { unit: e.target.value })}
+                        className="w-full rounded-md bg-white/5 px-2 py-1 text-xs text-text-secondary outline-none sm:w-auto"
+                      />
+                    </div>
+                    {ing.shoppingNote && (
+                      <p className="text-[10px] text-text-secondary/60">{ing.shoppingNote}</p>
+                    )}
                   </div>
                 </li>
               )
@@ -288,13 +295,7 @@ export function EditableShoppingList({
             {inStockItems.map(ing => (
               <li key={ing.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-2 text-xs text-text-secondary line-through opacity-40">
                 <span className="min-w-0 break-words">・{ing.name}</span>
-                <span className="shrink-0 whitespace-nowrap">{formatQty({
-                  name: ing.name,
-                  totalQuantity: ing.quantity,
-                  unit: ing.unit,
-                  inStock: ing.inStock,
-                  ingredientCategory: ing.ingredientCategory,
-                })}</span>
+                <span className="shrink-0 whitespace-nowrap">{formatQty(ing)}</span>
               </li>
             ))}
           </ul>
