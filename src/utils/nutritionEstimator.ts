@@ -31,15 +31,28 @@ function unitToGrams(
   if (u === 'カップ' || u === 'cup' || u === 'c') return quantity * 200
   if (u === '合') return quantity * 150 // rice: 1合 ≈ 150g uncooked
 
-  // Person / serving / dish-based units
+  // Person / serving / dish-based units (exact match only — endsWith would cause
+  // false positives like '大皿' matching '皿' or '深皿分' matching '皿分')
   const servingUnits: Array<[string, number]> = [
     ['人前', 150], ['人分', 150], ['膳', 160],
     ['皿分', 180], ['皿', 180],
   ]
   for (const [su, defaultG] of servingUnits) {
-    if (u === su || u.endsWith(su)) {
-      return quantity * (unitGrams[su] ?? defaultG)
+    if (u === su) {
+      return quantity * (unitGrams[u] ?? defaultG)
     }
+  }
+
+  // Sized / named dish units not covered by servingUnits above.
+  // unitGrams (ingredient-specific) takes priority over sizedDishMap defaults,
+  // so e.g. 白飯の茶碗:160g is preserved over the generic 150g default.
+  const sizedDishMap: Record<string, number> = {
+    '大皿': 300, '中皿': 200, '小皿': 120, '深皿': 250,
+    '丼': 350, '丼杯分': 350,
+    '茶碗': 160, 'お茶碗': 160, 'お茶碗杯分': 160,
+  }
+  if (sizedDishMap[u] !== undefined) {
+    return quantity * (unitGrams[u] ?? sizedDishMap[u])
   }
 
   // Piece-based units — check ingredient-specific overrides first
