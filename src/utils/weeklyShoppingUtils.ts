@@ -17,14 +17,12 @@ export interface AggregatedIngredient {
 }
 
 const STORE_SECTION_ORDER = [
-  '野菜・きのこ',
-  '果物',
-  '肉・ハム',
-  '魚介',
-  '豆腐・納豆・卵',
-  '乳製品',
-  '米・パン・麺',
+  '青果（野菜・きのこ・果物）',
+  '精肉・ハム',
+  '鮮魚',
+  '日配（豆腐・納豆・卵・乳製品）',
   '冷凍食品',
+  '米・パン・麺',
   '調味料・乾物・缶詰',
   '飲料・その他',
 ] as const
@@ -32,20 +30,49 @@ const STORE_SECTION_ORDER = [
 type StoreSection = typeof STORE_SECTION_ORDER[number]
 
 const STORE_SECTION_RULES: Array<{ section: StoreSection, keywords: string[] }> = [
-  { section: '野菜・きのこ', keywords: ['ねぎ', '玉ねぎ', 'キャベツ', '白菜', '大根', '人参', 'にんじん', 'じゃがいも', 'なす', 'トマト', 'きゅうり', 'ピーマン', 'ブロッコリー', 'ほうれん草', 'レタス', 'もやし', 'しめじ', 'えのき', 'きのこ'] },
-  { section: '果物', keywords: ['りんご', 'バナナ', 'みかん', 'レモン', 'いちご', 'キウイ', '果物'] },
-  { section: '肉・ハム', keywords: ['牛', '豚', '鶏', 'ひき肉', 'ベーコン', 'ハム', 'ソーセージ'] },
-  { section: '魚介', keywords: ['鮭', 'さば', 'いわし', 'まぐろ', 'かつお', 'えび', 'いか', 'たこ', '貝', 'しらす', '魚'] },
-  { section: '豆腐・納豆・卵', keywords: ['豆腐', '厚揚げ', '油揚げ', '納豆', '卵', 'たまご', 'がんも'] },
-  { section: '乳製品', keywords: ['牛乳', 'チーズ', 'バター', 'ヨーグルト', '生クリーム'] },
-  { section: '米・パン・麺', keywords: ['米', 'ごはん', 'パン', '食パン', 'うどん', 'そば', 'パスタ', '麺', '小麦粉', '片栗粉'] },
+  {
+    section: '青果（野菜・きのこ・果物）',
+    keywords: [
+      'ねぎ', '玉ねぎ', 'たまねぎ', '長ねぎ', 'キャベツ', '白菜', '大根', '人参', 'にんじん', 'じゃがいも', 'さつまいも',
+      'なす', 'トマト', 'ミニトマト', 'きゅうり', 'ピーマン', 'パプリカ', 'ブロッコリー', 'ほうれん草', '小松菜', 'レタス',
+      'もやし', 'しめじ', 'えのき', '舞茸', 'まいたけ', '椎茸', 'しいたけ', 'きのこ', 'しょうが', '生姜', 'にんにく',
+      'りんご', 'バナナ', 'みかん', 'レモン', 'いちご', 'キウイ', '果物', 'アボカド', 'ぶどう', 'オレンジ',
+    ],
+  },
+  { section: '精肉・ハム', keywords: ['牛肉', '豚肉', '鶏肉', 'ひき肉', 'ひきにく', 'もも肉', 'むね肉', '手羽', 'ベーコン', 'ハム', 'ソーセージ', 'ウインナー'] },
+  { section: '鮮魚', keywords: ['鮭', 'さば', '鯖', 'いわし', 'まぐろ', 'かつお', 'ぶり', 'えび', '海老', 'いか', 'たこ', '貝', 'しらす', '魚'] },
+  {
+    section: '日配（豆腐・納豆・卵・乳製品）',
+    keywords: ['豆腐', '厚揚げ', '油揚げ', '納豆', '卵', 'たまご', 'がんも', '牛乳', 'チーズ', 'バター', 'ヨーグルト', '生クリーム'],
+  },
   { section: '冷凍食品', keywords: ['冷凍'] },
-  { section: '調味料・乾物・缶詰', keywords: ['塩', '砂糖', '醤油', 'しょうゆ', 'みりん', '酒', '酢', '味噌', 'みそ', 'だし', 'コンソメ', 'オイスター', 'ごま油', 'サラダ油', 'オリーブオイル', '胡椒', 'こしょう', 'カレー粉', '海苔', 'のり', '乾燥', '缶'] },
+  { section: '米・パン・麺', keywords: ['米', 'ごはん', 'パン', '食パン', 'うどん', 'そば', 'パスタ', '麺', '小麦粉', '片栗粉', '春雨'] },
+  {
+    section: '調味料・乾物・缶詰',
+    keywords: [
+      '塩', '砂糖', '醤油', 'しょうゆ', 'みりん', '酒', '料理酒', '酢', '味噌', 'みそ', 'だし', 'コンソメ', 'オイスター',
+      'ごま油', 'サラダ油', 'オリーブオイル', '胡椒', 'こしょう', 'カレー粉', '海苔', 'のり', '乾燥', '缶', 'わかめ', 'ひじき',
+    ],
+  },
 ]
 
+const NORMALIZE_MAP: Record<string, string> = {
+  'ヶ': 'ケ',
+  'ヵ': 'カ',
+}
+
+function normalizeIngredientName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[\s\u3000]/g, '')
+    .replace(/[()[\]（）［］【】「」『』]/g, '')
+    .replace(/[ヶヵ]/g, (char) => NORMALIZE_MAP[char] ?? char)
+}
+
 function classifyStoreSection(name: string): StoreSection {
+  const normalized = normalizeIngredientName(name)
   for (const rule of STORE_SECTION_RULES) {
-    if (rule.keywords.some((keyword) => name.includes(keyword))) {
+    if (rule.keywords.some((keyword) => normalized.includes(normalizeIngredientName(keyword)))) {
       return rule.section
     }
   }

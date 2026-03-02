@@ -222,9 +222,33 @@ describe('formatWeeklyShoppingListByStoreSection', () => {
     const result = formatWeeklyShoppingListByStoreSection('2026-01-06', items)
 
     expect(result).toContain('買い物リスト（売場順）')
-    expect(result).toContain('【野菜・きのこ】')
-    expect(result).toContain('【肉・ハム】')
+    expect(result).toContain('【青果（野菜・きのこ・果物）】')
+    expect(result).toContain('【精肉・ハム】')
     expect(result).toContain('【調味料・乾物・缶詰】')
+  })
+
+  it('uses large-supermarket aisle order for calendar-friendly output', () => {
+    const items = [
+      { name: '牛乳', totalQuantity: 1, unit: '本', ingredientCategory: 'main' as const, inStock: false },
+      { name: '鮭', totalQuantity: 2, unit: '切れ', ingredientCategory: 'main' as const, inStock: false },
+      { name: '玉ねぎ', totalQuantity: 1, unit: '個', ingredientCategory: 'main' as const, inStock: false },
+      { name: '豚肉', totalQuantity: 200, unit: 'g', ingredientCategory: 'main' as const, inStock: false },
+      { name: '醤油', totalQuantity: 2, unit: '大さじ', ingredientCategory: 'sub' as const, inStock: false },
+    ]
+
+    const result = formatWeeklyShoppingListByStoreSection('2026-01-06', items)
+
+    const produce = result.indexOf('【青果（野菜・きのこ・果物）】')
+    const meat = result.indexOf('【精肉・ハム】')
+    const fish = result.indexOf('【鮮魚】')
+    const daily = result.indexOf('【日配（豆腐・納豆・卵・乳製品）】')
+    const seasoning = result.indexOf('【調味料・乾物・缶詰】')
+
+    expect(produce).toBeGreaterThan(-1)
+    expect(meat).toBeGreaterThan(produce)
+    expect(fish).toBeGreaterThan(meat)
+    expect(daily).toBeGreaterThan(fish)
+    expect(seasoning).toBeGreaterThan(daily)
   })
 
   it('falls back to その他 section for unknown ingredients', () => {
