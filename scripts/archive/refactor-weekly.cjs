@@ -1,7 +1,18 @@
+/**
+ * Archived one-off script.
+ *
+ * Purpose:
+ * - Historical refactor helper for `src/pages/WeeklyMenuPage.tsx`.
+ *
+ * Re-run policy:
+ * - DO NOT run in normal development.
+ * - Kept only as migration history/reference.
+ */
+
 const fs = require('fs');
 const path = require('path');
 
-const filePath = path.join(__dirname, '..', 'src', 'pages', 'WeeklyMenuPage.tsx');
+const filePath = path.join(__dirname, '..', '..', 'src', 'pages', 'WeeklyMenuPage.tsx');
 let content = fs.readFileSync(filePath, 'utf-8');
 
 // 1. Update imports
