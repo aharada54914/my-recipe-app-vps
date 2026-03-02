@@ -10,6 +10,16 @@ const TOKEN_KEY = 'google_access_token'
 const TOKEN_EXPIRY_KEY = 'google_token_expiry'
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
+function clearAuthStorage() {
+  try {
+    localStorage.removeItem(USER_KEY)
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_EXPIRY_KEY)
+  } catch {
+    // ignore storage errors
+  }
+}
+
 function getPersistedAuthItem(key: string): string | null {
   try {
     const localValue = localStorage.getItem(key)
@@ -95,11 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const signOut = () => {
       setUser(null)
       setProviderToken(null)
-      try {
-        localStorage.removeItem(USER_KEY)
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(TOKEN_EXPIRY_KEY)
-      } catch { /* ignore */ }
+      clearAuthStorage()
     }
 
     return (
@@ -156,11 +162,7 @@ function OAuthEnabledAuthProvider({
       // Silent refresh failed (Google session expired) — clear auth state so login UI reappears
       setUser(null)
       setProviderToken(null)
-      try {
-        localStorage.removeItem(USER_KEY)
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(TOKEN_EXPIRY_KEY)
-      } catch { /* ignore */ }
+      clearAuthStorage()
     },
   })
 
@@ -193,11 +195,7 @@ function OAuthEnabledAuthProvider({
   const signOut = useCallback(() => {
     setUser(null)
     setProviderToken(null)
-    try {
-      localStorage.removeItem(USER_KEY)
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(TOKEN_EXPIRY_KEY)
-    } catch { /* ignore */ }
+    clearAuthStorage()
   }, [setProviderToken, setUser])
 
   // On mount and whenever token disappears: attempt silent refresh if user is known
