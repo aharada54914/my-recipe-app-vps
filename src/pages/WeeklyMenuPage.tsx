@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Lock, Unlock, RefreshCw, ShoppingCart, Calendar, CalendarClock, Clock3, UtensilsCrossed } from 'lucide-react'
+import { Lock, Unlock, RefreshCw, ShoppingCart, Calendar, CalendarClock, Clock3, UtensilsCrossed, ChevronDown, ChevronUp } from 'lucide-react'
 import { format, addDays, parse, addMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { db, type Recipe, type WeeklyMenu } from '../db/db'
@@ -38,6 +38,8 @@ import { ServingsStepper } from '../components/weekly/ServingsStepper'
 import jsQR from 'jsqr'
 import { WEEKLY_MENU_IMPORT_PARAM } from '../utils/weeklyMenuQr'
 import { analyzeWeeklyMenuNutrition } from '../utils/weeklyMenuNutritionInsights'
+import { getWeeklyWeatherForecast, type DailyWeather } from '../utils/season-weather/weatherProvider'
+import { WeatherIllustration } from '../components/weather/WeatherIllustration'
 
 const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', string> = {
   'heuristic-3': '3段階推定',
@@ -76,6 +78,8 @@ export function WeeklyMenuPage() {
   const [shareOpen, setShareOpen] = useState(false)
   const [shareCodeInput, setShareCodeInput] = useState('')
   const [swapLoading, setSwapLoading] = useState(false)
+  const [weeklyWeather, setWeeklyWeather] = useState<DailyWeather[]>([])
+  const [weatherExpanded, setWeatherExpanded] = useState(false)
 
   const stockItems = useLiveQuery(() => db.stock.filter(s => s.inStock).toArray(), [])
   const stockNames = useMemo(() => new Set((stockItems ?? []).map(s => s.name)), [stockItems])
@@ -448,6 +452,17 @@ export function WeeklyMenuPage() {
   }, [navigate, applySharedMenu])
 
   useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const forecast = await getWeeklyWeatherForecast(weekStart)
+      if (!cancelled) setWeeklyWeather(forecast)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [weekStart])
+
+  useEffect(() => {
     if (!showShoppingList) return
     if (!stockItems || !preferences.notifyShoppingListDone) return
     if (getNotificationPermission() !== 'granted') return
@@ -486,6 +501,41 @@ export function WeeklyMenuPage() {
           >
             次の週
           </button>
+        </div>
+
+        <div className="rounded-2xl bg-bg-card p-4">
+          <button
+            type="button"
+            onClick={() => setWeatherExpanded((prev) => !prev)}
+            className="flex w-full items-center justify-between text-left"
+            aria-expanded={weatherExpanded}
+            aria-label="今週の東京都天気カードを展開"
+          >
+            <h4 className="text-sm font-bold text-text-secondary">今週の東京都天気（気象庁）</h4>
+            {weatherExpanded ? <ChevronUp className="h-4 w-4 text-text-secondary" /> : <ChevronDown className="h-4 w-4 text-text-secondary" />}
+          </button>
+
+          {weatherExpanded && (
+            <div className="mt-3">
+              {weeklyWeather.length === 0 ? (
+                <p className="text-xs text-text-secondary">天気予報を読み込み中...</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
+                  {weeklyWeather.map((w) => (
+                    <div key={w.date} className="rounded-lg bg-white/5 p-2">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="font-semibold text-text-primary">{format(parse(w.date, 'yyyy-MM-dd', new Date()), 'M/d (E)', { locale: ja })}</p>
+                        <WeatherIllustration weather={w} size={42} />
+                      </div>
+                      <p className="text-text-secondary">{w.maxTempC}℃ / {w.minTempC}℃</p>
+                      <p className="text-text-secondary">降水目安: {w.precipitationMm}mm</p>
+                      <p className="text-text-secondary">湿度: {w.humidityPercent != null ? `${w.humidityPercent}%` : '—'}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Menu content */}

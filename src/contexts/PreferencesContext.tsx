@@ -9,6 +9,7 @@ import {
   isDefaultGeminiFeatureConfig,
   setGeminiFeatureConfig,
 } from '../lib/geminiSettings'
+import { runStartupPriceSync } from '../utils/cost/startupPriceSync'
 
 export type { PreferencesContextValue } from './preferencesContextDef'
 
@@ -56,6 +57,18 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date(),
       })
     }
+  }, [stored])
+
+  useEffect(() => {
+    if (stored === undefined || stored === null || !stored.id) return
+    void (async () => {
+      const result = await runStartupPriceSync(stored.lastPriceSyncAt)
+      if (!result.synced) return
+      await db.userPreferences.update(stored.id!, {
+        lastPriceSyncAt: new Date(),
+        updatedAt: new Date(),
+      })
+    })()
   }, [stored])
 
   const preferences: UserPreferences = (stored !== null && stored !== undefined)
