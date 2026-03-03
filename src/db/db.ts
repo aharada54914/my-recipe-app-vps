@@ -157,6 +157,45 @@ export interface CalendarEventRecord {
 }
 
 export type SeasonalPriority = 'low' | 'medium' | 'high'
+export type WeeklyMenuCostMode = 'saving' | 'ignore' | 'luxury'
+
+export interface IngredientPrice {
+  id?: number
+  normalizedName: string
+  unitBasis: 'g' | 'ml' | 'piece'
+  tokyoAvgPrice: number
+  sourceId: string
+  sourceUrl: string
+  confidence: number
+  updatedAt: Date
+}
+
+export interface IngredientPriceSyncLog {
+  id?: number
+  startedAt: Date
+  endedAt: Date
+  status: 'success' | 'failed'
+  updatedCount: number
+  failedCount: number
+  errorSummary: string
+}
+
+export interface IngredientSimilarityCache {
+  id?: number
+  name: string
+  candidateName: string
+  score: number
+  updatedAt: Date
+}
+
+export interface WeatherCacheItem {
+  id?: number
+  date: string
+  maxTempC: number
+  minTempC: number
+  precipitationMm: number
+  updatedAt: Date
+}
 
 export interface UserPreferences {
   id?: number
@@ -187,6 +226,10 @@ export interface UserPreferences {
   // Desired meal time
   desiredMealHour: number
   desiredMealMinute: number
+  weeklyMenuCostMode: WeeklyMenuCostMode
+  weeklyBudgetYen?: number
+  lastPriceSyncAt?: Date
+  lastWeatherSyncAt?: Date
   // AI feature settings (Drive-backup eligible)
   geminiModelChat: string
   geminiModelRecipeImportText: string
@@ -257,6 +300,10 @@ class RecipeDB extends Dexie {
   calendarEvents!: Table<CalendarEventRecord, number>
   userPreferences!: Table<UserPreferences, number>
   weeklyMenus!: Table<WeeklyMenu, number>
+  ingredientPrices!: Table<IngredientPrice, number>
+  ingredientPriceSyncLogs!: Table<IngredientPriceSyncLog, number>
+  ingredientSimilarityCache!: Table<IngredientSimilarityCache, number>
+  weatherCache!: Table<WeatherCacheItem, number>
 
   constructor() {
     super('RecipeDB')
@@ -582,6 +629,26 @@ class RecipeDB extends Dexie {
           matchedFoodCodes: diagnostics.matchedFoodCodes,
           updatedAt: new Date(),
         }
+      })
+    })
+
+    this.version(14).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+      ingredientPrices: '++id, &normalizedName, updatedAt',
+      ingredientPriceSyncLogs: '++id, startedAt, status',
+      ingredientSimilarityCache: '++id, name, candidateName, score',
+      weatherCache: '++id, &date, updatedAt',
+    }).upgrade(async (tx) => {
+      await tx.table('userPreferences').toCollection().modify((record) => {
+        const prefs = record as UserPreferences
+        if (!prefs.weeklyMenuCostMode) prefs.weeklyMenuCostMode = 'ignore'
       })
     })
   }

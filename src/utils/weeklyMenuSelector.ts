@@ -16,12 +16,19 @@ import { computeMainScore, computeSideScore } from './mealBalanceScoring'
 import type { MealBalanceInference } from './mealBalanceTypes'
 import { resolveBalanceScoringTier } from './mealBalanceTier'
 import type { BalanceTierDecision } from './mealBalanceTier'
+import type { WeeklyMenuCostMode } from '../db/db'
+import { estimateRecipeCost } from './cost/costEstimator'
+import { computeLuxuryExperienceScore } from './cost/luxuryExperience'
+import { getWeeklyWeatherForecast, type DailyWeather } from './season-weather/weatherProvider'
+import { computeWeatherComfortScore } from './season-weather/weatherScoring'
 
 export interface MenuSelectionConfig {
   seasonalPriority: SeasonalPriority
   userPrompt: string
   desiredMealHour: number
   desiredMealMinute: number
+  weeklyMenuCostMode?: WeeklyMenuCostMode
+  weeklyBudgetYen?: number
 }
 
 interface ScoredRecipe {
@@ -36,6 +43,10 @@ interface SelectionContext {
   byRecipeId: Map<number, Recipe>
   byInferenceId: Map<number, MealBalanceInference>
   balanceTier: BalanceTierDecision
+  recipeCostMap: Map<number, number>
+  luxuryScoreMap: Map<number, number>
+  weatherByDate: Map<string, DailyWeather>
+  costMode: WeeklyMenuCostMode
 }
 
 const SEASONAL_WEIGHTS: Record<SeasonalPriority, number> = {
@@ -136,7 +147,7 @@ function buildScoredRecipes(
   })
 }
 
-async function buildSelectionContext(config: MenuSelectionConfig): Promise<SelectionContext> {
+async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionConfig): Promise<SelectionContext> {
   const [recipes, stockItems, recentMenus, recentHistory] = await Promise.all([
     db.recipes.toArray(),
     db.stock.filter(item => item.inStock).toArray(),
@@ -192,7 +203,29 @@ async function buildSelectionContext(config: MenuSelectionConfig): Promise<Selec
 
   const balanceTier = resolveBalanceScoringTier(mainEligible, DEFAULT_BALANCE_SCORING_MODE)
 
-  return { scoredMains, scoredSides, mainEligible, byRecipeId, byInferenceId, balanceTier }
+  const recipeCostMap = new Map<number, number>()
+  const luxuryScoreMap = new Map<number, number>()
+  const mode: WeeklyMenuCostMode = config.weeklyMenuCostMode ?? 'ignore'
+  await Promise.all(eligible.map(async (recipe) => {
+    if (recipe.id == null) return
+    const cost = await estimateRecipeCost(recipe, mode)
+    recipeCostMap.set(recipe.id, cost)
+  }))
+
+  const weather = await getWeeklyWeatherForecast(weekStartDate)
+  const weatherByDate = new Map<string, DailyWeather>()
+  weather.forEach((w) => weatherByDate.set(w.date, w))
+
+  for (let i = 0; i < 7; i += 1) {
+    const dateStr = format(addDays(weekStartDate, i), 'yyyy-MM-dd')
+    for (const recipe of eligible) {
+      if (recipe.id == null) continue
+      luxuryScoreMap.set(recipe.id, computeLuxuryExperienceScore(recipe, i))
+      if (!weatherByDate.has(dateStr)) continue
+    }
+  }
+
+  return { scoredMains, scoredSides, mainEligible, byRecipeId, byInferenceId, balanceTier, recipeCostMap, luxuryScoreMap, weatherByDate, costMode: mode }
 }
 
 /**
@@ -204,7 +237,7 @@ export async function selectWeeklyMenu(
   config: MenuSelectionConfig,
   lockedItems?: WeeklyMenuItem[]
 ): Promise<WeeklyMenuItem[]> {
-  const context = await buildSelectionContext(config)
+  const context = await buildSelectionContext(weekStartDate, config)
 
   if (context.mainEligible.length === 0) return []
 
@@ -254,7 +287,7 @@ export async function selectWeeklyMenu(
       const candidateInference = context.byInferenceId.get(recipe.id!)
       if (!candidateInference) continue
 
-      const score = computeMainScore({
+      let score = computeMainScore({
         recipe,
         baseScore,
         selectedCategories,
@@ -265,6 +298,13 @@ export async function selectWeeklyMenu(
         selectedMainRecipes,
         balanceTier: context.balanceTier.tier,
       })
+
+      const weather = context.weatherByDate.get(dateStr)
+      if (weather) score += computeWeatherComfortScore(recipe, weather) * 5
+
+      const recipeCost = context.recipeCostMap.get(recipe.id!) ?? 0
+      if (context.costMode === 'saving') score -= recipeCost / 80
+      if (context.costMode === 'luxury') score += (context.luxuryScoreMap.get(recipe.id!) ?? 0) * 8
 
       if (score > bestScore) {
         bestScore = score
