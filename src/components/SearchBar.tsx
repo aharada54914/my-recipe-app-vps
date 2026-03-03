@@ -8,6 +8,8 @@ interface SearchBarProps {
   history?: string[]
   onSubmit?: () => void
   onSelectHistory?: (value: string) => void
+  onCompositionChange?: (isComposing: boolean) => void
+  searching?: boolean
 }
 
 export function SearchBar({
@@ -16,6 +18,8 @@ export function SearchBar({
   history = [],
   onSubmit,
   onSelectHistory,
+  onCompositionChange,
+  searching = false,
 }: SearchBarProps) {
   const [focused, setFocused] = useState(false)
   const suggestions = useMemo(() => {
@@ -31,13 +35,19 @@ export function SearchBar({
           onSubmit?.()
         }}
       >
-        <button type="submit" className="shrink-0" aria-label="検索実行">
+        <button
+          type="submit"
+          className={`shrink-0 transition-transform duration-[120ms] ${searching ? 'search-icon-sweep' : ''}`}
+          aria-label="検索実行"
+        >
           <Search className="h-5 w-5 text-text-secondary" />
         </button>
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onCompositionStart={() => onCompositionChange?.(true)}
+          onCompositionEnd={() => onCompositionChange?.(false)}
           onFocus={() => setFocused(true)}
           onBlur={() => window.setTimeout(() => setFocused(false), 120)}
           placeholder="レシピを検索..."

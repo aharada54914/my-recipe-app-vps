@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback, useTransition, useDeferredValue, useMemo, useEffect } from 'react'
+import { useState, useRef, useCallback, useDeferredValue, useMemo, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams } from 'react-router-dom'
 import { db } from '../db/db'
 import type { Recipe, RecipeCategory, DeviceType } from '../db/db'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
+import { Loader2 } from 'lucide-react'
 import { searchRecipesWithScores } from '../utils/searchUtils'
 import { useDebounce } from '../hooks/useDebounce'
 import { SearchBar } from './SearchBar'
@@ -42,7 +43,9 @@ interface RecipeListProps {
 }
 
 export function RecipeList({ onSelectRecipe }: RecipeListProps) {
-  const [search, setSearch] = useState('')
+  const [inputValue, setInputValue] = useState('')
+  const [committedQuery, setCommittedQuery] = useState('')
+  const [isComposing, setIsComposing] = useState(false)
   const [selectedCategories, setSelectedCategories] = useState<RecipeCategory[]>([])
   const [deviceFilter, setDeviceFilter] = useState<DeviceType | null>(null)
   const [quickFilter, setQuickFilter] = useState(false)
@@ -58,12 +61,16 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     }
   })
 
-  const debouncedSearch = useDebounce(search, 300)
+  const debouncedInput = useDebounce(inputValue, 150)
   // T-22: useDeferredValue defers re-renders during rapid input
-  const deferredSearch = useDeferredValue(debouncedSearch)
+  const deferredSearch = useDeferredValue(committedQuery)
   const parentRef = useRef<HTMLDivElement>(null)
-  // T-22: useTransition marks filtering as non-urgent so input stays responsive
-  const [isPending] = useTransition()
+  const [isFiltering, setIsFiltering] = useState(false)
+
+  useEffect(() => {
+    if (isComposing) return
+    setCommittedQuery(debouncedInput)
+  }, [debouncedInput, isComposing])
 
   // Read URL ?filter= param and initialize state
   const [searchParams] = useSearchParams()
@@ -127,7 +134,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
       return { recipes, stockItems, viewHistory, favorites, weeklyMenus, calendarEvents }
     },
-    [selectedCategories, deviceFilter, !!deferredSearch],
+    [selectedCategories, deviceFilter],
     { recipes: [], stockItems: [], viewHistory: [], favorites: [], weeklyMenus: [], calendarEvents: [] }
   )
 
@@ -201,6 +208,12 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     preferenceProfile,
   ])
 
+  useEffect(() => {
+    setIsFiltering(true)
+    const timer = window.setTimeout(() => setIsFiltering(false), 100)
+    return () => window.clearTimeout(timer)
+  }, [deferredSearch, selectedCategories, quickFilter, seasonalFilter, deviceFilter])
+
   // T-04: Virtual scrolling
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
@@ -234,6 +247,14 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       : seasonalFilter ? '旬のレシピ'
         : null
 
+  const categoryCounts = useMemo(() => {
+    const map: Partial<Record<RecipeCategory, number>> = { 'すべて': data.recipes.length }
+    for (const recipe of data.recipes) {
+      map[recipe.category] = (map[recipe.category] ?? 0) + 1
+    }
+    return map
+  }, [data.recipes])
+
   const saveSearchHistory = useCallback((keyword: string) => {
     const normalized = keyword.trim()
     if (!normalized) return
@@ -246,24 +267,32 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   }, [])
 
   const handleSubmitSearch = useCallback(() => {
-    saveSearchHistory(search)
-  }, [saveSearchHistory, search])
+    setCommittedQuery(inputValue)
+    saveSearchHistory(inputValue)
+  }, [saveSearchHistory, inputValue])
 
   const handleSelectHistory = useCallback((value: string) => {
-    setSearch(value)
+    setInputValue(value)
+    setCommittedQuery(value)
     saveSearchHistory(value)
   }, [saveSearchHistory])
 
   return (
     <>
       <SearchBar
-        value={search}
-        onChange={setSearch}
+        value={inputValue}
+        onChange={setInputValue}
         history={searchHistory}
         onSubmit={handleSubmitSearch}
         onSelectHistory={handleSelectHistory}
+        onCompositionChange={setIsComposing}
+        searching={isFiltering}
       />
-      <CategoryTags selectedCategories={selectedCategories} onToggle={handleCategoryToggle} />
+      <CategoryTags
+        selectedCategories={selectedCategories}
+        onToggle={handleCategoryToggle}
+        counts={categoryCounts}
+      />
 
       {/* Active special filter badge */}
       {activeFilterLabel && (
@@ -284,6 +313,13 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         </div>
       )}
 
+      {isFiltering && (
+        <div className="mb-3 inline-flex items-center gap-2 rounded-xl bg-bg-card px-3 py-1.5 text-xs text-text-secondary">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          絞り込み中...
+        </div>
+      )}
+
       {withRates.length === 0 ? (
         <p className="py-12 text-center text-sm text-text-secondary">
           レシピが見つかりません
@@ -294,7 +330,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
           className="overflow-auto"
           style={{
             height: 'calc(100dvh - 220px)',
-            opacity: isPending ? 0.6 : 1,
+            opacity: isFiltering ? 0.7 : 1,
             transition: 'opacity 150ms',
           }}
         >
