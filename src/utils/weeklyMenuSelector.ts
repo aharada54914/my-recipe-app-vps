@@ -21,6 +21,9 @@ import { estimateRecipeCost } from './cost/costEstimator'
 import { computeLuxuryExperienceScore } from './cost/luxuryExperience'
 import { getWeeklyWeatherForecast, type DailyWeather } from './season-weather/weatherProvider'
 import { computeWeatherComfortScore } from './season-weather/weatherScoring'
+import { filterForecastForWeek, isCompleteForecastForWeek } from './season-weather/weekWeather'
+import { ensureRecipeFeatureMatrix } from './recipeFeatureMatrix'
+import type { IngredientFeatureRecord } from '../db/db'
 
 export interface MenuSelectionConfig {
   seasonalPriority: SeasonalPriority
@@ -29,6 +32,7 @@ export interface MenuSelectionConfig {
   desiredMealMinute: number
   weeklyMenuCostMode?: WeeklyMenuCostMode
   weeklyBudgetYen?: number
+  preloadedWeather?: DailyWeather[]
 }
 
 interface ScoredRecipe {
@@ -47,6 +51,7 @@ interface SelectionContext {
   luxuryScoreMap: Map<number, number>
   weatherByDate: Map<string, DailyWeather>
   costMode: WeeklyMenuCostMode
+  featureMatrixByRecipeId: Map<number, IngredientFeatureRecord>
 }
 
 const SEASONAL_WEIGHTS: Record<SeasonalPriority, number> = {
@@ -129,6 +134,7 @@ function buildScoredRecipes(
   seasonalWeight: number,
   recentMenuRecipeIds: Set<number>,
   recentViewIds: Set<number>,
+  featureMatrixByRecipeId: Map<number, IngredientFeatureRecord>,
 ): ScoredRecipe[] {
   return recipes.map((recipe) => {
     let score = 0
@@ -143,7 +149,9 @@ function buildScoredRecipes(
     if (recentMenuRecipeIds.has(recipe.id!)) score -= 20
     if (recentViewIds.has(recipe.id!)) score -= 5
 
-    return { recipe, baseScore: score }
+    // Apply Gemini confidence floor: low-confidence AI recipes get dampened base scores
+    const featureConfidence = featureMatrixByRecipeId.get(recipe.id!)?.confidence ?? 1
+    return { recipe, baseScore: score * featureConfidence }
   })
 }
 
@@ -174,6 +182,8 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
   const mainEligible = filterRecipesByRole(eligible, 'main')
   const sideEligible = eligible.filter((r) => isRecipeAllowedForRole(r, 'side'))
 
+  const featureMatrixByRecipeId = await ensureRecipeFeatureMatrix(eligible)
+
   const scoredMains = buildScoredRecipes(
     mainEligible,
     stockNames,
@@ -181,6 +191,7 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
     seasonalWeight,
     recentMenuRecipeIds,
     recentViewIds,
+    featureMatrixByRecipeId,
   ).sort((a, b) => b.baseScore - a.baseScore)
 
   const scoredSides = buildScoredRecipes(
@@ -190,6 +201,7 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
     seasonalWeight,
     recentMenuRecipeIds,
     recentViewIds,
+    featureMatrixByRecipeId,
   ).sort((a, b) => b.baseScore - a.baseScore)
 
   const byRecipeId = new Map<number, Recipe>()
@@ -212,7 +224,10 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
     recipeCostMap.set(recipe.id, cost)
   }))
 
-  const weather = await getWeeklyWeatherForecast(weekStartDate)
+  const preloaded = config.preloadedWeather ? filterForecastForWeek(config.preloadedWeather, weekStartDate) : []
+  const weather = isCompleteForecastForWeek(preloaded, weekStartDate)
+    ? preloaded
+    : await getWeeklyWeatherForecast(weekStartDate)
   const weatherByDate = new Map<string, DailyWeather>()
   weather.forEach((w) => weatherByDate.set(w.date, w))
 
@@ -225,7 +240,7 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
     }
   }
 
-  return { scoredMains, scoredSides, mainEligible, byRecipeId, byInferenceId, balanceTier, recipeCostMap, luxuryScoreMap, weatherByDate, costMode: mode }
+  return { scoredMains, scoredSides, mainEligible, byRecipeId, byInferenceId, balanceTier, recipeCostMap, luxuryScoreMap, weatherByDate, costMode: mode, featureMatrixByRecipeId }
 }
 
 /**

@@ -186,17 +186,28 @@ export function estimateCookingSteps(
 
 // --- Category guesser ---
 
-function guessCategory(title: string): RecipeCategory {
-    const categoryMap: [string[], RecipeCategory][] = [
+function guessCategory(title: string, ingredients: Ingredient[]): RecipeCategory {
+    const titleCategoryMap: [string[], RecipeCategory][] = [
         [['スープ', 'みそ汁', '味噌汁', 'シチュー', 'ポタージュ', '汁'], 'スープ'],
         [['ご飯', 'ピラフ', 'リゾット', 'チャーハン', 'おにぎり', 'パスタ', 'うどん', 'そば', 'ラーメン'], '一品料理'],
         [['ケーキ', 'クッキー', 'プリン', 'ゼリー', 'アイス', 'チョコ', 'マフィン', 'パン', 'ヨーグルト', 'スイーツ', 'ジャム', 'コンポート', 'あんこ', '甘酒', 'おしるこ', 'メレンゲ'], 'スイーツ'],
         [['サラダ', 'ナムル', 'きんぴら', '漬', 'マリネ', 'おひたし', '和え', 'ピクルス'], '副菜'],
     ]
 
-    for (const [keywords, cat] of categoryMap) {
+    for (const [keywords, cat] of titleCategoryMap) {
         if (keywords.some((kw) => title.includes(kw))) return cat
     }
+
+    // Ingredient-aware fallback: use main ingredients to refine category
+    const mainIngredients = ingredients
+        .filter((ing) => ing.category === 'main')
+        .map((ing) => ing.name)
+    const joined = mainIngredients.join(' ')
+
+    if (/米|ご飯|麺|うどん|そば|パスタ|餅/.test(joined)) return '一品料理'
+    if (/豆腐|ほうれん草|小松菜|きゅうり|トマト|ブロッコリー|なす|かぼちゃ/.test(joined)) return '副菜'
+    if (/牛乳|生クリーム|チーズ/.test(joined) && /砂糖|はちみつ|ジャム|チョコ/.test(joined)) return 'スイーツ'
+
     return '主菜'
 }
 
@@ -392,7 +403,7 @@ export async function importHealsioCSV(csvText: string): Promise<{ imported: num
             title,
             recipeNumber: generateCsvRecipeNumber('healsio', i),
             device: 'healsio',
-            category: guessCategory(title),
+            category: guessCategory(title, ingredients),
             baseServings,
             totalWeightG,
             ingredients,
@@ -479,7 +490,7 @@ export async function importHotcookCSV(csvText: string): Promise<{ imported: num
             title,
             recipeNumber: menuNumber || generateCsvRecipeNumber('hotcook', i),
             device: 'hotcook',
-            category: guessCategory(title),
+            category: guessCategory(title, ingredients),
             baseServings,
             totalWeightG,
             ingredients,

@@ -13,6 +13,7 @@ vi.mock('../../db/db', () => ({
     stock: { filter: vi.fn(() => ({ toArray: vi.fn(() => []) })) },
     weeklyMenus: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
     viewHistory: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
+    recipeFeatureMatrix: { bulkPut: vi.fn(() => Promise.resolve()) },
   },
 }))
 
@@ -20,6 +21,14 @@ vi.mock('../../data/seasonalIngredients', () => ({
   getCurrentSeasonalIngredients: vi.fn(() => []),
 }))
 
+
+const { mockGetWeeklyWeatherForecast } = vi.hoisted(() => ({
+  mockGetWeeklyWeatherForecast: vi.fn(),
+}))
+
+vi.mock('../season-weather/weatherProvider', () => ({
+  getWeeklyWeatherForecast: mockGetWeeklyWeatherForecast,
+}))
 import { getWeekStartDate, selectWeeklyMenu } from '../weeklyMenuSelector'
 import type { Recipe } from '../../db/db'
 
@@ -83,12 +92,16 @@ describe('getWeekStartDate', () => {
     getWeekStartDate(date)
     expect(date.getTime()).toBe(original)
   })
+
+
 })
 
 describe('selectWeeklyMenu device balance', () => {
   beforeEach(() => {
     mockRecipesToArray.mockReset()
     vi.spyOn(Math, 'random').mockReturnValue(0.9999)
+    mockGetWeeklyWeatherForecast.mockReset()
+    mockGetWeeklyWeatherForecast.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -186,4 +199,47 @@ describe('selectWeeklyMenu device balance', () => {
 
     expect(menu[1]?.recipeId).toBe(3)
   })
+
+  it('uses preloaded weather on regenerate and skips new weather fetch', async () => {
+    const mains: Recipe[] = Array.from({ length: 8 }, (_, i) => makeRecipe(i + 1, 'manual'))
+    mockRecipesToArray.mockResolvedValue(mains)
+
+    const preloadedWeather = Array.from({ length: 7 }, (_, i) => ({
+      date: `2026-02-${String(22 + i).padStart(2, '0')}`,
+      maxTempC: 20,
+      minTempC: 10,
+      precipitationMm: 0,
+    }))
+
+    await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+      preloadedWeather,
+    })
+
+    expect(mockGetWeeklyWeatherForecast).not.toHaveBeenCalled()
+  })
+
+  it('fetches weather for target week when preloaded weather dates are from another week', async () => {
+    const mains: Recipe[] = Array.from({ length: 8 }, (_, i) => makeRecipe(i + 1, 'manual'))
+    mockRecipesToArray.mockResolvedValue(mains)
+
+    const stalePreloadedWeather = [
+      { date: '2026-03-01', maxTempC: 20, minTempC: 10, precipitationMm: 0 },
+      { date: '2026-03-02', maxTempC: 21, minTempC: 11, precipitationMm: 1 },
+    ]
+
+    await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+      preloadedWeather: stalePreloadedWeather,
+    })
+
+    expect(mockGetWeeklyWeatherForecast).toHaveBeenCalledTimes(1)
+  })
+
 })

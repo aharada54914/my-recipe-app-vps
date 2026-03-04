@@ -39,6 +39,7 @@ import jsQR from 'jsqr'
 import { WEEKLY_MENU_IMPORT_PARAM } from '../utils/weeklyMenuQr'
 import { analyzeWeeklyMenuNutrition } from '../utils/weeklyMenuNutritionInsights'
 import { getWeeklyWeatherForecast, type DailyWeather } from '../utils/season-weather/weatherProvider'
+import { filterForecastForWeek, isCompleteForecastForWeek } from '../utils/season-weather/weekWeather'
 import { WeatherIllustration } from '../components/weather/WeatherIllustration'
 
 const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', string> = {
@@ -80,6 +81,8 @@ export function WeeklyMenuPage() {
   const [swapLoading, setSwapLoading] = useState(false)
   const [weeklyWeather, setWeeklyWeather] = useState<DailyWeather[]>([])
   const [weatherExpanded, setWeatherExpanded] = useState(false)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherLastFetchedAt, setWeatherLastFetchedAt] = useState<Date | null>(null)
 
   const stockItems = useLiveQuery(() => db.stock.filter(s => s.inStock).toArray(), [])
   const stockNames = useMemo(() => new Set((stockItems ?? []).map(s => s.name)), [stockItems])
@@ -110,7 +113,14 @@ export function WeeklyMenuPage() {
   const handleGenerate = useCallback(async () => {
     setGenerating(true)
     try {
-      const items = await selectWeeklyMenu(weekStart, preferences, menu?.items)
+      const items = await selectWeeklyMenu(
+        weekStart,
+        {
+          ...preferences,
+          preloadedWeather: isCompleteForecastForWeek(weeklyWeather, weekStart) ? filterForecastForWeek(weeklyWeather, weekStart) : undefined,
+        },
+        menu?.items,
+      )
 
       const newMenu: WeeklyMenu = {
         id: menu?.id,
@@ -451,6 +461,21 @@ export function WeeklyMenuPage() {
     img.src = url
   }, [navigate, applySharedMenu])
 
+  const refreshWeeklyWeather = useCallback(async () => {
+    setWeatherLoading(true)
+    try {
+      const forecast = await getWeeklyWeatherForecast(weekStart)
+      setWeeklyWeather(filterForecastForWeek(forecast, weekStart))
+      setWeatherLastFetchedAt(new Date())
+    } finally {
+      setWeatherLoading(false)
+    }
+  }, [weekStart])
+
+  useEffect(() => {
+    void refreshWeeklyWeather()
+  }, [refreshWeeklyWeather])
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -504,20 +529,36 @@ export function WeeklyMenuPage() {
         </div>
 
         <div className="rounded-2xl bg-bg-card p-4">
-          <button
-            type="button"
-            onClick={() => setWeatherExpanded((prev) => !prev)}
-            className="flex w-full items-center justify-between text-left"
-            aria-expanded={weatherExpanded}
-            aria-label="今週の東京都天気カードを展開"
-          >
-            <h4 className="text-sm font-bold text-text-secondary">今週の東京都天気（気象庁）</h4>
-            {weatherExpanded ? <ChevronUp className="h-4 w-4 text-text-secondary" /> : <ChevronDown className="h-4 w-4 text-text-secondary" />}
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setWeatherExpanded((prev) => !prev)}
+              className="flex flex-1 items-center justify-between text-left"
+              aria-expanded={weatherExpanded}
+              aria-label="今週の東京都天気カードを展開"
+            >
+              <h4 className="text-sm font-bold text-text-secondary">今週の東京都天気（気象庁）</h4>
+              {weatherExpanded ? <ChevronUp className="h-4 w-4 text-text-secondary" /> : <ChevronDown className="h-4 w-4 text-text-secondary" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => void refreshWeeklyWeather()}
+              disabled={weatherLoading}
+              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-bg-card-hover px-2 py-1 text-xs font-semibold text-text-secondary transition-colors hover:text-accent disabled:opacity-50"
+              aria-label="天気予報を再取得"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${weatherLoading ? 'animate-spin' : ''}`} />
+              再取得
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] text-text-secondary">
+            取得タイミング: 週の切替時に自動取得 / 手動で再取得可能
+            {weatherLastFetchedAt ? `（最終取得: ${format(weatherLastFetchedAt, 'M/d HH:mm')}）` : ''}
+          </p>
 
           {weatherExpanded && (
             <div className="mt-3">
-              {weeklyWeather.length === 0 ? (
+              {weatherLoading && weeklyWeather.length === 0 ? (
                 <p className="text-xs text-text-secondary">天気予報を読み込み中...</p>
               ) : (
                 <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">

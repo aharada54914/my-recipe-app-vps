@@ -197,6 +197,16 @@ export interface WeatherCacheItem {
   updatedAt: Date
 }
 
+export interface IngredientFeatureRecord {
+  id?: number
+  recipeId: number
+  confidence: number
+  source: 'csv' | 'gemini' | 'estimated'
+  updatedAt: Date
+  seasonalityScore?: number
+  priceSignalScore?: number
+}
+
 export interface UserPreferences {
   id?: number
   // Calendar settings
@@ -227,6 +237,7 @@ export interface UserPreferences {
   desiredMealHour: number
   desiredMealMinute: number
   weeklyMenuCostMode: WeeklyMenuCostMode
+  weeklyMenuLuxuryRewardDays?: number
   weeklyBudgetYen?: number
   lastPriceSyncAt?: Date
   lastWeatherSyncAt?: Date
@@ -304,6 +315,7 @@ class RecipeDB extends Dexie {
   ingredientPriceSyncLogs!: Table<IngredientPriceSyncLog, number>
   ingredientSimilarityCache!: Table<IngredientSimilarityCache, number>
   weatherCache!: Table<WeatherCacheItem, number>
+  recipeFeatureMatrix!: Table<IngredientFeatureRecord, number>
 
   constructor() {
     super('RecipeDB')
@@ -650,6 +662,23 @@ class RecipeDB extends Dexie {
         const prefs = record as UserPreferences
         if (!prefs.weeklyMenuCostMode) prefs.weeklyMenuCostMode = 'ignore'
       })
+    })
+
+    // v15: Add recipeFeatureMatrix for Gemini confidence floor and price/seasonality signals
+    this.version(15).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+      ingredientPrices: '++id, &normalizedName, updatedAt',
+      ingredientPriceSyncLogs: '++id, startedAt, status',
+      ingredientSimilarityCache: '++id, name, candidateName, score',
+      weatherCache: '++id, &date, updatedAt',
+      recipeFeatureMatrix: '++id, &recipeId, confidence, source',
     })
   }
 }
