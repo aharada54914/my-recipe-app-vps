@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Search, Leaf, Sparkles, ChevronRight, Package } from 'lucide-react'
+import { Search, Leaf, Sparkles, ChevronRight, Flame, Cloud } from 'lucide-react'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { RecipeCard } from '../components/RecipeCard'
@@ -10,7 +10,13 @@ import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { getLocalRecommendations } from '../utils/geminiRecommender'
 import { WeeklyMenuTimeline } from '../components/WeeklyMenuTimeline'
 import { CategoryGrid } from '../components/CategoryGrid'
-import { useAuth } from '../hooks/useAuth'
+import { getWeeklyWeatherForecast } from '../utils/season-weather/weatherProvider'
+import type { DailyWeather } from '../utils/season-weather/weatherProvider'
+import {
+  computeWeatherComfortScoreWithTopt,
+  computeWeatherDemandVec,
+} from '../utils/season-weather/weatherScoring'
+import { computeRecipeWeatherVec, dotProduct } from '../utils/season-weather/recipeWeatherVectors'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
@@ -20,7 +26,102 @@ function findSeasonalRecipes(recipes: Recipe[]): Recipe[] {
     r.ingredients.some((ing) =>
       seasonalIngredients.some((s) => ing.name.includes(s))
     )
-  ).slice(0, 6)
+  ).slice(0, 4)
+}
+
+/**
+ * Softmaxを用いて上位 k 件を確率的にサンプリングする。
+ * temperature が小さいほど決定論的（最高スコアを優先）。
+ * 多様性を確保しつつ低品質レシピが頻繁に出ることを防ぐ。
+ */
+function softmaxSample<T>(
+  items: { item: T; score: number }[],
+  k: number,
+  temperature = 0.4,
+): T[] {
+  if (items.length <= k) return items.map((i) => i.item)
+  const maxScore = Math.max(...items.map((i) => i.score))
+  const exp = items.map((i) => ({
+    item: i.item,
+    p: Math.exp((i.score - maxScore) / temperature),
+  }))
+  const total = exp.reduce((sum, e) => sum + e.p, 0)
+  const pool = exp.map((e) => ({ item: e.item, p: e.p / total }))
+
+  const selected: T[] = []
+  for (let drawn = 0; drawn < k && pool.length > 0; drawn++) {
+    const r = Math.random()
+    let cumProb = 0
+    for (let j = 0; j < pool.length; j++) {
+      cumProb += pool[j].p
+      if (r <= cumProb || j === pool.length - 1) {
+        selected.push(pool[j].item)
+        pool.splice(j, 1)
+        // 残りを再正規化
+        const newTotal = pool.reduce((s, e) => s + e.p, 0)
+        if (newTotal > 0) pool.forEach((e) => { e.p /= newTotal })
+        break
+      }
+    }
+  }
+  return selected
+}
+
+/** 年通算日を計算 (1-365) */
+function getDayOfYear(date: Date): number {
+  const start = new Date(date.getFullYear(), 0, 0)
+  return Math.floor((date.getTime() - start.getTime()) / 86_400_000)
+}
+
+/**
+ * 今日おすすめレシピを選出する（Phase 3: T_opt × Softmax版）
+ *
+ * スコア構成:
+ *   - 天気ベクトルドット積スコア × 0.4  (Phase 2 ベクトルスコア)
+ *   - T_opt個人補正天気スコア × 0.35    (Phase 3 個人化)
+ *   - 旬食材一致ボーナス × 0.25         (旬フィルタ)
+ *
+ * 最終選出: Softmax確率的サンプリング（多様性確保）
+ */
+function findTodayRecipes(
+  recipes: Recipe[],
+  todayWeather: DailyWeather | null,
+  tOpt = 22,
+): Recipe[] {
+  const candidates = recipes.filter((r) => !isHelsioDeli(r))
+  if (!todayWeather) {
+    // フォールバック: 旬食材フィルタのみ
+    return candidates
+      .filter((r) => r.ingredients.some((ing) => seasonalIngredients.some((s) => ing.name.includes(s))))
+      .slice(0, 4)
+  }
+
+  const today = new Date()
+  const dayOfYear = getDayOfYear(today)
+  // circannual B_carb も込みで需要ベクトルを算出
+  const demandVec = computeWeatherDemandVec(todayWeather, tOpt, dayOfYear)
+
+  const scored = candidates.map((r) => {
+    // Phase 2: ベクトルドット積スコア [0, 1]
+    const recipeVec = computeRecipeWeatherVec(r)
+    const vecScore = dotProduct(demandVec, recipeVec)
+
+    // Phase 3: T_opt個人補正天気スコア [0, 1]
+    const personalWeatherScore = computeWeatherComfortScoreWithTopt(r, todayWeather, tOpt)
+
+    // 旬食材ボーナス [0, 1]
+    const seasonalScore = r.ingredients.some((ing) =>
+      seasonalIngredients.some((s) => ing.name.includes(s))
+    ) ? 1 : 0
+
+    return {
+      item: r,
+      score: 0.40 * vecScore + 0.35 * personalWeatherScore + 0.25 * seasonalScore,
+    }
+  })
+
+  // Softmax確率的サンプリング (temperature=0.4: 多様性と品質のバランス)
+  return softmaxSample(scored, 4, 0.4)
 }
 
 /** 2-column tile grid section with a "more" link */
@@ -79,43 +180,53 @@ function TwoColRecipeSection({
 
 export function HomePage() {
   const navigate = useNavigate()
-  const { user, signInWithGoogle, loading: authLoading, isOAuthAvailable } = useAuth()
   const [recommendations, setRecommendations] = useState<{ recipe: Recipe; matchRate: number }[]>([])
+  const [todayWeather, setTodayWeather] = useState<DailyWeather | null>(null)
 
   const data = useLiveQuery(async () => {
-    const [recipes, stockItems] = await Promise.all([
-      db.recipes.toArray(),
+    const [recipes, stockItems, prefs] = await Promise.all([
+      db.recipes.limit(200).toArray(),
       db.stock.filter(item => item.inStock).toArray(),
+      db.userPreferences.limit(1).toArray(),
     ])
     const stockNames = new Set(stockItems.map((s) => s.name))
     const seasonal = findSeasonalRecipes(recipes)
     const hasStock = stockItems.length > 0
-    return { seasonal, stockNames, hasStock }
+    const tOpt = prefs[0]?.tOpt ?? 22  // T_opt個人最適気温（デフォルト22°C）
+    return { recipes, seasonal, stockNames, hasStock, tOpt }
   })
 
   // Load recommendations when stock data is available
   useEffect(() => {
     if (!data?.hasStock) return
     let cancelled = false
-    getLocalRecommendations(6).then(recs => {
+    getLocalRecommendations(4).then(recs => {
       if (!cancelled) setRecommendations(recs)
     })
     return () => { cancelled = true }
   }, [data?.hasStock])
 
+  // Load today's weather
+  useEffect(() => {
+    let cancelled = false
+    getWeeklyWeatherForecast(new Date()).then(forecast => {
+      if (!cancelled && forecast.length > 0) setTodayWeather(forecast[0])
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  const todayFoodRef = useRef<HTMLDivElement>(null)
   const stockSectionRef = useRef<HTMLDivElement>(null)
   const seasonalSectionRef = useRef<HTMLDivElement>(null)
 
   if (!data) return null
 
-  const { seasonal, stockNames } = data
+  const { recipes, seasonal, stockNames, tOpt } = data
 
-  // Only show recommendations when stock exists
   const displayRecs = data.hasStock ? recommendations : []
   const recMatchRates = new Map(displayRecs.map(r => [r.recipe.id!, r.matchRate]))
 
-  // Show login banner when not logged in
-  const showLoginBanner = isOAuthAvailable && !authLoading && !user
+  const todayRecipes = findTodayRecipes(recipes, todayWeather, tOpt)
 
   return (
     <div>
@@ -130,13 +241,15 @@ export function HomePage() {
 
       {/* Quick actions */}
       <div className="mb-5 flex gap-2">
-        <button
-          onClick={() => navigate('/stock')}
-          className="ui-btn ui-btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm font-semibold transition-colors hover:text-accent active:scale-95"
-        >
-          <Package className="h-4 w-4" />
-          在庫管理
-        </button>
+        {todayRecipes.length > 0 && (
+          <button
+            onClick={() => todayFoodRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="ui-btn ui-btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm font-semibold transition-colors hover:text-accent active:scale-95"
+          >
+            <Flame className="h-4 w-4 text-orange-400" />
+            今日食べたい料理
+          </button>
+        )}
         {displayRecs.length > 0 && (
           <button
             onClick={() => stockSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -157,31 +270,6 @@ export function HomePage() {
         )}
       </div>
 
-      {/* Login banner — non-intrusive, only when not logged in */}
-      {showLoginBanner && (
-        <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-bg-card px-4 py-3">
-          <div>
-            <p className="text-base font-semibold">Google Driveにバックアップ</p>
-            <p className="text-sm text-text-secondary">在庫・お気に入り・メモ・履歴・献立を自動保存</p>
-          </div>
-          <button
-            onClick={signInWithGoogle}
-            className="ui-btn ui-btn-primary min-h-[44px] px-4 py-2 text-sm transition-transform active:scale-95"
-          >
-            ログイン
-          </button>
-        </div>
-      )}
-
-      {!isOAuthAvailable && (
-        <div className="mb-5 rounded-2xl border border-border bg-bg-card px-4 py-3">
-          <p className="text-sm font-medium">Googleログインは現在未設定です</p>
-          <p className="mt-1 text-xs text-text-secondary">
-            バックアップ連携を使うには `VITE_GOOGLE_CLIENT_ID` の設定が必要です。
-          </p>
-        </div>
-      )}
-
       {/* Category grid */}
       <div className="mb-6">
         <CategoryGrid />
@@ -192,7 +280,26 @@ export function HomePage() {
         <WeeklyMenuTimeline compact />
       </div>
 
-      {/* Stock-based recommendations — 2-column grid */}
+      {/* 今日食べたい料理 — weather × seasonal scoring, 2×2 */}
+      {todayRecipes.length > 0 && (
+        <div ref={todayFoodRef}>
+          {todayWeather?.weatherText && (
+            <div className="mb-2 flex items-center gap-1.5 text-xs text-text-secondary">
+              <Cloud className="h-3.5 w-3.5" />
+              <span>今日の天気: {todayWeather.weatherText}（{todayWeather.maxTempC}°C）</span>
+            </div>
+          )}
+          <TwoColRecipeSection
+            icon={<Flame className="h-5 w-5 text-orange-400" />}
+            title="今日食べたい料理"
+            recipes={todayRecipes}
+            stockNames={stockNames}
+            onSelect={(id) => navigate(`/recipe/${id}`)}
+          />
+        </div>
+      )}
+
+      {/* Stock-based recommendations — 2×2 */}
       {displayRecs.length > 0 && (
         <div ref={stockSectionRef}>
           <TwoColRecipeSection
@@ -206,7 +313,7 @@ export function HomePage() {
         </div>
       )}
 
-      {/* Seasonal recipes — 2-column grid */}
+      {/* Seasonal recipes — 2×2 */}
       {seasonal.length > 0 && (
         <div ref={seasonalSectionRef}>
           <div className="mb-3 flex flex-wrap gap-1.5">

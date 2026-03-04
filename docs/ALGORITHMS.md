@@ -1,7 +1,7 @@
 # アルゴリズム仕様一覧
 
-最終改訂: 2026-02-24
-対象コードベース: `main` (v1.9.6)
+最終改訂: 2026-03-04
+対象コードベース: `claude/nifty-black` (v2.0.0)
 
 本ドキュメントは、Kitchen App の「判定・推定・選択・通知」ロジックをまとめた仕様書です。
 
@@ -36,9 +36,10 @@
 
 対象: `src/data/seasonalIngredients.ts`
 
-- 月ごとに20種類以上の旬食材プールを保持
-- 日付（年内通算日）をシードに毎日開始位置をずらして選抜
-- 同じ月でも日替わりで提案食材が変化
+- 月ごとに24種類の旬食材プールを保持（1月〜12月すべて定義）
+- `getCurrentSeasonalIngredients(limit = 10)` でデフォルト10件を選抜
+- 日付（年内通算日）をシードに毎日開始位置をずらして選抜（`rotateAndPick`）
+- 同じ月でも日替わりで提案食材が変化（最大24通りのパターン）
 
 ---
 
@@ -179,3 +180,73 @@
 - `importData`:
   - `overwrite`: 全置換
   - `merge`: 主キーupsert
+
+---
+
+## 12. 天気快適スコア（v2.0.0）
+
+対象: `src/utils/season-weather/weatherScoring.ts`
+
+今日の天気とレシピの相性を 0〜1 のスコアで評価。「今日食べたい料理」セクションのレシピ選定に使用する。
+
+```
+weatherComfortScore = 0.45 × thermalFit(recipe, weather)
+                    + 0.30 × cookingLoadFit(recipe, weather)
+                    + 0.25 × shoppingBurdenFit(recipe, weather)
+```
+
+### thermalFit（気温適合度）重み 45%
+
+| 条件 | スコア |
+|---|---|
+| maxTempC ≥ 28 かつ タイトルに `冷\|サラダ\|さっぱり` を含む | 1.0 |
+| maxTempC ≥ 28 かつ タイトルに `煮込み\|鍋` を含む | 0.3 |
+| maxTempC ≥ 28 その他 | 0.6 |
+| maxTempC ≤ 12 かつ タイトルに `煮込み\|鍋\|スープ` を含む | 1.0 |
+| maxTempC ≤ 12 かつ タイトルに `冷\|サラダ` を含む | 0.4 |
+| maxTempC ≤ 12 その他 / 12°C < maxTempC < 28°C | 0.7 |
+
+### cookingLoadFit（調理負荷適合度）重み 30%
+
+| 条件 | スコア |
+|---|---|
+| maxTempC ≥ 30 かつ totalTimeMinutes ≤ 20 | 1.0 |
+| maxTempC ≥ 30 かつ totalTimeMinutes > 20 | 0.5 |
+| maxTempC < 30 かつ totalTimeMinutes ≤ 40 | 0.8 |
+| maxTempC < 30 かつ totalTimeMinutes > 40 | 0.6 |
+
+`totalTimeMinutes` が null の場合は 30 分として扱う。
+
+### shoppingBurdenFit（買い物負担適合度）重み 25%
+
+| 条件 | スコア |
+|---|---|
+| precipitationMm < 5（晴れ/曇り） | 0.7（固定） |
+| precipitationMm ≥ 5 かつ main食材数 ≤ 5 | 1.0 |
+| precipitationMm ≥ 5 かつ main食材数 > 5 | 0.6 |
+
+`main食材数` は `ingredients[].category === 'main'` の件数。調味料（`seasoning`）は除外。
+
+**天気データ**: 気象庁 API (`https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json`)、東京エリア。取得失敗時は月別平均気温に基づく合成7日間フォールバック（`buildSyntheticForecast`）を使用。
+
+---
+
+## 13. 今日食べたい料理スコア（v2.0.0）
+
+対象: `src/pages/HomePage.tsx` — `findTodayRecipes`
+
+天気快適スコアと旬食材一致スコアを等分で合成し、ホームの「今日食べたい料理」2×2タイルに表示するレシピ4件を決定する。
+
+```
+todayScore = 0.5 × weatherComfortScore + 0.5 × seasonalScore
+```
+
+| 成分 | 重み | 説明 |
+|---|---|---|
+| `weatherComfortScore` | 50% | `computeWeatherComfortScore` の出力（0〜1） |
+| `seasonalScore` | 50% | レシピの食材のいずれかが当月の旬食材リストに含まれれば 1、なければ 0 |
+
+- ヘルシオデリ判定（`isHelsioDeli()`）のレシピは除外
+- `todayScore` 降順で上位4件を表示
+- 天気データ未取得時: 旬食材フィルタのみで上位4件にフォールバック
+- 旬食材: `src/data/seasonalIngredients.ts` — 月ごとに24種類のプールを保持。`getCurrentSeasonalIngredients(limit=10)` が年内通算日をシードにローテーションして10件を選抜（§2 参照）

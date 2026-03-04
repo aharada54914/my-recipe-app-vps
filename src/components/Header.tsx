@@ -1,4 +1,4 @@
-import { Search, CalendarClock, Settings } from 'lucide-react'
+import { Search, CalendarClock, Settings, Package } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
@@ -6,10 +6,11 @@ interface HeaderProps {
   onSearchToggle?: () => void
   onMultiSchedule?: () => void
   onSettings?: () => void
+  onStock?: () => void
 }
 
-export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderProps) {
-  const { user } = useAuth()
+export function Header({ onSearchToggle, onMultiSchedule, onSettings, onStock }: HeaderProps) {
+  const { user, signInWithGoogle, isOAuthAvailable } = useAuth()
   const navigate = useNavigate()
 
   return (
@@ -43,7 +44,7 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
             </button>
           )}
 
-          {/* Auth badge */}
+          {/* Auth area: account badge when logged in, compact login button when not */}
           {user ? (
             <button
               onClick={() => navigate('/settings')}
@@ -56,7 +57,26 @@ export function Header({ onSearchToggle, onMultiSchedule, onSettings }: HeaderPr
                 user.email[0].toUpperCase()
               )}
             </button>
+          ) : isOAuthAvailable ? (
+            <button
+              onClick={signInWithGoogle}
+              aria-label="Googleでログイン"
+              className="flex min-h-[36px] items-center justify-center rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-text-secondary transition-colors hover:bg-white/20 hover:text-accent"
+            >
+              ログイン
+            </button>
           ) : null}
+
+          {/* 在庫管理 */}
+          {onStock && (
+            <button
+              onClick={onStock}
+              aria-label="在庫管理"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white/10 p-2.5 transition-colors hover:bg-white/20"
+            >
+              <Package className="h-5 w-5 text-text-secondary" />
+            </button>
+          )}
 
           {onSettings && (
             <button

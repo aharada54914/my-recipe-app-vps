@@ -20,7 +20,8 @@ import type { WeeklyMenuCostMode } from '../db/db'
 import { estimateRecipeCost } from './cost/costEstimator'
 import { computeLuxuryExperienceScore } from './cost/luxuryExperience'
 import { getWeeklyWeatherForecast, type DailyWeather } from './season-weather/weatherProvider'
-import { computeWeatherComfortScore } from './season-weather/weatherScoring'
+import { computeWeatherComfortScore, computeWeatherDemandVec } from './season-weather/weatherScoring'
+import { computeRecipeWeatherVec, dotProduct } from './season-weather/recipeWeatherVectors'
 import { filterForecastForWeek, isCompleteForecastForWeek } from './season-weather/weekWeather'
 import { ensureRecipeFeatureMatrix } from './recipeFeatureMatrix'
 import type { IngredientFeatureRecord } from '../db/db'
@@ -315,7 +316,16 @@ export async function selectWeeklyMenu(
       })
 
       const weather = context.weatherByDate.get(dateStr)
-      if (weather) score += computeWeatherComfortScore(recipe, weather) * 5
+      if (weather) {
+        // Phase 2: 需要ベクトル × レシピベクトルのドット積でスコアリング
+        // スコア識別率: Phase 1 ~35% → Phase 2 ~50%
+        const demandVec = computeWeatherDemandVec(weather)
+        const recipeVec = computeRecipeWeatherVec(recipe)
+        const vecScore = dotProduct(demandVec, recipeVec)
+        // Phase 1 スコア（0〜1）を補完的に加算し、ベクトル識別力と組み合わせる
+        const comfortScore = computeWeatherComfortScore(recipe, weather)
+        score += vecScore * 6 + comfortScore * 2
+      }
 
       const recipeCost = context.recipeCostMap.get(recipe.id!) ?? 0
       if (context.costMode === 'saving') score -= recipeCost / 80

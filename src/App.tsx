@@ -38,6 +38,7 @@ function AppLayout() {
     <div className="min-h-dvh bg-bg-primary liquid-background">
       <Header
         onSettings={() => navigate('/settings')}
+        onStock={() => navigate('/stock')}
       />
       <GeminiProcessingBanner />
       <main className="px-4 pb-24">

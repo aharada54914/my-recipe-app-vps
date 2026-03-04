@@ -1,7 +1,7 @@
 # Architecture Reference
 
-最終改訂: 2026-03-02
-対象バージョン: v1.9.9
+最終改訂: 2026-03-04
+対象バージョン: v2.0.0
 
 Kitchen App の現行アーキテクチャ概要です。
 
@@ -134,14 +134,31 @@ DB: `RecipeDB`（Dexie schema version 9）
 
 ---
 
-## 10. 非採用/廃止
+## 10. ホームページ天気レコメンド（v2.0.0）
+
+対象:
+- `src/pages/HomePage.tsx`
+- `src/utils/season-weather/weatherProvider.ts`
+- `src/utils/season-weather/weatherScoring.ts`
+
+`HomePage` 起動時に気象庁APIから東京7日間予報を取得（`getWeeklyWeatherForecast`）し、今日分の`DailyWeather`を`todayWeather`ステートに保存。
+
+`findTodayRecipes` が天気快適スコア × 旬スコアの複合値でレシピをランキングし、上位4件を「今日食べたい料理」2×2タイルに表示する。詳細スコア計算は `docs/ALGORITHMS.md` §12〜13 を参照。
+
+**ヘッダー変更（v2.0.0）:**
+- `Header.tsx` に `onStock` プロップを追加し、Packageアイコンボタン（在庫管理へのナビゲーション）をアカウントアイコンと設定アイコンの間に配置
+- OAuth設定あり・未ログイン時にコンパクトな「ログイン」ボタンをヘッダーに表示
+
+---
+
+## 11. 非採用/廃止
 
 - Supabase同期層は削除済み（v1.5.0以前の履歴を除く）
 - 現在のクラウド連携は Google Drive バックアップ中心
 
 ---
 
-## 11. ビルド・配布
+## 12. ビルド・配布
 
 - `npm run build`
   - `scripts/prebuild-recipes.mjs`（CSV→JSON）

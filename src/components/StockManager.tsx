@@ -98,7 +98,7 @@ function StockRow({
         </div>
       )}
       <div
-        className="flex min-h-[52px] touch-pan-y items-center gap-2 rounded-xl bg-bg-card px-4 py-3 ring-1 ring-white/10 transition-transform"
+        className="relative z-10 flex min-h-[52px] touch-pan-y items-center gap-2 rounded-xl bg-bg-card px-4 py-3 ring-1 ring-white/10 transition-transform"
         style={{ transform: `translateX(${offsetX}px)` }}
         onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
         onTouchMove={(e) => handleDragMove(e.touches[0].clientX)}

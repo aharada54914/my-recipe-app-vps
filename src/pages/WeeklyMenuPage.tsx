@@ -160,7 +160,7 @@ export function WeeklyMenuPage() {
     } finally {
       setGenerating(false)
     }
-  }, [weekStart, weekStartStr, preferences, menu, loadRecipes])
+  }, [weekStart, weekStartStr, preferences, menu, loadRecipes, weeklyWeather])
 
   // Toggle lock
   const handleToggleLock = useCallback((dayIndex: number) => {
@@ -476,16 +476,7 @@ export function WeeklyMenuPage() {
     void refreshWeeklyWeather()
   }, [refreshWeeklyWeather])
 
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const forecast = await getWeeklyWeatherForecast(weekStart)
-      if (!cancelled) setWeeklyWeather(forecast)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [weekStart])
+
 
   useEffect(() => {
     if (!showShoppingList) return

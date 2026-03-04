@@ -384,3 +384,107 @@ Recipe data is loaded via a **pre-build pipeline**, not runtime CSV import.
 - **JSON-LD/OGP parsing**: `geminiParser.ts` extracts structured data from recipe URLs before falling back to AI parsing
 - **重複チェック**: AI parser checks for duplicate recipes by title before saving
 
+---
+
+## Recommendation Algorithms
+
+### 1. Weather Comfort Score — `computeWeatherComfortScore`
+
+**File**: `src/utils/season-weather/weatherScoring.ts`
+
+Scores a single recipe against today's weather on a 0–1 scale. Used in the "今日食べたい料理" section.
+
+```
+weatherComfortScore = 0.45 × thermalFit(recipe, weather)
+                    + 0.30 × cookingLoadFit(recipe, weather)
+                    + 0.25 × shoppingBurdenFit(recipe, weather)
+```
+
+**thermalFit (45%)** — title keyword match vs temperature:
+
+| Condition | Score |
+|---|---|
+| maxTempC ≥ 28 AND title matches `冷\|サラダ\|さっぱり` | 1.0 |
+| maxTempC ≥ 28 AND title matches `煮込み\|鍋` | 0.3 |
+| maxTempC ≥ 28 otherwise | 0.6 |
+| maxTempC ≤ 12 AND title matches `煮込み\|鍋\|スープ` | 1.0 |
+| maxTempC ≤ 12 AND title matches `冷\|サラダ` | 0.4 |
+| 12°C < maxTempC < 28°C / ≤12 otherwise | 0.7 |
+
+**cookingLoadFit (30%)** — `totalTimeMinutes` vs temperature (null → treated as 30 min):
+
+| Condition | Score |
+|---|---|
+| maxTempC ≥ 30 AND totalTimeMinutes ≤ 20 | 1.0 |
+| maxTempC ≥ 30 AND totalTimeMinutes > 20 | 0.5 |
+| maxTempC < 30 AND totalTimeMinutes ≤ 40 | 0.8 |
+| maxTempC < 30 AND totalTimeMinutes > 40 | 0.6 |
+
+**shoppingBurdenFit (25%)** — main-category ingredient count vs precipitation:
+
+| Condition | Score |
+|---|---|
+| precipitationMm < 5 (clear/cloudy) | 0.7 (fixed) |
+| precipitationMm ≥ 5 AND main ingredients ≤ 5 | 1.0 |
+| precipitationMm ≥ 5 AND main ingredients > 5 | 0.6 |
+
+`main ingredients` = `ingredients[].category === 'main'` count (seasonings excluded).
+
+**Weather data source**: JMA Forecast API (`https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json`) — Tokyo area. Falls back to `buildSyntheticForecast` (month-average based synthetic 7 days) when unavailable.
+
+---
+
+### 2. Today's Recipe Score — `findTodayRecipes`
+
+**File**: `src/pages/HomePage.tsx`
+
+Combines weather comfort with seasonal ingredient match to rank recipes for the "今日食べたい料理" 2×2 tile section.
+
+```
+todayScore = 0.5 × weatherComfortScore + 0.5 × seasonalScore
+```
+
+| Component | Weight | Description |
+|---|---|---|
+| `weatherComfortScore` | 50% | Output of `computeWeatherComfortScore` (0–1) |
+| `seasonalScore` | 50% | 1 if any ingredient name contains a seasonal ingredient string, else 0 |
+
+- Recipes flagged as ヘルシオデリ (`isHelsioDeli()`) are excluded.
+- Top 4 recipes by `todayScore` descending are displayed.
+- If weather data is unavailable, falls back to seasonal-only filter (top 4).
+- Seasonal ingredients: `getCurrentSeasonalIngredients(limit=10)` — picks 10 from a 24-item monthly pool using day-of-year as rotation seed (`src/data/seasonalIngredients.ts`).
+
+---
+
+### 3. Stock-Based Recommendation — `getLocalRecommendations`
+
+**File**: `src/utils/geminiRecommender.ts`
+
+Ranks recipes by the proportion of their ingredients currently in stock. Fully offline — no API call.
+
+```
+matchRate = (ingredients present in stock / total ingredients) × 100
+```
+
+- Loads up to 200 recipes (`db.recipes.limit(200).toArray()`); excludes ヘルシオデリ.
+- Queries `db.stock` with `.filter(item => item.inStock)` (table is small ≤100 rows).
+- Excludes recipes with `matchRate === 0`.
+- Returns top 4 recipes sorted by `matchRate` descending.
+- Displayed only when the user has at least one stock item.
+
+---
+
+### 4. Search Preference Rank — Kitchen App Preference Rank
+
+**File**: `src/utils/searchUtils.ts`
+
+Composite search score combining text relevance, user preference history, and stock match rate.
+
+```
+searchScore = textRelevance + preferenceBonus + stockMatchBonus
+```
+
+- **textRelevance**: Fuse.js fuzzy score against title/category/device/ingredients
+- **preferenceBonus**: Weighted sum of view history, favorites, and weekly menu adoption history
+- **stockMatchBonus**: Partial credit based on `matchRate` from stock items
+
