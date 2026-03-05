@@ -280,6 +280,30 @@ export function HomePage() {
         <WeeklyMenuTimeline compact />
       </div>
 
+      {/* Seasonal recipes — 2×2, placed directly below WeeklyMenuTimeline */}
+      {seasonal.length > 0 && (
+        <div ref={seasonalSectionRef}>
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {seasonalIngredients.map((name) => (
+              <span
+                key={name}
+                className="rounded-lg bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+          <TwoColRecipeSection
+            icon={<Leaf className="h-5 w-5 text-green-400" />}
+            title="旬のおすすめ"
+            recipes={seasonal}
+            stockNames={stockNames}
+            onMore={() => navigate('/search?filter=seasonal')}
+            onSelect={(id) => navigate(`/recipe/${id}`)}
+          />
+        </div>
+      )}
+
       {/* 今日食べたい料理 — weather × seasonal scoring, 2×2 */}
       {todayRecipes.length > 0 && (
         <div ref={todayFoodRef}>
@@ -308,30 +332,6 @@ export function HomePage() {
             recipes={displayRecs.map(r => r.recipe)}
             stockNames={stockNames}
             matchRates={recMatchRates}
-            onSelect={(id) => navigate(`/recipe/${id}`)}
-          />
-        </div>
-      )}
-
-      {/* Seasonal recipes — 2×2 */}
-      {seasonal.length > 0 && (
-        <div ref={seasonalSectionRef}>
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {seasonalIngredients.map((name) => (
-              <span
-                key={name}
-                className="rounded-lg bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400"
-              >
-                {name}
-              </span>
-            ))}
-          </div>
-          <TwoColRecipeSection
-            icon={<Leaf className="h-5 w-5 text-green-400" />}
-            title="旬のおすすめ"
-            recipes={seasonal}
-            stockNames={stockNames}
-            onMore={() => navigate('/search?filter=seasonal')}
             onSelect={(id) => navigate(`/recipe/${id}`)}
           />
         </div>

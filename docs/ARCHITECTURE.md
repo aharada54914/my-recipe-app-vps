@@ -1,6 +1,6 @@
 # Architecture Reference
 
-最終改訂: 2026-03-04
+最終改訂: 2026-03-05
 対象バージョン: v2.0.0
 
 Kitchen App の現行アーキテクチャ概要です。
@@ -140,10 +140,25 @@ DB: `RecipeDB`（Dexie schema version 9）
 - `src/pages/HomePage.tsx`
 - `src/utils/season-weather/weatherProvider.ts`
 - `src/utils/season-weather/weatherScoring.ts`
+- `src/utils/season-weather/recipeWeatherVectors.ts`
+- `src/utils/season-weather/tOptLearner.ts`
 
-`HomePage` 起動時に気象庁APIから東京7日間予報を取得（`getWeeklyWeatherForecast`）し、今日分の`DailyWeather`を`todayWeather`ステートに保存。
+`HomePage` 起動時に気象庁APIから東京7日間予報を取得（`getWeeklyWeatherForecast`）し、今日分の `DailyWeather` を `todayWeather` ステートに保存。
 
-`findTodayRecipes` が天気快適スコア × 旬スコアの複合値でレシピをランキングし、上位4件を「今日食べたい料理」2×2タイルに表示する。詳細スコア計算は `docs/ALGORITHMS.md` §12〜13 を参照。
+`findTodayRecipes` が Phase2ベクトルスコア × T_opt個人化スコア × 旬スコアの複合値（§13）でレシピをランキングし、Softmax確率的サンプリングで4件を「今日食べたい料理」2×2タイルに表示。詳細は `docs/ALGORITHMS.md` §13〜15 参照。
+
+**season-weather モジュール構成:**
+
+| ファイル | 役割 |
+|---|---|
+| `weatherProvider.ts` | 気象庁API取得 + 合成フォールバック（`buildSyntheticForecast`） |
+| `weatherScoring.ts` | Phase1: 3因子快適スコア / Phase3: T_opt個人化スコア |
+| `recipeWeatherVectors.ts` | Phase2: レシピ4Dベクトル算出 + ドット積スコアリング |
+| `tOptLearner.ts` | 履歴から T_opt（個人最適気温）を学習・推定 |
+| `weatherTagger.ts` | レシピへの天気タグ付与 |
+| `weekWeather.ts` | 週スコープ天気フィルタ |
+| `weatherIllustrationComposer.ts` | 湿度・降水量レイヤードイラスト合成 |
+| `weatherIllustrationTokens.ts` | イラストトークン定義 |
 
 **ヘッダー変更（v2.0.0）:**
 - `Header.tsx` に `onStock` プロップを追加し、Packageアイコンボタン（在庫管理へのナビゲーション）をアカウントアイコンと設定アイコンの間に配置
@@ -166,3 +181,30 @@ DB: `RecipeDB`（Dexie schema version 9）
   - `vite build`
 - PWA: `vite-plugin-pwa`
 - `vercel.json` でSPAリライト
+
+---
+
+## 13. コストシステム（v2.0.0）
+
+対象: `src/utils/cost/`
+
+食材の平均価格データ（`src/data/ingredientAveragePrices.ts`）をもとにレシピのコストを推定する。
+
+| ファイル | 役割 |
+|---|---|
+| `costEstimator.ts` | レシピ1件のコスト合計を計算するエントリポイント |
+| `priceResolver.ts` | 食材名と単位から価格を解決（完全一致→類似一致の順） |
+| `similarIngredientResolver.ts` | 食材名の表記ゆれを吸収し類似食材の価格を流用 |
+| `luxuryExperience.ts` | 高額食材（松茸・カニ・和牛等）を検出しラグジュアリーフラグを付与 |
+| `priceSync.ts` | 価格データの同期処理（将来的な外部API連携を想定） |
+| `startupPriceSync.ts` | `initDb()` から呼び出す起動時価格同期 |
+
+`UserPreferences.weeklyMenuCostMode` で挙動を制御（`'ignore'` / `'budget'` / `'luxury'`）。詳細は `docs/ALGORITHMS.md` §16 参照。
+
+---
+
+## 14. レシピ特徴行列（v2.0.0）
+
+対象: `src/utils/recipeFeatureMatrix.ts`
+
+`ensureRecipeFeatureMatrix(recipes)` が週間献立選択時にレシピの特徴ベクトルを一括生成・キャッシュする。`selectWeeklyMenu` がスコアリングのために参照する中間データ層。天気ベクトル（§14）とコスト推定（§16）の入力としても使用される。

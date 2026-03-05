@@ -157,6 +157,9 @@ export function WeeklyMenuPage() {
           tag: `weekly_menu_${weekStartStr}`,
         })
       }
+    } catch (err) {
+      console.error('献立の生成に失敗しました', err)
+      alert('献立の生成に失敗しました。しばらくしてから再度お試しください。')
     } finally {
       setGenerating(false)
     }

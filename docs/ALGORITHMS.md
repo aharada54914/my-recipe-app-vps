@@ -1,6 +1,6 @@
 # アルゴリズム仕様一覧
 
-最終改訂: 2026-03-04
+最終改訂: 2026-03-05
 対象コードベース: `claude/nifty-black` (v2.0.0)
 
 本ドキュメントは、Kitchen App の「判定・推定・選択・通知」ロジックをまとめた仕様書です。
@@ -231,22 +231,121 @@ weatherComfortScore = 0.45 × thermalFit(recipe, weather)
 
 ---
 
-## 13. 今日食べたい料理スコア（v2.0.0）
+## 13. 今日食べたい料理スコア — Phase 3（v2.0.0）
 
 対象: `src/pages/HomePage.tsx` — `findTodayRecipes`
 
-天気快適スコアと旬食材一致スコアを等分で合成し、ホームの「今日食べたい料理」2×2タイルに表示するレシピ4件を決定する。
+Phase2ベクトルスコア・T_opt個人化スコア・旬食材スコアを合成し、ホームの「今日食べたい料理」2×2タイルに表示するレシピ4件を決定する（Softmax確率的サンプリング）。
 
 ```
-todayScore = 0.5 × weatherComfortScore + 0.5 × seasonalScore
+todayScore = 0.40 × vecScore
+           + 0.35 × personalWeatherScore
+           + 0.25 × seasonalScore
 ```
 
 | 成分 | 重み | 説明 |
 |---|---|---|
-| `weatherComfortScore` | 50% | `computeWeatherComfortScore` の出力（0〜1） |
-| `seasonalScore` | 50% | レシピの食材のいずれかが当月の旬食材リストに含まれれば 1、なければ 0 |
+| `vecScore` | 40% | Phase2: `dotProduct(weatherDemandVec, recipeWeatherVec)`（§14参照） |
+| `personalWeatherScore` | 35% | Phase3: `computeWeatherComfortScoreWithTopt(recipe, weather, tOpt)`（§15参照） |
+| `seasonalScore` | 25% | 食材のいずれかが当月の旬食材リストに含まれれば 1、なければ 0 |
 
 - ヘルシオデリ判定（`isHelsioDeli()`）のレシピは除外
-- `todayScore` 降順で上位4件を表示
 - 天気データ未取得時: 旬食材フィルタのみで上位4件にフォールバック
-- 旬食材: `src/data/seasonalIngredients.ts` — 月ごとに24種類のプールを保持。`getCurrentSeasonalIngredients(limit=10)` が年内通算日をシードにローテーションして10件を選抜（§2 参照）
+- 最終4件は `softmaxSample(scored, 4, temperature=0.4)` で確率的に選出（多様性と品質のバランス）
+- 旬食材: `src/data/seasonalIngredients.ts` — 月ごとに24種類のプールを保持。`getCurrentSeasonalIngredients(limit=10)` が年内通算日をシードにローテーションして10件を選抜（§2参照）
+
+---
+
+## 14. Phase 2 レシピ×気象4Dベクトル（v2.0.0）
+
+対象: `src/utils/season-weather/recipeWeatherVectors.ts`
+
+レシピの材料・栄養・調理特性から4次元属性ベクトルを算出し、天気需要ベクトルとのドット積でスコアリングする。スコア識別率を Phase 1 の約35% から約50% へ向上。
+
+### レシピベクトル `RecipeWeatherVec = [x_temp, x_water, x_spice, x_carb]`
+
+| 次元 | 意味 | 高スコア例 | 低スコア例 |
+|---|---|---|---|
+| `x_temp` | 温料理強度 | 鍋・シチュー・煮込み（+調理時間長） | サラダ・冷製（-調理時間短） |
+| `x_water` | 汁物・水分強度 | カテゴリ=スープ・みそ汁・ポタージュ | 炒め・揚げ物 |
+| `x_spice` | 辛み強度 | キムチ・カレー・豆板醤・ラー油 | （辛み素材なし） |
+| `x_carb` | 糖質密度 | `carbG / 50` で正規化 | 栄養未取得時は 0.5 |
+
+### 天気需要ベクトル `WeatherDemandVec`
+
+`computeWeatherDemandVec(weather, tOpt, dayOfYear)` が気温・降水量・T_opt・年内通算日から算出。年内通算日による `B_carb`（炭水化物季節補正: 冬高・夏低）を含む。
+
+### スコア算出
+
+```
+vecScore = dot(weatherDemandVec, recipeWeatherVec)  // [0, 1]
+```
+
+---
+
+## 15. T_opt 個人最適気温学習（v2.0.0）
+
+対象: `src/utils/season-weather/tOptLearner.ts`
+
+ユーザーの閲覧履歴・献立採用履歴から個人の熱的快適温度帯（T_opt）を推定する。デフォルトは 22°C。推定値は `UserPreferences.tOpt` として保存。
+
+### 学習ロジック
+
+- `viewHistory` と `weeklyMenus` の採用レシピのタイトルキーワードを集計
+- 「鍋・シチュー・煮込み」系（温料理）採用が多い → T_opt を下方修正（寒い料理好き）
+- 「サラダ・冷製・さっぱり」系（冷料理）採用が多い → T_opt を上方修正（さっぱり系好き）
+
+### 個人化スコア
+
+```
+personalWeatherScore = computeWeatherComfortScoreWithTopt(recipe, weather, tOpt)
+```
+
+T_opt を基準に気温差に応じたペナルティを付与し、§12 の3因子スコアと合成する。
+
+---
+
+## 16. コスト推定（v2.0.0）
+
+対象: `src/utils/cost/`
+
+食材の平均価格データ（`ingredientAveragePrices.ts`）をもとにレシピのコストを推定する。
+
+### モジュール構成
+
+| ファイル | 役割 |
+|---|---|
+| `costEstimator.ts` | レシピ1件のコスト合計を計算するエントリポイント |
+| `priceResolver.ts` | 食材名と単位から価格を解決（完全一致→類似一致の順） |
+| `similarIngredientResolver.ts` | 食材名の表記ゆれを吸収し類似食材の価格を流用 |
+| `luxuryExperience.ts` | 高額食材（松茸・カニ・和牛等）を検出しラグジュアリーフラグを付与 |
+| `priceSync.ts` | 価格データの同期処理（将来的な外部API連携を想定） |
+| `startupPriceSync.ts` | `initDb()` から呼び出す起動時価格同期 |
+
+### 週間献立コストモード
+
+`UserPreferences.weeklyMenuCostMode` により挙動を切り替え:
+- `'ignore'`: コスト計算スキップ（デフォルト）
+- `'budget'`: `weeklyBudgetYen` を週あたり上限として考慮
+- `'luxury'`: 高額食材を優先
+
+---
+
+## 17. 週間献立 天気スコアリング統合（v2.0.0）
+
+対象: `src/pages/WeeklyMenuPage.tsx`, `src/utils/weeklyMenuSelector.ts`
+
+週間献立ページが気象庁APIから当週の天気予報を取得し、`selectWeeklyMenu` に渡すことで天気考慮の献立選択を実現する。
+
+### フロー
+
+1. `WeeklyMenuPage` 起動時・週切替時に `getWeeklyWeatherForecast(weekStart)` を呼び出し
+2. `filterForecastForWeek(forecast, weekStart)` で当週7日分に絞り込み
+3. `isCompleteForecastForWeek(weeklyWeather, weekStart)` が真のとき `preloadedWeather` として `selectWeeklyMenu` に渡す
+4. `selectWeeklyMenu` 内部でレシピの天気スコアを加味してスコアリング
+
+### 天気パネルUI
+
+- 折りたたみ式（デフォルト折りたたみ）、展開時に7日分を表示
+- 手動再取得ボタン（`refreshWeeklyWeather`）+ 最終取得日時表示
+- 各日: `WeatherIllustration` + 最高/最低気温 + 降水目安
