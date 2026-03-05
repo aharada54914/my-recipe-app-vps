@@ -43,13 +43,23 @@ export function buildRecipeFeatureRecord(recipe: Recipe): IngredientFeatureRecor
 }
 
 export async function ensureRecipeFeatureMatrix(recipes: Recipe[]): Promise<Map<number, IngredientFeatureRecord>> {
-  const records = recipes
+  const ids = recipes.map(r => r.id).filter((id): id is number => id != null)
+  const existing = await db.recipeFeatureMatrix.bulkGet(ids)
+  const existingMap = new Map(
+    (existing.filter(Boolean) as IngredientFeatureRecord[]).map(r => [r.recipeId, r])
+  )
+
+  const newRecords = recipes
+    .filter(r => r.id != null && !existingMap.has(r.id))
     .map(buildRecipeFeatureRecord)
     .filter((record): record is IngredientFeatureRecord => record != null)
 
-  if (records.length > 0) {
-    await db.recipeFeatureMatrix.bulkPut(records)
+  if (newRecords.length > 0) {
+    await db.recipeFeatureMatrix.bulkPut(newRecords)
   }
 
-  return new Map(records.map((record) => [record.recipeId, record]))
+  for (const record of newRecords) {
+    existingMap.set(record.recipeId, record)
+  }
+  return existingMap
 }

@@ -1,6 +1,7 @@
 import type { Recipe } from '../../db/db'
 import type { DailyWeather } from './weatherProvider'
 import type { RecipeWeatherVec } from './recipeWeatherVectors'
+import { WARM_TITLE_RE, COLD_TITLE_RE } from './recipeKeywords'
 
 // ── Phase 1 helpers ─────────────────────────────────────────────────────────
 
@@ -56,8 +57,8 @@ function thermalFit(recipe: Recipe, weather: DailyWeather): number {
   const delta = 22 - apparentTemp
   const weatherDemand = Math.max(-1, Math.min(1, delta / 20))
 
-  const isColdDish = /冷|サラダ|さっぱり/.test(recipe.title)
-  const isWarmDish = /煮込み|鍋|スープ|シチュー/.test(recipe.title)
+  const isColdDish = COLD_TITLE_RE.test(recipe.title)
+  const isWarmDish = WARM_TITLE_RE.test(recipe.title)
 
   if (isColdDish) {
     // 冷系レシピ: 暑い日ほど高スコア（weatherDemandが負のとき適合↑）

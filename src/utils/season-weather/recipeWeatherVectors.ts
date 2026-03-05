@@ -13,21 +13,16 @@
  */
 
 import type { Recipe } from '../../db/db'
+import { WARM_TITLE_RE, COLD_TITLE_RE, SPICE_KEYWORDS_RE } from './recipeKeywords'
 
 /** レシピの気象属性ベクトル (x_temp, x_water, x_spice, x_carb) */
 export type RecipeWeatherVec = [number, number, number, number]
 
 // ── キーワードセット ─────────────────────────────────────────────────────────
 
-const WARM_TITLE = /鍋|シチュー|ポトフ|おでん|煮込み|グラタン|ラーメン|うどん|そば|けんちん|ポワレ|ブレゼ/
-const COLD_TITLE = /冷|サラダ|あえ|マリネ|カルパッチョ|ガスパチョ|そうめん|冷製/
-
 const SOUP_INGREDIENTS = /だし|スープ|ブイヨン|コンソメ|みそ汁|お吸い物|ポタージュ|チャウダー|湯|水[（(]多め/
 /** RecipeCategory === 'スープ' の場合に汁物スコアを加算 */
 const SOUP_CATEGORY = 'スープ' as const
-
-const SPICE_KEYWORDS =
-  /唐辛子|一味|七味|豆板醤|コチュジャン|キムチ|カレー|チリ|タバスコ|ラー油|鷹の爪|ハラペーニョ|サンバル/
 
 // ── 各次元の計算 ──────────────────────────────────────────────────────────────
 
@@ -40,8 +35,8 @@ function computeXTemp(recipe: Recipe): number {
   const title = recipe.title
   let score = 0.5 // 中間値をデフォルト
 
-  if (WARM_TITLE.test(title)) score += 0.35
-  if (COLD_TITLE.test(title)) score -= 0.35
+  if (WARM_TITLE_RE.test(title)) score += 0.35
+  if (COLD_TITLE_RE.test(title)) score -= 0.35
 
   // 調理時間が長い = 煮込み・蒸し料理 = 温料理傾向
   const minutes = recipe.totalTimeMinutes ?? 30
@@ -73,8 +68,8 @@ function computeXSpice(recipe: Recipe): number {
   const ingredientNames = recipe.ingredients.map((i) => i.name).join(' ')
 
   let score = 0.0
-  if (SPICE_KEYWORDS.test(ingredientNames)) score += 0.6
-  if (SPICE_KEYWORDS.test(recipe.title)) score += 0.3
+  if (SPICE_KEYWORDS_RE.test(ingredientNames)) score += 0.6
+  if (SPICE_KEYWORDS_RE.test(recipe.title)) score += 0.3
 
   return Math.max(0, Math.min(1, score))
 }

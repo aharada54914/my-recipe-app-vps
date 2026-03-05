@@ -20,7 +20,7 @@ import type { WeeklyMenuCostMode } from '../db/db'
 import { estimateRecipeCost } from './cost/costEstimator'
 import { computeLuxuryExperienceScore } from './cost/luxuryExperience'
 import { getWeeklyWeatherForecast, type DailyWeather } from './season-weather/weatherProvider'
-import { computeWeatherComfortScore, computeWeatherDemandVec } from './season-weather/weatherScoring'
+import { computeWeatherComfortScoreWithTopt, computeWeatherDemandVec } from './season-weather/weatherScoring'
 import { computeRecipeWeatherVec, dotProduct } from './season-weather/recipeWeatherVectors'
 import { filterForecastForWeek, isCompleteForecastForWeek } from './season-weather/weekWeather'
 import { ensureRecipeFeatureMatrix } from './recipeFeatureMatrix'
@@ -34,6 +34,7 @@ export interface MenuSelectionConfig {
   weeklyMenuCostMode?: WeeklyMenuCostMode
   weeklyBudgetYen?: number
   preloadedWeather?: DailyWeather[]
+  tOpt?: number
 }
 
 interface ScoredRecipe {
@@ -49,10 +50,12 @@ interface SelectionContext {
   byInferenceId: Map<number, MealBalanceInference>
   balanceTier: BalanceTierDecision
   recipeCostMap: Map<number, number>
-  luxuryScoreMap: Map<number, number>
+  /** キー: `${recipeId}_${dateStr}` */
+  luxuryScoreMap: Map<string, number>
   weatherByDate: Map<string, DailyWeather>
   costMode: WeeklyMenuCostMode
   featureMatrixByRecipeId: Map<number, IngredientFeatureRecord>
+  tOpt: number
 }
 
 const SEASONAL_WEIGHTS: Record<SeasonalPriority, number> = {
@@ -156,13 +159,26 @@ function buildScoredRecipes(
   })
 }
 
+const SAMPLE_SIZE = 300
+
 async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionConfig): Promise<SelectionContext> {
-  const [recipes, stockItems, recentMenus, recentHistory] = await Promise.all([
-    db.recipes.toArray(),
+  const [allIds, stockItems, recentMenus, recentHistory, prefsRecord] = await Promise.all([
+    db.recipes.orderBy('id').primaryKeys() as Promise<number[]>,
     db.stock.filter(item => item.inStock).toArray(),
     db.weeklyMenus.orderBy('weekStartDate').reverse().limit(2).toArray(),
     db.viewHistory.orderBy('viewedAt').reverse().limit(30).toArray(),
+    db.userPreferences.limit(1).first(),
   ])
+  const tOpt = config.tOpt ?? prefsRecord?.tOpt ?? 22
+
+  // 直近閲覧レシピは必ず含め、残りをランダムサンプリング
+  const recentViewIds = new Set(recentHistory.map(vh => vh.recipeId))
+  const shuffledIds = shuffleRecipes(allIds)
+  const sampledIds = [
+    ...recentViewIds,
+    ...shuffledIds.filter(id => !recentViewIds.has(id)).slice(0, Math.max(0, SAMPLE_SIZE - recentViewIds.size)),
+  ]
+  const rawRecipes = (await db.recipes.bulkGet(sampledIds)).filter((r): r is Recipe => r != null)
 
   const stockNames = new Set(stockItems.map(s => s.name))
   const seasonalIngredients = getCurrentSeasonalIngredients()
@@ -175,9 +191,7 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
     }
   }
 
-  const recentViewIds = new Set(recentHistory.map(vh => vh.recipeId))
-
-  const eligible = shuffleRecipes(recipes)
+  const eligible = shuffleRecipes(rawRecipes)
     .filter(r => !isHelsioDeli(r) && r.id != null)
 
   const mainEligible = filterRecipesByRole(eligible, 'main')
@@ -217,13 +231,18 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
   const balanceTier = resolveBalanceScoringTier(mainEligible, DEFAULT_BALANCE_SCORING_MODE)
 
   const recipeCostMap = new Map<number, number>()
-  const luxuryScoreMap = new Map<number, number>()
+  const luxuryScoreMap = new Map<string, number>()
   const mode: WeeklyMenuCostMode = config.weeklyMenuCostMode ?? 'ignore'
-  await Promise.all(eligible.map(async (recipe) => {
-    if (recipe.id == null) return
-    const cost = await estimateRecipeCost(recipe, mode)
-    recipeCostMap.set(recipe.id, cost)
-  }))
+
+  if (mode !== 'ignore') {
+    // 価格テーブルを1回だけロードし、全レシピで共有（各食材ごとの繰り返し toArray() を排除）
+    const priceTable = await db.ingredientPrices.toArray()
+    await Promise.all(eligible.map(async (recipe) => {
+      if (recipe.id == null) return
+      const cost = await estimateRecipeCost(recipe, mode, priceTable)
+      recipeCostMap.set(recipe.id, cost)
+    }))
+  }
 
   const preloaded = config.preloadedWeather ? filterForecastForWeek(config.preloadedWeather, weekStartDate) : []
   const weather = isCompleteForecastForWeek(preloaded, weekStartDate)
@@ -236,12 +255,11 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
     const dateStr = format(addDays(weekStartDate, i), 'yyyy-MM-dd')
     for (const recipe of eligible) {
       if (recipe.id == null) continue
-      luxuryScoreMap.set(recipe.id, computeLuxuryExperienceScore(recipe, i))
-      if (!weatherByDate.has(dateStr)) continue
+      luxuryScoreMap.set(`${recipe.id}_${dateStr}`, computeLuxuryExperienceScore(recipe, i))
     }
   }
 
-  return { scoredMains, scoredSides, mainEligible, byRecipeId, byInferenceId, balanceTier, recipeCostMap, luxuryScoreMap, weatherByDate, costMode: mode, featureMatrixByRecipeId }
+  return { scoredMains, scoredSides, mainEligible, byRecipeId, byInferenceId, balanceTier, recipeCostMap, luxuryScoreMap, weatherByDate, costMode: mode, featureMatrixByRecipeId, tOpt }
 }
 
 /**
@@ -255,7 +273,9 @@ export async function selectWeeklyMenu(
 ): Promise<WeeklyMenuItem[]> {
   const context = await buildSelectionContext(weekStartDate, config)
 
-  if (context.mainEligible.length === 0) return []
+  if (context.mainEligible.length === 0) {
+    throw new Error('利用可能な主菜レシピが見つかりませんでした。レシピデータを確認してください。')
+  }
 
   const lockedMap = new Map<string, number>()
   const lockedDevices: DeviceType[] = []
@@ -317,19 +337,23 @@ export async function selectWeeklyMenu(
 
       const weather = context.weatherByDate.get(dateStr)
       if (weather) {
-        // Phase 2: 需要ベクトル × レシピベクトルのドット積でスコアリング
+        // Phase 2: 需要ベクトル × レシピベクトルのドット積でスコアリング（tOpt + dayOfYear 対応）
         // スコア識別率: Phase 1 ~35% → Phase 2 ~50%
-        const demandVec = computeWeatherDemandVec(weather)
+        const dayDate = addDays(weekStartDate, day)
+        const dayOfYear = Math.floor(
+          (dayDate.getTime() - new Date(dayDate.getFullYear(), 0, 0).getTime()) / 86400000,
+        )
+        const demandVec = computeWeatherDemandVec(weather, context.tOpt, dayOfYear)
         const recipeVec = computeRecipeWeatherVec(recipe)
         const vecScore = dotProduct(demandVec, recipeVec)
-        // Phase 1 スコア（0〜1）を補完的に加算し、ベクトル識別力と組み合わせる
-        const comfortScore = computeWeatherComfortScore(recipe, weather)
+        // Phase 3 個人化スコア（tOpt 対応版）を補完的に加算し、ベクトル識別力と組み合わせる
+        const comfortScore = computeWeatherComfortScoreWithTopt(recipe, weather, context.tOpt)
         score += vecScore * 6 + comfortScore * 2
       }
 
       const recipeCost = context.recipeCostMap.get(recipe.id!) ?? 0
       if (context.costMode === 'saving') score -= recipeCost / 80
-      if (context.costMode === 'luxury') score += (context.luxuryScoreMap.get(recipe.id!) ?? 0) * 8
+      if (context.costMode === 'luxury') score += (context.luxuryScoreMap.get(`${recipe.id!}_${dateStr}`) ?? 0) * 8
 
       if (score > bestScore) {
         bestScore = score

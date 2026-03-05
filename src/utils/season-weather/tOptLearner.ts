@@ -18,6 +18,7 @@
 
 import { db } from '../../db/db'
 import type { WeeklyMenu } from '../../db/db'
+import { WARM_TITLE_RE, COLD_TITLE_RE } from './recipeKeywords'
 
 const T_OPT_DEFAULT = 22
 const T_OPT_MIN = 10
@@ -27,10 +28,8 @@ const LOOKBACK_DAYS = 30    // 参照する過去日数
 
 /** 料理タイトルから温冷方向性を推定 (-1.0〜+1.0) */
 function recipeTempDirection(title: string): number {
-  const WARM = /鍋|シチュー|ポトフ|おでん|煮込み|グラタン|ラーメン|うどん|そば|けんちん|雑炊|おじや/
-  const COLD = /冷|サラダ|あえ|マリネ|そうめん|冷製|カルパッチョ|ガスパチョ/
-  if (WARM.test(title)) return 1.0
-  if (COLD.test(title)) return -1.0
+  if (WARM_TITLE_RE.test(title)) return 1.0
+  if (COLD_TITLE_RE.test(title)) return -1.0
   return 0.0
 }
 

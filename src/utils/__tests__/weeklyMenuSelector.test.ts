@@ -4,18 +4,31 @@ const { mockRecipesToArray } = vi.hoisted(() => ({
   mockRecipesToArray: vi.fn<() => Promise<import('../../db/db').Recipe[]>>(),
 }))
 
-vi.mock('../../db/db', () => ({
-  db: {
-    recipes: {
-      toArray: mockRecipesToArray,
-      limit: vi.fn(() => ({ toArray: vi.fn(() => []) })),
+vi.mock('../../db/db', () => {
+  const mockPrimaryKeys = vi.fn(async () => {
+    const recipes = await mockRecipesToArray()
+    return recipes.map((r) => r.id!)
+  })
+  const mockBulkGet = vi.fn(async (ids: number[]) => {
+    const recipes = await mockRecipesToArray()
+    return ids.map((id) => recipes.find((r) => r.id === id))
+  })
+  return {
+    db: {
+      recipes: {
+        toArray: mockRecipesToArray,
+        limit: vi.fn(() => ({ toArray: vi.fn(() => []) })),
+        orderBy: vi.fn(() => ({ primaryKeys: mockPrimaryKeys })),
+        bulkGet: mockBulkGet,
+      },
+      stock: { filter: vi.fn(() => ({ toArray: vi.fn(() => []) })) },
+      weeklyMenus: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
+      viewHistory: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
+      userPreferences: { limit: vi.fn(() => ({ first: vi.fn(() => Promise.resolve(undefined)) })) },
+      recipeFeatureMatrix: { bulkPut: vi.fn(() => Promise.resolve()), bulkGet: vi.fn(() => Promise.resolve([])) },
     },
-    stock: { filter: vi.fn(() => ({ toArray: vi.fn(() => []) })) },
-    weeklyMenus: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
-    viewHistory: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
-    recipeFeatureMatrix: { bulkPut: vi.fn(() => Promise.resolve()) },
-  },
-}))
+  }
+})
 
 vi.mock('../../data/seasonalIngredients', () => ({
   getCurrentSeasonalIngredients: vi.fn(() => []),

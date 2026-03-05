@@ -1,3 +1,5 @@
+import { db } from '../../db/db'
+
 export interface DailyWeather {
   date: string
   maxTempC: number
@@ -123,6 +125,7 @@ export function parseTokyoWeeklyForecast(payload: unknown, startDate: Date): Dai
 }
 
 export async function getWeeklyWeatherForecast(startDate: Date): Promise<DailyWeather[]> {
+  let forecast: DailyWeather[]
   try {
     const res = await fetch(JMA_TOKYO_FORECAST_URL, {
       method: 'GET',
@@ -130,8 +133,23 @@ export async function getWeeklyWeatherForecast(startDate: Date): Promise<DailyWe
     })
     if (!res.ok) throw new Error(`JMA forecast fetch failed: ${res.status}`)
     const payload = await res.json()
-    return parseTokyoWeeklyForecast(payload, startDate)
+    forecast = parseTokyoWeeklyForecast(payload, startDate)
   } catch {
-    return buildSyntheticForecast(startDate)
+    forecast = buildSyntheticForecast(startDate)
   }
+
+  // 取得データを weatherCache に非同期で保存（tOptLearner の学習に使用）
+  void Promise.allSettled(
+    forecast.map((day) =>
+      db.weatherCache.put({
+        date: day.date,
+        maxTempC: day.maxTempC,
+        minTempC: day.minTempC,
+        precipitationMm: day.precipitationMm,
+        updatedAt: new Date(),
+      }),
+    ),
+  )
+
+  return forecast
 }

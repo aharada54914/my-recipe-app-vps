@@ -1,4 +1,4 @@
-import type { Ingredient, Recipe } from '../../db/db'
+import type { Ingredient, IngredientPrice, Recipe } from '../../db/db'
 import { resolveIngredientPrice } from './priceResolver'
 
 export type WeeklyMenuCostMode = 'saving' | 'ignore' | 'luxury'
@@ -17,12 +17,12 @@ function estimateQuantityInBasis(ing: Ingredient): number {
   return ing.quantity
 }
 
-export async function estimateRecipeCost(recipe: Recipe, mode: WeeklyMenuCostMode): Promise<number> {
+export async function estimateRecipeCost(recipe: Recipe, mode: WeeklyMenuCostMode, priceTable?: IngredientPrice[]): Promise<number> {
   if (mode === 'ignore') return 0
   let total = 0
   for (const ing of recipe.ingredients) {
     if (ing.category === 'sub') continue // exclude seasoning
-    const resolved = await resolveIngredientPrice(ing.name)
+    const resolved = await resolveIngredientPrice(ing.name, priceTable)
     const qty = estimateQuantityInBasis(ing)
     const factor = MODE_FACTOR[mode]
     total += qty * resolved.tokyoAvgPrice * factor

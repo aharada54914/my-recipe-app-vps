@@ -41,6 +41,7 @@ import { analyzeWeeklyMenuNutrition } from '../utils/weeklyMenuNutritionInsights
 import { getWeeklyWeatherForecast, type DailyWeather } from '../utils/season-weather/weatherProvider'
 import { filterForecastForWeek, isCompleteForecastForWeek } from '../utils/season-weather/weekWeather'
 import { WeatherIllustration } from '../components/weather/WeatherIllustration'
+import { learnTOptFromHistory } from '../utils/season-weather/tOptLearner'
 
 const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', string> = {
   'heuristic-3': '3段階推定',
@@ -51,7 +52,7 @@ const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', 
 export function WeeklyMenuPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { preferences } = usePreferences()
+  const { preferences, updatePreferences } = usePreferences()
   const { providerToken, signInWithGoogle, isOAuthAvailable } = useAuth()
 
   const [weekStart, setWeekStart] = useState(() => getWeekStartDate(new Date()))
@@ -159,7 +160,8 @@ export function WeeklyMenuPage() {
       }
     } catch (err) {
       console.error('献立の生成に失敗しました', err)
-      alert('献立の生成に失敗しました。しばらくしてから再度お試しください。')
+      const detail = err instanceof Error ? err.message : '不明なエラー'
+      alert(`献立の生成に失敗しました。\n${detail}`)
     } finally {
       setGenerating(false)
     }
@@ -314,10 +316,15 @@ export function WeeklyMenuPage() {
       } else {
         alert(`カレンダー登録が完了しました（${result.registered}件）`)
       }
+
+      // カレンダー登録（status: 'registered'）後に T_opt を学習・更新（ノンブロッキング）
+      void learnTOptFromHistory(preferences.tOpt).then((updatedTOpt) => {
+        void updatePreferences({ tOpt: updatedTOpt })
+      })
     } finally {
       setRegistering(false)
     }
-  }, [includeSeasonings, isOAuthAvailable, menu, preferences, providerToken, recipes, selectedRecipes, signInWithGoogle, stockItems, weekStart, weekStartStr])
+  }, [includeSeasonings, isOAuthAvailable, menu, preferences, providerToken, recipes, selectedRecipes, signInWithGoogle, stockItems, updatePreferences, weekStart, weekStartStr])
 
   // Week navigation
   const adjustWeek = (delta: number) => {
