@@ -39,21 +39,35 @@ export function solarFactor(weatherCode: string): number {
 // ── 各スコア因子 ──────────────────────────────────────────────────────────────
 
 /**
- * 気温適合度（連続関数版）
- * T_opt = 22°C を基準とし、全レシピにスコアを割り当てる。
- * 旧実装はタイトル正規表現で約7%のレシピのみ判定していたが、
- * 本実装では連続関数により全レシピを識別可能にする。
+ * 気温適合度
+ * T_opt = 22°C を基準とした連続関数に、レシピタイトルのキーワードで
+ * 冷系・温系を判定して適合スコアを調整する。
+ *   冷系（冷|サラダ|さっぱり）: 暑いほど高スコア
+ *   温系（煮込み|鍋|スープ|シチュー）: 寒いほど高スコア
+ *   中立: 連続関数のまま
  *
- * 快晴日は日射による体感温度上昇（最大+2°C）を加味し、
- * 暑い晴れの日ほど涼し系レシピが上位に来やすくする。
+ * 快晴日は日射による体感温度上昇（最大+2°C）を加味する。
  */
-function thermalFit(_recipe: Recipe, weather: DailyWeather): number {
-  const T_OPT = 22
+function thermalFit(recipe: Recipe, weather: DailyWeather): number {
   const solar = solarFactor(weather.weatherCode ?? '101')
   // 快晴: +2°C / 曇: -0.6°C / 雨: -1.6°C の体感補正
   const apparentTemp = weather.maxTempC + (solar - 0.5) * 4
-  const delta = T_OPT - apparentTemp
-  // delta ∈ [-20, +20] → score ∈ [0, 1]（低温=delta正=温料理選好、高温=delta負=冷料理選好）
+  // delta: 正=寒い(温料理需要↑), 負=暑い(冷料理需要↑)
+  const delta = 22 - apparentTemp
+  const weatherDemand = Math.max(-1, Math.min(1, delta / 20))
+
+  const isColdDish = /冷|サラダ|さっぱり/.test(recipe.title)
+  const isWarmDish = /煮込み|鍋|スープ|シチュー/.test(recipe.title)
+
+  if (isColdDish) {
+    // 冷系レシピ: 暑い日ほど高スコア（weatherDemandが負のとき適合↑）
+    return Math.max(0, Math.min(1, 0.5 - 0.5 * weatherDemand))
+  }
+  if (isWarmDish) {
+    // 温系レシピ: 寒い日ほど高スコア（weatherDemandが正のとき適合↑）
+    return Math.max(0, Math.min(1, 0.5 + 0.5 * weatherDemand))
+  }
+  // 中立レシピ: 連続関数
   return Math.max(0, Math.min(1, 0.5 + delta / 40))
 }
 
