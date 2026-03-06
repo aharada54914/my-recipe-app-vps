@@ -18,12 +18,14 @@ function resolveFeatureConfidence(recipe: Recipe): number {
 }
 
 function scoreSeasonalitySignal(recipe: Recipe): number {
-  const text = `${recipe.title} ${recipe.ingredients.map((i) => i.name).join(' ')}`
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : []
+  const text = `${recipe.title} ${ingredients.map((i) => i.name).join(' ')}`
   return /春|夏|秋|冬|旬|新玉ねぎ|なす|かぼちゃ|白菜/.test(text) ? 1 : 0.5
 }
 
 function scorePriceSignal(recipe: Recipe): number {
-  const text = `${recipe.title} ${recipe.ingredients.map((i) => i.name).join(' ')}`
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : []
+  const text = `${recipe.title} ${ingredients.map((i) => i.name).join(' ')}`
   if (/和牛|うなぎ|鰻|いくら|かに|蟹|ローストビーフ/.test(text)) return 0.15
   if (/鶏むね|もやし|豆腐|卵|豚こま/.test(text)) return 0.9
   return 0.55

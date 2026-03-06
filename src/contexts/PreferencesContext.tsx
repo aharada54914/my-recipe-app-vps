@@ -72,7 +72,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [stored])
 
   const preferences: UserPreferences = (stored !== null && stored !== undefined)
-    ? stored
+    ? {
+        ...DEFAULT_PREFERENCES,
+        ...stored,
+      }
     : { ...DEFAULT_PREFERENCES, updatedAt: new Date() }
 
   const updatePreference = useCallback(async <K extends keyof UserPreferences>(

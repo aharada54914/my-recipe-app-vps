@@ -235,6 +235,45 @@ describe('selectWeeklyMenu device balance', () => {
     expect(mockGetWeeklyWeatherForecast).not.toHaveBeenCalled()
   })
 
+
+  it('falls back gracefully when seasonalPriority is missing in legacy preferences', async () => {
+    const mains: Recipe[] = Array.from({ length: 8 }, (_, i) => makeRecipe(i + 1, 'manual'))
+    mockRecipesToArray.mockResolvedValue(mains)
+
+    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: undefined as unknown as 'low',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    })
+
+    expect(menu).toHaveLength(7)
+  })
+
+
+  it('fills missing days from top-ranked mains when unique candidates are insufficient', async () => {
+    const mains: Recipe[] = [
+      makeRecipe(1, 'manual', '主菜', 'A'),
+      makeRecipe(2, 'manual', '主菜', 'B'),
+      makeRecipe(3, 'manual', '主菜', 'C'),
+    ]
+    mockRecipesToArray.mockResolvedValue(mains)
+
+    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    }, [
+      { recipeId: 1, date: '2026-02-22', mealType: 'dinner', locked: true },
+      { recipeId: 2, date: '2026-02-23', mealType: 'dinner', locked: true },
+      { recipeId: 3, date: '2026-02-24', mealType: 'dinner', locked: true },
+    ])
+
+    expect(menu).toHaveLength(7)
+    expect(new Set(menu.map((item) => item.date)).size).toBe(7)
+  })
+
   it('fetches weather for target week when preloaded weather dates are from another week', async () => {
     const mains: Recipe[] = Array.from({ length: 8 }, (_, i) => makeRecipe(i + 1, 'manual'))
     mockRecipesToArray.mockResolvedValue(mains)

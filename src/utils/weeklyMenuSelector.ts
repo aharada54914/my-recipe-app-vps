@@ -142,11 +142,12 @@ function buildScoredRecipes(
 ): ScoredRecipe[] {
   return recipes.map((recipe) => {
     let score = 0
+    const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : []
 
-    const matchRate = calculateMatchRate(recipe.ingredients, stockNames)
+    const matchRate = calculateMatchRate(ingredients, stockNames)
     score += matchRate * 3.0
 
-    const hasSeasonalIngredient = recipe.ingredients.some(
+    const hasSeasonalIngredient = ingredients.some(
       ing => seasonalIngredients.some(s => ing.name.includes(s))
     )
     if (hasSeasonalIngredient) score += 10 * seasonalWeight
@@ -182,7 +183,7 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
 
   const stockNames = new Set(stockItems.map(s => s.name))
   const seasonalIngredients = getCurrentSeasonalIngredients()
-  const seasonalWeight = SEASONAL_WEIGHTS[config.seasonalPriority]
+  const seasonalWeight = SEASONAL_WEIGHTS[config.seasonalPriority] ?? SEASONAL_WEIGHT.OFF
 
   const recentMenuRecipeIds = new Set<number>()
   for (const menu of recentMenus) {
@@ -375,6 +376,40 @@ export async function selectWeeklyMenu(
       mealType: 'dinner',
       locked: false,
     })
+  }
+
+
+  if (result.length === 0) {
+    throw new Error(
+      `献立候補が選択できませんでした（主菜候補: ${context.scoredMains.length}件）。カテゴリやレシピデータを確認してください。`,
+    )
+  }
+
+  if (result.length < TARGET_DAYS) {
+    const filledDates = new Set(result.map((item) => item.date))
+    const rankedMains = context.scoredMains
+      .map(({ recipe }) => recipe)
+      .filter((recipe): recipe is Recipe => recipe.id != null)
+
+    if (rankedMains.length === 0) {
+      throw new Error('主菜候補が存在しないため、献立を完成できませんでした。')
+    }
+
+    for (let day = 0; day < TARGET_DAYS; day += 1) {
+      const dateStr = format(addDays(weekStartDate, day), 'yyyy-MM-dd')
+      if (filledDates.has(dateStr)) continue
+
+      const nextRecipe = rankedMains[result.length % rankedMains.length]
+      result.push({
+        recipeId: nextRecipe.id!,
+        date: dateStr,
+        mealType: 'dinner',
+        locked: false,
+      })
+      filledDates.add(dateStr)
+    }
+
+    result.sort((a, b) => a.date.localeCompare(b.date))
   }
 
   if (context.scoredSides.length > 0) {
