@@ -138,7 +138,6 @@ export async function getWeeklyWeatherForecast(startDate: Date): Promise<DailyWe
     forecast = buildSyntheticForecast(startDate)
   }
 
-  // 取得データを weatherCache に非同期で保存（tOptLearner の学習に使用）
   void Promise.allSettled(
     forecast.map((day) =>
       db.weatherCache.put({
@@ -146,6 +145,10 @@ export async function getWeeklyWeatherForecast(startDate: Date): Promise<DailyWe
         maxTempC: day.maxTempC,
         minTempC: day.minTempC,
         precipitationMm: day.precipitationMm,
+        temperatureC: day.maxTempC,
+        humidityPercent: day.humidityPercent ?? 60,
+        rainMm: day.precipitationMm,
+        fetchedAt: new Date(),
         updatedAt: new Date(),
       }),
     ),

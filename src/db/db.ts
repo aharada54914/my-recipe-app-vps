@@ -192,7 +192,10 @@ export interface IngredientSimilarityCache {
 
 export interface WeatherCacheItem {
   id?: number
-  date?: string
+  date: string
+  maxTempC: number
+  minTempC: number
+  precipitationMm: number
   temperatureC: number
   humidityPercent: number
   pressureHpa?: number
@@ -247,6 +250,8 @@ export interface UserPreferences {
   // Desired meal time
   desiredMealHour: number
   desiredMealMinute: number
+  // Personalized thermal preference learned from history
+  tOpt: number
   weeklyBudgetYen?: number
   // AI feature settings (Drive-backup eligible)
   geminiModelChat: string
@@ -257,10 +262,6 @@ export interface UserPreferences {
   geminiModelWeeklyMenuRefine: string
   geminiRetryEscalationForUrlAndImage: boolean
   geminiEstimatedDailyLimit: number
-  // Phase 3: 個人最適気温パラメータ (T_opt)
-  // 献立採用履歴から学習。デフォルト22°C。
-  // 寒がりなら高め（例25）、暑がりなら低め（例18）に収束する。
-  tOpt?: number
   // Meta
   updatedAt: Date
 }

@@ -18,7 +18,10 @@ vi.mock('../../db/db', () => ({
       where: vi.fn(() => ({ equals: vi.fn(() => ({ first: vi.fn(() => undefined) })) })),
       toArray: vi.fn(() => []),
     },
-    recipeFeatureMatrix: { bulkPut: vi.fn(() => Promise.resolve()) },
+    recipeFeatureMatrix: {
+      bulkGet: vi.fn(async (ids: number[]) => ids.map(() => undefined)),
+      bulkPut: vi.fn(() => Promise.resolve()),
+    },
   },
 }))
 
