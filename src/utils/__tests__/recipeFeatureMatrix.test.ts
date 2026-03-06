@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Recipe } from '../../db/db'
+import type { Recipe, RecipeNutritionMeta } from '../../db/db'
 import { buildRecipeFeatureRecord } from '../recipeFeatureMatrix'
 
 function makeRecipe(overrides: Partial<Recipe> = {}): Recipe {
@@ -21,9 +21,10 @@ function makeRecipe(overrides: Partial<Recipe> = {}): Recipe {
 describe('recipeFeatureMatrix', () => {
   it('uses same confidence rule for CSV and Gemini recipes', () => {
     const csvRecord = buildRecipeFeatureRecord(makeRecipe({ isUserAdded: false }))
+    const geminiNutritionMeta: RecipeNutritionMeta = { confidence: 0.1, lowConfidence: true }
     const geminiRecord = buildRecipeFeatureRecord(makeRecipe({
       isUserAdded: true,
-      nutritionMeta: { confidence: 0.1, lowConfidence: true } as any,
+      nutritionMeta: geminiNutritionMeta,
     }))
 
     expect(csvRecord?.confidence).toBe(1)
