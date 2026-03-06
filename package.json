@@ -14,6 +14,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:smoke": "npm run build && playwright test",
+    "test:smoke:ci": "playwright test",
+    "test:smoke:live": "playwright test",
     "nutrition:audit": "tsx scripts/nutrition-audit.ts"
   },
   "dependencies": {
@@ -40,6 +43,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",

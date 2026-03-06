@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronDown, Search, Trash2 } from 'lucide-react'
 import { db } from '../db/db'
-import { useDebounce } from '../hooks/useDebounce'
+import { useSearchInputController } from '../hooks/useSearchInputController'
 import { expandSynonyms } from '../data/synonyms'
 import { STOCK_MASTER } from '../data/stockMaster'
 import { SEASONING_MASTER, SEASONING_PRESETS } from '../data/seasoningPresets'
@@ -178,8 +178,17 @@ function CollapsibleCard({
 }
 
 export function StockManager() {
-  const [query, setQuery] = useState('')
-  const debouncedQuery = useDebounce(query, 300)
+  const [searchQuery, setSearchQuery] = useState('')
+  const {
+    draftValue,
+    setDraftValue,
+    handleCompositionStart,
+    handleCompositionEnd,
+  } = useSearchInputController({
+    value: searchQuery,
+    onCommit: setSearchQuery,
+    delay: 300,
+  })
 
   const stockItems = useLiveQuery(() => db.stock.toArray())
 
@@ -279,8 +288,8 @@ export function StockManager() {
   )
 
   const searchResults = useMemo(() => {
-    if (!debouncedQuery.trim()) return []
-    const synonyms = expandSynonyms(debouncedQuery.trim())
+    if (!searchQuery.trim()) return []
+    const synonyms = expandSynonyms(searchQuery.trim())
     return INGREDIENT_INDEX.filter((ing) => {
       if (inStockNames.has(ing.name)) return false
       const nameLower = ing.name.toLowerCase()
@@ -290,7 +299,7 @@ export function StockManager() {
           syn.toLowerCase().includes(nameLower)
       )
     })
-  }, [debouncedQuery, inStockNames])
+  }, [searchQuery, inStockNames])
 
   if (!stockItems) return null
 
@@ -329,8 +338,10 @@ export function StockManager() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
         <input
           type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={draftValue}
+          onChange={(e) => setDraftValue(e.target.value)}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={(e) => handleCompositionEnd(e.currentTarget.value)}
           placeholder="食材・調味料を検索..."
           className="w-full rounded-xl bg-bg-card py-3 pl-10 pr-4 text-base text-text-primary placeholder:text-text-secondary outline-none ring-1 ring-white/10"
         />
@@ -400,16 +411,16 @@ export function StockManager() {
       )}
 
       {/* Empty state */}
-      {inStockItems.length === 0 && !debouncedQuery.trim() && (
+      {inStockItems.length === 0 && !searchQuery.trim() && (
         <p className="py-12 text-center text-sm text-text-secondary">
           食材や調味料を検索して在庫を登録しましょう
         </p>
       )}
 
       {/* No search results */}
-      {debouncedQuery.trim() && searchResults.length === 0 && inStockItems.length === 0 && (
+      {searchQuery.trim() && searchResults.length === 0 && inStockItems.length === 0 && (
         <p className="py-8 text-center text-sm text-text-secondary">
-          「{debouncedQuery}」に一致する食材・調味料が見つかりません
+          「{searchQuery}」に一致する食材・調味料が見つかりません
         </p>
       )}
     </div>

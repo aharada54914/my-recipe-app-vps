@@ -35,3 +35,12 @@ jobs:
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+
+      - name: Install Playwright Chromium
+        run: env -u npm_config_http_proxy npx playwright install --with-deps chromium
+
+      - name: Smoke Test
+        run: env -u npm_config_http_proxy npm run test:smoke:ci -- --project=chromium
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}

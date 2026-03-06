@@ -7,8 +7,10 @@ import { NUTRITION_REFERENCE } from '../data/nutritionLookup'
 
 // Increment this version string when the estimation logic changes significantly,
 // to force re-estimation on next launch for existing users.
-const NUTRITION_ESTIMATION_VERSION = 'v6'
+const NUTRITION_ESTIMATION_VERSION = 'v7'
 const NUTRITION_ESTIMATION_KEY = 'nutritionEstimationApplied'
+let initPromise: Promise<void> | null = null
+let nutritionMaintenancePromise: Promise<void> | null = null
 
 function hasNutrition5Coverage(nutrition: RecipeNutritionPerServing | undefined): boolean {
   if (!nutrition) return false
@@ -41,6 +43,10 @@ function normalizeRecipeCategory<T extends { category?: string }>(recipe: T): T 
   }
 }
 
+export function shouldRunNutritionMaintenance(recipeCount: number, appliedVersion: string | null): boolean {
+  return recipeCount === 0 || appliedVersion !== NUTRITION_ESTIMATION_VERSION
+}
+
 /**
  * Applies ingredient-based nutrition estimation to all recipes that are missing
  * nutritionPerServing data. Runs once per install (tracked via localStorage).
@@ -49,7 +55,7 @@ function normalizeRecipeCategory<T extends { category?: string }>(recipe: T): T 
 async function applyNutritionEstimation(): Promise<void> {
   const {
     estimateRecipeNutritionDetailed,
-    deriveEstimationConfidence,
+    resolveNutritionMetaConfidence,
   } = await import('../utils/nutritionEstimator')
   await db.recipes.toCollection().modify((recipe) => {
     const r = recipe as Recipe
@@ -65,10 +71,7 @@ async function applyNutritionEstimation(): Promise<void> {
       metaEstimatorVersion === NUTRITION_REFERENCE.estimatorVersion
     )
     // Skip only when required nutrition coverage is already present.
-    if (
-      hasNutrition5Coverage(r.nutritionPerServing) &&
-      hasCurrentEstimatedSchema
-    ) return
+    if (!isEstimatedOrUnknown && hasNutrition5Coverage(r.nutritionPerServing) && hasCurrentEstimatedSchema) return
 
     const existing = r.nutritionPerServing ?? {}
     const { nutrition: estimated, diagnostics } = estimateRecipeNutritionDetailed(r)
@@ -96,7 +99,11 @@ async function applyNutritionEstimation(): Promise<void> {
       source: r.nutritionMeta?.source === 'jsonld' || r.nutritionMeta?.source === 'gemini'
         ? r.nutritionMeta.source
         : 'estimated',
-      confidence: r.nutritionMeta?.confidence ?? deriveEstimationConfidence(diagnostics),
+      confidence: resolveNutritionMetaConfidence(
+        r.nutritionMeta?.source,
+        r.nutritionMeta?.confidence,
+        diagnostics,
+      ),
       schemaVersion: 3,
       referenceDataset: NUTRITION_REFERENCE.dataset,
       referenceLabel: NUTRITION_REFERENCE.label,
@@ -116,8 +123,7 @@ async function applyNutritionEstimation(): Promise<void> {
   localStorage.setItem(NUTRITION_ESTIMATION_KEY, NUTRITION_ESTIMATION_VERSION)
 }
 
-export async function initDb() {
-  // Init recipes (run once on first launch)
+async function seedRecipesIfEmpty(): Promise<{ recipeCount: number, seeded: boolean }> {
   const recipeCount = await db.recipes.count()
   if (recipeCount === 0) {
     const allRecipes = [
@@ -125,29 +131,68 @@ export async function initDb() {
       ...healsioRecipes,
     ].map((recipe) => normalizeRecipeCategory(recipe)) as Omit<Recipe, 'id'>[]
     await db.recipes.bulkAdd(allRecipes)
-    // Apply nutrition estimation on first launch to ensure current estimator schema is applied.
-    await applyNutritionEstimation()
-  } else {
-    // Safety migration for users whose DB was initialized before category rename was applied at import time.
-    await db.recipes.toCollection().modify((recipe) => {
-      recipe.category = normalizeCategory(recipe.category) as Recipe['category']
-    })
-    // Apply nutrition estimation for existing installs if not yet done
-    if (localStorage.getItem(NUTRITION_ESTIMATION_KEY) !== NUTRITION_ESTIMATION_VERSION) {
-      await applyNutritionEstimation()
-    }
+    return { recipeCount: allRecipes.length, seeded: true }
   }
 
-  // Init stock from master (run once if stock table is empty)
+  return { recipeCount, seeded: false }
+}
+
+async function normalizeRecipeCategories(): Promise<void> {
+  await db.recipes.toCollection().modify((recipe) => {
+    recipe.category = normalizeCategory(recipe.category) as Recipe['category']
+  })
+}
+
+async function seedStockIfEmpty(): Promise<void> {
   const stockCount = await db.stock.count()
-  if (stockCount === 0) {
-    await db.stock.bulkAdd(
-      STOCK_MASTER.map((item) => ({
-        name: item.name,
-        unit: item.unit,
-        inStock: false,
-        quantity: 0,
-      }))
-    )
+  if (stockCount > 0) return
+
+  await db.stock.bulkAdd(
+    STOCK_MASTER.map((item) => ({
+      name: item.name,
+      unit: item.unit,
+      inStock: false,
+      quantity: 0,
+    })),
+  )
+}
+
+function scheduleDeferredNutritionMaintenance(recipeCount: number): void {
+  const appliedVersion = localStorage.getItem(NUTRITION_ESTIMATION_KEY)
+  if (!shouldRunNutritionMaintenance(recipeCount, appliedVersion)) return
+  if (nutritionMaintenancePromise) return
+
+  nutritionMaintenancePromise = new Promise<void>((resolve) => {
+    window.setTimeout(() => {
+      void applyNutritionEstimation()
+        .catch((error) => {
+          console.error('Deferred nutrition maintenance failed', error)
+        })
+        .finally(() => {
+          nutritionMaintenancePromise = null
+          resolve()
+        })
+    }, 0)
+  })
+}
+
+async function initDbInternal(): Promise<void> {
+  const { recipeCount, seeded } = await seedRecipesIfEmpty()
+  if (!seeded && recipeCount > 0) {
+    await normalizeRecipeCategories()
   }
+
+  await seedStockIfEmpty()
+  scheduleDeferredNutritionMaintenance(recipeCount)
+}
+
+export async function initDb() {
+  if (initPromise) return initPromise
+
+  initPromise = initDbInternal().catch((error) => {
+    initPromise = null
+    throw error
+  })
+
+  return initPromise
 }

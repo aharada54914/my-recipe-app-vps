@@ -3,6 +3,7 @@ import {
   deriveEstimationConfidence,
   estimateRecipeNutrition,
   estimateRecipeNutritionDetailed,
+  resolveNutritionMetaConfidence,
 } from '../nutritionEstimator'
 import type { Recipe, Ingredient } from '../../db/db'
 
@@ -311,6 +312,24 @@ describe('estimation diagnostics', () => {
     expect(deriveEstimationConfidence(fallback.diagnostics)).toBeLessThan(
       deriveEstimationConfidence(matched.diagnostics)
     )
+  })
+
+  it('recomputes stale estimated confidence instead of preserving legacy 35%', () => {
+    const matched = estimateRecipeNutritionDetailed(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: '鶏むね肉', quantity: 100, unit: 'g' }],
+    }))
+
+    expect(resolveNutritionMetaConfidence('estimated', 0.35, matched.diagnostics)).toBeGreaterThan(0.35)
+  })
+
+  it('preserves imported AI confidence when nutrition source is gemini', () => {
+    const matched = estimateRecipeNutritionDetailed(makeRecipe({
+      baseServings: 1,
+      ingredients: [{ name: '鶏むね肉', quantity: 100, unit: 'g' }],
+    }))
+
+    expect(resolveNutritionMetaConfidence('gemini', 0.61, matched.diagnostics)).toBe(0.61)
   })
 })
 

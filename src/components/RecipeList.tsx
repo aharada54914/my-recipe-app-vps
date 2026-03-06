@@ -1,51 +1,24 @@
-import { useState, useRef, useCallback, useDeferredValue, useMemo, useEffect } from 'react'
+import { startTransition, useState, useRef, useCallback, useDeferredValue, useMemo, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams } from 'react-router-dom'
 import { db } from '../db/db'
-import type { Recipe, RecipeCategory, DeviceType } from '../db/db'
-import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
+import type { RecipeCategory, DeviceType } from '../db/db'
 import { Loader2 } from 'lucide-react'
-import { searchRecipesWithScores } from '../utils/searchUtils'
-import { useDebounce } from '../hooks/useDebounce'
 import { SearchBar } from './SearchBar'
 import { CategoryTags } from './CategoryTags'
 import { RecipeCard } from './RecipeCard'
-import { buildPreferenceProfile } from '../utils/preferenceSignals'
-import { computeKitchenAppPreferenceScore } from '../utils/preferenceRanker'
-import { applyUiRecipeFilters } from '../utils/recipeFilters'
+import { useRecipeSearchModel } from '../hooks/useRecipeSearchModel'
 
 const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
 const SEARCH_HISTORY_KEY = 'recipe_search_history'
-const QUERY_SCORE_WEIGHT = 4.2
-
-interface BaseRecipeScore {
-  matchRate: number
-  isDeli: boolean
-  baseScore: number
-}
-
-function computeBaseRecipeScore(recipe: Recipe, stockNames: Set<string>, preferenceScore: number): BaseRecipeScore {
-  const matchRate = calculateMatchRate(recipe.ingredients, stockNames)
-  const stockScore = (matchRate / 100) * 1.4
-  const isDeli = isHelsioDeli(recipe)
-  const deliPenalty = isDeli ? 2.2 : 0
-
-  return {
-    matchRate,
-    isDeli,
-    baseScore: preferenceScore + stockScore - deliPenalty,
-  }
-}
 
 interface RecipeListProps {
   onSelectRecipe: (id: number) => void
 }
 
 export function RecipeList({ onSelectRecipe }: RecipeListProps) {
-  const [inputValue, setInputValue] = useState('')
-  const [committedQuery, setCommittedQuery] = useState('')
-  const [isComposing, setIsComposing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<RecipeCategory[]>([])
   const [deviceFilter, setDeviceFilter] = useState<DeviceType | null>(null)
   const [quickFilter, setQuickFilter] = useState(false)
@@ -61,16 +34,10 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     }
   })
 
-  const debouncedInput = useDebounce(inputValue, 150)
   // T-22: useDeferredValue defers re-renders during rapid input
-  const deferredSearch = useDeferredValue(committedQuery)
+  const deferredSearch = useDeferredValue(searchQuery)
   const parentRef = useRef<HTMLDivElement>(null)
   const [isFiltering, setIsFiltering] = useState(false)
-
-  useEffect(() => {
-    if (isComposing) return
-    setCommittedQuery(debouncedInput)
-  }, [debouncedInput, isComposing])
 
   // Read URL ?filter= param and initialize state
   const [searchParams] = useSearchParams()
@@ -138,75 +105,31 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     { recipes: [], stockItems: [], viewHistory: [], favorites: [], weeklyMenus: [], calendarEvents: [] }
   )
 
-  const stockNames = useMemo(() => new Set(data.stockItems.map((s) => s.name)), [data.stockItems])
-
-  const preferenceProfile = useMemo(
-    () =>
-      buildPreferenceProfile({
-        recipes: data.recipes,
-        viewHistory: data.viewHistory,
-        favorites: data.favorites,
-        weeklyMenus: data.weeklyMenus,
-        calendarEvents: data.calendarEvents,
-      }),
-    [data.recipes, data.viewHistory, data.favorites, data.weeklyMenus, data.calendarEvents]
-  )
-
-  const baseScoreByRecipeId = useMemo(() => {
-    const scoreMap = new Map<number, BaseRecipeScore>()
-    for (const recipe of data.recipes) {
-      if (recipe.id == null) continue
-      const preferenceScore = computeKitchenAppPreferenceScore(recipe, preferenceProfile)
-      scoreMap.set(recipe.id, computeBaseRecipeScore(recipe, stockNames, preferenceScore))
-    }
-    return scoreMap
-  }, [data.recipes, stockNames, preferenceProfile])
-
-  // T-01 + T-22: Fuzzy search + filters wrapped in transition for smooth typing
-  const withRates = useMemo(() => {
-    const scored = deferredSearch
-      ? searchRecipesWithScores(data.recipes, deferredSearch)
-      : data.recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
-
-    const filtered = applyUiRecipeFilters(
-      scored.map((entry) => entry.recipe),
-      { selectedCategories, quickFilter, seasonalFilter }
-    )
-
-    const scoreById = new Map(scored.map((entry) => [entry.recipe.id!, entry.queryScore]))
-
-    return filtered
-      .map((r) => {
-        const queryScore = scoreById.get(r.id!) ?? 0.5
-        const cachedScore = r.id != null ? baseScoreByRecipeId.get(r.id) : undefined
-        const resolvedScore = cachedScore ?? computeBaseRecipeScore(
-          r,
-          stockNames,
-          computeKitchenAppPreferenceScore(r, preferenceProfile)
-        )
-        const finalScore = queryScore * QUERY_SCORE_WEIGHT + resolvedScore.baseScore
-
-        return {
-          recipe: r,
-          matchRate: resolvedScore.matchRate,
-          isDeli: resolvedScore.isDeli,
-          finalScore,
-        }
-      })
-      .sort((a, b) => {
-        if (a.isDeli !== b.isDeli) return a.isDeli ? 1 : -1
-        return b.finalScore - a.finalScore
-      })
-  }, [
+  const searchModelInput = useMemo(() => ({
+    recipes: data.recipes,
+    stockItems: data.stockItems,
+    viewHistory: data.viewHistory,
+    favorites: data.favorites,
+    weeklyMenus: data.weeklyMenus,
+    calendarEvents: data.calendarEvents,
+    searchQuery: deferredSearch,
+    selectedCategories,
+    quickFilter,
+    seasonalFilter,
+  }), [
     data.recipes,
+    data.stockItems,
+    data.viewHistory,
+    data.favorites,
+    data.weeklyMenus,
+    data.calendarEvents,
     deferredSearch,
     selectedCategories,
     quickFilter,
     seasonalFilter,
-    baseScoreByRecipeId,
-    stockNames,
-    preferenceProfile,
   ])
+
+  const { results: withRates, categoryCounts } = useRecipeSearchModel(searchModelInput)
 
   useEffect(() => {
     setIsFiltering(true)
@@ -247,14 +170,6 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       : seasonalFilter ? '旬のレシピ'
         : null
 
-  const categoryCounts = useMemo(() => {
-    const map: Partial<Record<RecipeCategory, number>> = { 'すべて': data.recipes.length }
-    for (const recipe of data.recipes) {
-      map[recipe.category] = (map[recipe.category] ?? 0) + 1
-    }
-    return map
-  }, [data.recipes])
-
   const saveSearchHistory = useCallback((keyword: string) => {
     const normalized = keyword.trim()
     if (!normalized) return
@@ -266,26 +181,30 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     })
   }, [])
 
-  const handleSubmitSearch = useCallback(() => {
-    setCommittedQuery(inputValue)
-    saveSearchHistory(inputValue)
-  }, [saveSearchHistory, inputValue])
+  const commitSearchQuery = useCallback((value: string) => {
+    startTransition(() => {
+      setSearchQuery(value)
+    })
+  }, [])
+
+  const handleSubmitSearch = useCallback((value: string) => {
+    commitSearchQuery(value)
+    saveSearchHistory(value)
+  }, [commitSearchQuery, saveSearchHistory])
 
   const handleSelectHistory = useCallback((value: string) => {
-    setInputValue(value)
-    setCommittedQuery(value)
+    commitSearchQuery(value)
     saveSearchHistory(value)
-  }, [saveSearchHistory])
+  }, [commitSearchQuery, saveSearchHistory])
 
   return (
     <>
       <SearchBar
-        value={inputValue}
-        onChange={setInputValue}
+        value={searchQuery}
+        onChange={commitSearchQuery}
         history={searchHistory}
         onSubmit={handleSubmitSearch}
         onSelectHistory={handleSelectHistory}
-        onCompositionChange={setIsComposing}
         searching={isFiltering}
       />
       <CategoryTags

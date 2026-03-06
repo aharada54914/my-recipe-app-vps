@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Search, X, Star } from 'lucide-react'
 import type { Recipe } from '../../db/db'
+import { useSearchInputController } from '../../hooks/useSearchInputController'
 import { RecipeCard } from '../RecipeCard'
 import { calculateMatchRate } from '../../utils/recipeUtils'
 import { searchRecipesWithScores } from '../../utils/searchUtils'
@@ -11,7 +12,6 @@ export interface SwapModalProps {
     candidates: Recipe[]
     favorites: Recipe[]
     searchQuery: string
-    debouncedSearch: string
     stockNames: Set<string>
     onSearchChange: (q: string) => void
     onSelect: (recipe: Recipe) => void
@@ -19,15 +19,26 @@ export interface SwapModalProps {
 }
 
 export function SwapModal({
-    swapType, candidates, favorites, searchQuery, debouncedSearch,
+    swapType, candidates, favorites, searchQuery,
     stockNames, onSearchChange, onSelect, onClose,
 }: SwapModalProps) {
+    const {
+        draftValue,
+        setDraftValue,
+        handleCompositionStart,
+        handleCompositionEnd,
+    } = useSearchInputController({
+        value: searchQuery,
+        onCommit: onSearchChange,
+        delay: 250,
+    })
+
     const filtered = useMemo(() => {
-        if (!debouncedSearch.trim()) return null
-        return searchRecipesWithScores(candidates, debouncedSearch)
+        if (!searchQuery.trim()) return null
+        return searchRecipesWithScores(candidates, searchQuery)
             .map((r) => r.recipe)
             .slice(0, 30)
-    }, [candidates, debouncedSearch])
+    }, [candidates, searchQuery])
 
     const showSearch = !!filtered
     const topAlternatives = useMemo(
@@ -58,8 +69,10 @@ export function SwapModal({
                         <input
                             autoFocus
                             type="search"
-                            value={searchQuery}
-                            onChange={e => onSearchChange(e.target.value)}
+                            value={draftValue}
+                            onChange={e => setDraftValue(e.target.value)}
+                            onCompositionStart={handleCompositionStart}
+                            onCompositionEnd={(e) => handleCompositionEnd(e.currentTarget.value)}
                             placeholder="レシピを検索..."
                             className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-secondary outline-none cursor-text"
                         />

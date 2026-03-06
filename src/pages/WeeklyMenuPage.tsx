@@ -15,7 +15,6 @@ import { ja } from 'date-fns/locale'
 import { db, type Recipe, type WeeklyMenu } from '../db/db'
 import { usePreferences } from '../hooks/usePreferences'
 import { useAuth } from '../hooks/useAuth'
-import { useDebounce } from '../hooks/useDebounce'
 import { selectWeeklyMenu, getWeekStartDate } from '../utils/weeklyMenuSelector'
 import {
   aggregateIngredients,
@@ -75,7 +74,6 @@ export function WeeklyMenuPage() {
   const [swapCandidates, setSwapCandidates] = useState<Recipe[]>([])
   const [swapFavorites, setSwapFavorites] = useState<Recipe[]>([])
   const [swapSearchQuery, setSwapSearchQuery] = useState('')
-  const debouncedSwapSearch = useDebounce(swapSearchQuery, 250)
   const [ganttDayIndex, setGanttDayIndex] = useState<number | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareCodeInput, setShareCodeInput] = useState('')
@@ -86,6 +84,7 @@ export function WeeklyMenuPage() {
   const [weatherLastFetchedAt, setWeatherLastFetchedAt] = useState<Date | null>(null)
 
   const stockItems = useLiveQuery(() => db.stock.filter(s => s.inStock).toArray(), [])
+  const latestWeather = useLiveQuery(() => db.weatherCache.orderBy('fetchedAt').last(), [])
   const stockNames = useMemo(() => new Set((stockItems ?? []).map(s => s.name)), [stockItems])
 
   const loadRecipes = useCallback(async (recipeIds: number[]) => {
@@ -247,6 +246,22 @@ export function WeeklyMenuPage() {
   }, [menu, recipes])
 
   const nutritionInsights = useMemo(() => analyzeWeeklyMenuNutrition(selectedRecipes), [selectedRecipes])
+
+  const recommendationReasons = useMemo(() => {
+    const modeLabel = preferences.weeklyMenuCostMode === 'saving'
+      ? '価格モード: 節約重視'
+      : preferences.weeklyMenuCostMode === 'luxury'
+        ? `価格モード: 贅沢重視（ご褒美枠 ${preferences.weeklyMenuLuxuryRewardDays}日）`
+        : '価格モード: 価格を気にしない'
+    const weatherLabel = latestWeather
+      ? `気象補正: 気温${Math.round(latestWeather.temperatureC)}℃・湿度${Math.round(latestWeather.humidityPercent)}%`
+      : '気象補正: キャッシュなし（季節スコアのみ）'
+    const userAddedCount = selectedRecipes.filter((r) => r.isUserAdded).length
+    const confidenceLabel = userAddedCount > 0
+      ? `特徴量行列: 公式CSV/Geminiを同一基準で評価（Gemini ${userAddedCount}件は低信頼下限20%適用）`
+      : '特徴量行列: 公式CSV/登録済みレシピを同一基準で評価'
+    return [modeLabel, weatherLabel, confidenceLabel]
+  }, [preferences.weeklyMenuCostMode, preferences.weeklyMenuLuxuryRewardDays, latestWeather, selectedRecipes])
   const lowConfidenceNutritionCount = useMemo(
     () => selectedRecipes.filter((r) => r.nutritionMeta?.source === 'estimated' && r.nutritionMeta?.lowConfidence).length,
     [selectedRecipes]
@@ -626,6 +641,15 @@ export function WeeklyMenuPage() {
               </div>
             </div>
 
+            <div className="rounded-xl bg-white/5 px-3 py-2 text-xs text-text-secondary">
+              <p className="font-semibold text-text-primary">推薦理由（簡易）</p>
+              <ul className="mt-1 space-y-0.5">
+                {recommendationReasons.map((reason) => (
+                  <li key={reason}>・{reason}</li>
+                ))}
+              </ul>
+            </div>
+
             {/* Daily menu cards */}
             <div className="space-y-3">
               {menu.items.map((item, i) => {
@@ -779,7 +803,6 @@ export function WeeklyMenuPage() {
             candidates={swapCandidates}
             favorites={swapFavorites}
             searchQuery={swapSearchQuery}
-            debouncedSearch={debouncedSwapSearch}
             stockNames={stockNames}
             onSearchChange={setSwapSearchQuery}
             onSelect={handleSelectSwap}

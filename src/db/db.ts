@@ -91,6 +91,8 @@ export interface Recipe {
   isUserAdded?: boolean
 }
 
+
+
 export interface StockItem {
   id?: number
   name: string
@@ -224,6 +226,13 @@ export interface UserPreferences {
   shoppingListMinute: number
   // Seasonal priority
   seasonalPriority: SeasonalPriority
+  // Cost mode (price-aware weekly planning)
+  weeklyMenuCostMode: WeeklyMenuCostMode
+  // Luxury mode reward slots (variable count per week)
+  weeklyMenuLuxuryRewardDays: number
+  // Last sync timestamps
+  lastPriceSyncAt?: Date
+  lastWeatherSyncAt?: Date
   // User prompt
   userPrompt: string
   // Notification settings
@@ -527,7 +536,7 @@ class RecipeDB extends Dexie {
     }).upgrade(async (tx) => {
       const {
         estimateRecipeNutritionDetailed,
-        deriveEstimationConfidence,
+        resolveNutritionMetaConfidence,
       } = await import('../utils/nutritionEstimator')
       const { NUTRITION_REFERENCE } = await import('../data/nutritionLookup')
       await tx.table('recipes').toCollection().modify((recipe) => {
@@ -556,7 +565,11 @@ class RecipeDB extends Dexie {
           source: r.nutritionMeta?.source === 'jsonld' || r.nutritionMeta?.source === 'gemini'
             ? r.nutritionMeta.source
             : 'estimated',
-          confidence: r.nutritionMeta?.confidence ?? deriveEstimationConfidence(diagnostics),
+          confidence: resolveNutritionMetaConfidence(
+            r.nutritionMeta?.source,
+            r.nutritionMeta?.confidence,
+            diagnostics,
+          ),
           schemaVersion: 3,
           referenceDataset: NUTRITION_REFERENCE.dataset,
           referenceLabel: NUTRITION_REFERENCE.label,
@@ -648,6 +661,7 @@ class RecipeDB extends Dexie {
       })
     })
 
+    // v14: Add price/weather/feature tables for weekly menu optimization
     this.version(14).stores({
       recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
       stock: '++id, &name, inStock',

@@ -1,5 +1,28 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment jsdom
+
+import { act } from 'react'
+import { createElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SearchBar } from '../SearchBar'
 import { getRecentSearchSuggestions } from '../../utils/searchUtils'
+
+let container: HTMLDivElement
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  // Silence React 19 act environment warnings for manual root rendering.
+  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  container = document.createElement('div')
+  document.body.appendChild(container)
+})
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+    container.remove()
+  })
 
 describe('getRecentSearchSuggestions', () => {
   it('returns empty array when input is not focused', () => {
@@ -18,5 +41,39 @@ describe('getRecentSearchSuggestions', () => {
       '麻婆豆腐',
       '餃子',
     ])
+  })
+})
+
+describe('SearchBar IME-safe behavior', () => {
+  it('does not commit partial values during composition and commits final value on compositionend', () => {
+    const handleChange = vi.fn()
+    const root = createRoot(container)
+
+    act(() => {
+      root.render(createElement(SearchBar, { value: '', onChange: handleChange }))
+    })
+
+    const input = container.querySelector('input')
+    expect(input).not.toBeNull()
+
+    act(() => {
+      input!.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+      input!.value = 'ぴ'
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+      vi.advanceTimersByTime(200)
+    })
+
+    expect(handleChange).not.toHaveBeenCalled()
+
+    act(() => {
+      input!.value = 'ぴー'
+      input!.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
+    })
+
+    expect(handleChange).toHaveBeenCalledWith('ぴー')
+
+    act(() => {
+      root.unmount()
+    })
   })
 })

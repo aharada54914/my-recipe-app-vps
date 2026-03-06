@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
+import { useSearchInputController } from '../hooks/useSearchInputController'
 import { getRecentSearchSuggestions } from '../utils/searchUtils'
 
 interface SearchBarProps {
   value: string
   onChange: (value: string) => void
   history?: string[]
-  onSubmit?: () => void
+  onSubmit?: (value: string) => void
   onSelectHistory?: (value: string) => void
-  onCompositionChange?: (isComposing: boolean) => void
   searching?: boolean
 }
 
@@ -18,10 +18,21 @@ export function SearchBar({
   history = [],
   onSubmit,
   onSelectHistory,
-  onCompositionChange,
   searching = false,
 }: SearchBarProps) {
   const [focused, setFocused] = useState(false)
+  const {
+    draftValue,
+    setDraftValue,
+    commitDraft,
+    handleCompositionStart,
+    handleCompositionEnd,
+  } = useSearchInputController({
+    value,
+    onCommit: onChange,
+    delay: 150,
+  })
+
   const suggestions = useMemo(() => {
     return getRecentSearchSuggestions(history, focused)
   }, [focused, history])
@@ -32,7 +43,8 @@ export function SearchBar({
         className="flex min-h-[48px] items-center gap-3 rounded-2xl bg-bg-card px-4 py-3 ring-1 ring-white/10"
         onSubmit={(e) => {
           e.preventDefault()
-          onSubmit?.()
+          commitDraft(draftValue)
+          onSubmit?.(draftValue)
         }}
       >
         <button
@@ -44,10 +56,10 @@ export function SearchBar({
         </button>
         <input
           type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onCompositionStart={() => onCompositionChange?.(true)}
-          onCompositionEnd={() => onCompositionChange?.(false)}
+          value={draftValue}
+          onChange={(e) => setDraftValue(e.target.value)}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={(e) => handleCompositionEnd(e.currentTarget.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => window.setTimeout(() => setFocused(false), 120)}
           placeholder="レシピを検索..."
@@ -60,7 +72,10 @@ export function SearchBar({
           {suggestions.map((entry) => (
             <button
               key={entry}
-              onClick={() => onSelectHistory?.(entry)}
+              onClick={() => {
+                commitDraft(entry)
+                onSelectHistory?.(entry)
+              }}
               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-text-secondary hover:bg-white/5 hover:text-text-primary"
             >
               <Search className="h-4 w-4" />

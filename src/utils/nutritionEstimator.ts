@@ -1,9 +1,9 @@
 /**
  * Ingredient-based nutrition estimator using the Japanese Food Composition Table (2020).
  * Estimates RecipeNutritionPerServing from a recipe's ingredient list.
- * source='estimated', confidence=0.35
+ * source='estimated', confidence derived from ingredient-match diagnostics
  */
-import type { Recipe, RecipeNutritionPerServing } from '../db/db'
+import type { Recipe, RecipeNutritionMeta, RecipeNutritionPerServing } from '../db/db'
 import { NUTRITION_PATTERNS, type NutritionPer100g } from '../data/nutritionLookup'
 import { normalizeIngredientName } from './ingredientNormalization'
 
@@ -410,6 +410,23 @@ export function deriveEstimationConfidence(diagnostics: NutritionEstimationDiagn
   const ingredientScore = Math.min(Math.max(diagnostics.ingredientMatchRatio, 0), 1)
   const value = 0.3 + weightScore * 0.45 + ingredientScore * 0.2
   return Math.min(0.95, Math.max(0.35, Math.round(value * 100) / 100))
+}
+
+export function resolveNutritionMetaConfidence(
+  source: RecipeNutritionMeta['source'] | undefined,
+  existingConfidence: number | undefined,
+  diagnostics: NutritionEstimationDiagnostics,
+): number {
+  const preserveImportedConfidence =
+    (source === 'jsonld' || source === 'gemini') &&
+    typeof existingConfidence === 'number' &&
+    Number.isFinite(existingConfidence)
+
+  if (preserveImportedConfidence) {
+    return existingConfidence
+  }
+
+  return deriveEstimationConfidence(diagnostics)
 }
 
 function estimateRecipeNutritionInternal(recipe: Recipe): NutritionEstimationResult {
