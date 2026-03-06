@@ -27,3 +27,4 @@ public/seed
 *.sln
 *.sw?
 .vercel
+.claude/worktrees
