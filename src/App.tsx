@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { Suspense, lazy, useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Outlet, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { initDb } from './db/initDb'
@@ -7,17 +7,6 @@ import { DriveBackupProvider } from './hooks/useGoogleDriveSync'
 import { PreferencesProvider } from './contexts/PreferencesContext'
 import { Header } from './components/Header'
 import { BottomNav } from './components/BottomNav'
-import { RecipeList } from './components/RecipeList'
-import { RecipeDetail } from './components/RecipeDetail'
-import { StockManager } from './components/StockManager'
-import { AiRecipeParser } from './components/AiRecipeParser'
-import { MultiScheduleView } from './components/MultiScheduleView'
-import { HomePage } from './pages/HomePage'
-import { HistoryPage } from './pages/HistoryPage'
-import { FavoritesPage } from './pages/FavoritesPage'
-import { SettingsPage } from './pages/SettingsPage'
-import { WeeklyMenuPage } from './pages/WeeklyMenuPage'
-import { AskGeminiPage } from './pages/AskGeminiPage'
 import { ToastContainer } from './components/ToastContainer'
 import { SplashScreen } from './components/SplashScreen'
 import { NotificationScheduler } from './components/NotificationScheduler'
@@ -28,6 +17,25 @@ import { getStartupNotice, shouldShowBlockingSplash, type AppStartupStatus } fro
 
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 const STARTUP_TIMEOUT_MS = 6000
+const RecipeList = lazy(() => import('./components/RecipeList').then((module) => ({ default: module.RecipeList })))
+const RecipeDetail = lazy(() => import('./components/RecipeDetail').then((module) => ({ default: module.RecipeDetail })))
+const StockManager = lazy(() => import('./components/StockManager').then((module) => ({ default: module.StockManager })))
+const AiRecipeParser = lazy(() => import('./components/AiRecipeParser').then((module) => ({ default: module.AiRecipeParser })))
+const MultiScheduleView = lazy(() => import('./components/MultiScheduleView').then((module) => ({ default: module.MultiScheduleView })))
+const HomePage = lazy(() => import('./pages/HomePage').then((module) => ({ default: module.HomePage })))
+const HistoryPage = lazy(() => import('./pages/HistoryPage').then((module) => ({ default: module.HistoryPage })))
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage').then((module) => ({ default: module.FavoritesPage })))
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })))
+const WeeklyMenuPage = lazy(() => import('./pages/WeeklyMenuPage').then((module) => ({ default: module.WeeklyMenuPage })))
+const AskGeminiPage = lazy(() => import('./pages/AskGeminiPage').then((module) => ({ default: module.AskGeminiPage })))
+
+function RouteFallback() {
+  return (
+    <div className="px-4 py-6 text-sm text-text-secondary">
+      読み込み中...
+    </div>
+  )
+}
 
 function AppLayout({ startupNotice }: { startupNotice: string | null }) {
   const navigate = useNavigate()
@@ -75,7 +83,11 @@ function AppLayout({ startupNotice }: { startupNotice: string | null }) {
 
 function SearchPage() {
   const navigate = useNavigate()
-  return <RecipeList onSelectRecipe={(id) => navigate(`/recipe/${id}`)} />
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <RecipeList onSelectRecipe={(id) => navigate(`/recipe/${id}`)} />
+    </Suspense>
+  )
 }
 
 function RecipeDetailPage() {
@@ -86,7 +98,9 @@ function RecipeDetailPage() {
 
   return (
     <div className="route-enter px-4 pb-24 pt-4">
-      <RecipeDetail recipeId={Number(id)} onBack={() => navigate(-1)} />
+      <Suspense fallback={<RouteFallback />}>
+        <RecipeDetail recipeId={Number(id)} onBack={() => navigate(-1)} />
+      </Suspense>
     </div>
   )
 }
@@ -96,7 +110,9 @@ function AiParsePage() {
 
   return (
     <div className="route-enter px-4 pb-24 pt-4">
-      <AiRecipeParser onBack={() => navigate(-1)} />
+      <Suspense fallback={<RouteFallback />}>
+        <AiRecipeParser onBack={() => navigate(-1)} />
+      </Suspense>
     </div>
   )
 }
@@ -106,7 +122,9 @@ function MultiSchedulePage() {
 
   return (
     <div className="route-enter px-4 pb-24 pt-4">
-      <MultiScheduleView onBack={() => navigate(-1)} />
+      <Suspense fallback={<RouteFallback />}>
+        <MultiScheduleView onBack={() => navigate(-1)} />
+      </Suspense>
     </div>
   )
 }
@@ -116,7 +134,9 @@ function SettingsPageWrapper() {
 
   return (
     <div className="route-enter">
-      <SettingsPage onBack={() => navigate(-1)} />
+      <Suspense fallback={<RouteFallback />}>
+        <SettingsPage onBack={() => navigate(-1)} />
+      </Suspense>
     </div>
   )
 }
@@ -184,13 +204,55 @@ function App() {
             <NotificationScheduler />
             <Routes>
               <Route element={<AppLayout startupNotice={startupNotice} />}>
-                <Route index element={<HomePage />} />
+                <Route
+                  index
+                  element={(
+                    <Suspense fallback={<RouteFallback />}>
+                      <HomePage />
+                    </Suspense>
+                  )}
+                />
                 <Route path="search" element={<SearchPage />} />
-                <Route path="stock" element={<StockManager />} />
-                <Route path="history" element={<HistoryPage />} />
-                <Route path="favorites" element={<FavoritesPage />} />
-                <Route path="weekly-menu" element={<WeeklyMenuPage />} />
-                <Route path="gemini" element={<AskGeminiPage />} />
+                <Route
+                  path="stock"
+                  element={(
+                    <Suspense fallback={<RouteFallback />}>
+                      <StockManager />
+                    </Suspense>
+                  )}
+                />
+                <Route
+                  path="history"
+                  element={(
+                    <Suspense fallback={<RouteFallback />}>
+                      <HistoryPage />
+                    </Suspense>
+                  )}
+                />
+                <Route
+                  path="favorites"
+                  element={(
+                    <Suspense fallback={<RouteFallback />}>
+                      <FavoritesPage />
+                    </Suspense>
+                  )}
+                />
+                <Route
+                  path="weekly-menu"
+                  element={(
+                    <Suspense fallback={<RouteFallback />}>
+                      <WeeklyMenuPage />
+                    </Suspense>
+                  )}
+                />
+                <Route
+                  path="gemini"
+                  element={(
+                    <Suspense fallback={<RouteFallback />}>
+                      <AskGeminiPage />
+                    </Suspense>
+                  )}
+                />
               </Route>
               <Route path="/recipe/:id" element={<RecipeDetailPage />} />
               <Route path="/ai-parse" element={<AiParsePage />} />

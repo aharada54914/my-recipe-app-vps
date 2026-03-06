@@ -279,17 +279,27 @@ function estimateCookingSteps(device, cookingTimeStr, ingredientCount) {
 
 // ─── Category guesser ───
 
-function guessCategory(title) {
-  const categoryMap = [
+function guessCategory(title, ingredients) {
+  const titleCategoryMap = [
     [['スープ', 'みそ汁', '味噌汁', 'シチュー', 'ポタージュ', '汁'], 'スープ'],
     [['ご飯', 'ピラフ', 'リゾット', 'チャーハン', 'おにぎり', 'パスタ', 'うどん', 'そば', 'ラーメン'], 'ご飯もの'],
     [['ケーキ', 'クッキー', 'プリン', 'ゼリー', 'アイス', 'チョコ', 'マフィン', 'パン', 'ヨーグルト', 'デザート', 'ジャム', 'コンポート', 'あんこ', '甘酒', 'おしるこ', 'メレンゲ'], 'デザート'],
     [['サラダ', 'ナムル', 'きんぴら', '漬', 'マリネ', 'おひたし', '和え', 'ピクルス'], '副菜'],
   ]
 
-  for (const [keywords, cat] of categoryMap) {
+  for (const [keywords, cat] of titleCategoryMap) {
     if (keywords.some((kw) => title.includes(kw))) return cat
   }
+
+  const mainIngredients = (ingredients ?? [])
+    .filter((ing) => ing.category === 'main')
+    .map((ing) => ing.name)
+  const joined = mainIngredients.join(' ')
+
+  if (/米|ご飯|麺|うどん|そば|パスタ|餅/.test(joined)) return 'ご飯もの'
+  if (/豆腐|ほうれん草|小松菜|きゅうり|トマト|ブロッコリー|なす|かぼちゃ/.test(joined)) return '副菜'
+  if (/牛乳|生クリーム|チーズ/.test(joined) && /砂糖|はちみつ|ジャム|チョコ/.test(joined)) return 'デザート'
+
   return '主菜'
 }
 
@@ -394,7 +404,7 @@ function convertHealsioCSV(csvText) {
       title,
       recipeNumber: generateCsvRecipeNumber('healsio', i),
       device: 'healsio',
-      category: guessCategory(title),
+      category: guessCategory(title, ingredients),
       baseServings: parseServings(servings),
       totalWeightG,
       ingredients,
@@ -451,7 +461,7 @@ function convertHotcookCSV(csvText) {
       title,
       recipeNumber: menuNumber || generateCsvRecipeNumber('hotcook', i),
       device: 'hotcook',
-      category: guessCategory(title),
+      category: guessCategory(title, ingredients),
       baseServings: parseServings(servings),
       totalWeightG,
       ingredients,
@@ -510,7 +520,9 @@ async function main() {
   } = await import('../src/utils/nutritionEstimator.ts')
   const { NUTRITION_REFERENCE } = await import('../src/data/nutritionLookup.ts')
   const outDir = join(ROOT, 'src', 'data')
+  const publicSeedDir = join(ROOT, 'public', 'seed')
   mkdirSync(outDir, { recursive: true })
+  mkdirSync(publicSeedDir, { recursive: true })
 
   // Healsio
   console.log('📖 Reading Healsio CSV...')
@@ -522,7 +534,9 @@ async function main() {
     NUTRITION_REFERENCE
   )
   const healsioOut = join(outDir, 'recipes-healsio.json')
+  const healsioPublicOut = join(publicSeedDir, 'recipes-healsio.json')
   writeFileSync(healsioOut, JSON.stringify(healsioRecipes, null, 2), 'utf-8')
+  writeFileSync(healsioPublicOut, JSON.stringify(healsioRecipes), 'utf-8')
   console.log(`✅ Healsio: ${healsioRecipes.length} recipes → ${healsioOut}`)
 
   // Hotcook
@@ -535,8 +549,12 @@ async function main() {
     NUTRITION_REFERENCE
   )
   const hotcookOut = join(outDir, 'recipes-hotcook.json')
+  const hotcookPublicOut = join(publicSeedDir, 'recipes-hotcook.json')
   writeFileSync(hotcookOut, JSON.stringify(hotcookRecipes, null, 2), 'utf-8')
+  writeFileSync(hotcookPublicOut, JSON.stringify(hotcookRecipes), 'utf-8')
   console.log(`✅ Hotcook: ${hotcookRecipes.length} recipes → ${hotcookOut}`)
+
+  console.log(`📦 Seed assets: ${healsioPublicOut}, ${hotcookPublicOut}`)
 
   console.log(`\n🎉 Total: ${healsioRecipes.length + hotcookRecipes.length} recipes pre-built`)
 }

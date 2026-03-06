@@ -1,9 +1,6 @@
 import { db } from './db'
 import type { Recipe, RecipeNutritionPerServing } from './db'
-import hotcookRecipes from '../data/recipes-hotcook.json'
-import healsioRecipes from '../data/recipes-healsio.json'
 import { STOCK_MASTER } from '../data/stockMaster'
-import { NUTRITION_REFERENCE } from '../data/nutritionLookup'
 
 // Increment this version string when the estimation logic changes significantly,
 // to force re-estimation on next launch for existing users.
@@ -43,6 +40,16 @@ function normalizeRecipeCategory<T extends { category?: string }>(recipe: T): T 
   }
 }
 
+async function loadSeedRecipesAsset(fileName: string): Promise<Omit<Recipe, 'id'>[]> {
+  const base = import.meta.env.BASE_URL || '/'
+  const assetUrl = `${base.replace(/\/?$/, '/')}seed/${fileName}`
+  const response = await fetch(assetUrl, { headers: { Accept: 'application/json' } })
+  if (!response.ok) {
+    throw new Error(`Failed to load seed recipes: ${fileName} (${response.status})`)
+  }
+  return response.json() as Promise<Omit<Recipe, 'id'>[]>
+}
+
 export function shouldRunNutritionMaintenance(recipeCount: number, appliedVersion: string | null): boolean {
   return recipeCount === 0 || appliedVersion !== NUTRITION_ESTIMATION_VERSION
 }
@@ -57,6 +64,7 @@ async function applyNutritionEstimation(): Promise<void> {
     estimateRecipeNutritionDetailed,
     resolveNutritionMetaConfidence,
   } = await import('../utils/nutritionEstimator')
+  const { NUTRITION_REFERENCE } = await import('../data/nutritionLookup')
   await db.recipes.toCollection().modify((recipe) => {
     const r = recipe as Recipe
     const metaSchemaVersion = typeof r.nutritionMeta?.schemaVersion === 'number'
@@ -126,6 +134,10 @@ async function applyNutritionEstimation(): Promise<void> {
 async function seedRecipesIfEmpty(): Promise<{ recipeCount: number, seeded: boolean }> {
   const recipeCount = await db.recipes.count()
   if (recipeCount === 0) {
+    const [hotcookRecipes, healsioRecipes] = await Promise.all([
+      loadSeedRecipesAsset('recipes-hotcook.json'),
+      loadSeedRecipesAsset('recipes-healsio.json'),
+    ])
     const allRecipes = [
       ...hotcookRecipes,
       ...healsioRecipes,

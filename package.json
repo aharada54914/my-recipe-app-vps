@@ -7,6 +7,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "predev": "tsx scripts/prebuild-recipes.mjs",
     "dev": "vite",
     "prebuild": "tsx scripts/prebuild-recipes.mjs",
     "build": "tsx scripts/prebuild-recipes.mjs && tsc -b && vite build",
@@ -54,6 +55,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "jsdom": "^28.1.0",
+    "path-browserify": "^1.0.1",
     "sharp": "^0.34.5",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",

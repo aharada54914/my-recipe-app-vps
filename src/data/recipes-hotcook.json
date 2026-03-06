@@ -591,7 +591,7 @@
     "title": "アクアパッツァ",
     "recipeNumber": "0019",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 500,
     "ingredients": [
@@ -2679,7 +2679,7 @@
     "title": "アルゴビマサラ(もっとクック専用)",
     "recipeNumber": "HC-025",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 550,
     "ingredients": [
@@ -2846,7 +2846,7 @@
     "title": "アレンジ自在！ホットクックで濃厚チゲ鍋(ヘルシオデリ)",
     "recipeNumber": "HC-026",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 3,
     "totalWeightG": 450,
     "ingredients": [
@@ -3435,7 +3435,7 @@
     "title": "いかのトマト煮",
     "recipeNumber": "0537",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 350,
     "ingredients": [
@@ -3562,7 +3562,7 @@
     "title": "いかめし",
     "recipeNumber": "0020",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 550,
     "ingredients": [
@@ -3694,7 +3694,7 @@
     "title": "イタリアンセット",
     "recipeNumber": "0263",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 2150,
     "ingredients": [
@@ -4281,7 +4281,7 @@
     "title": "一尾丸ごと！淡路産天然真鯛の鯛めし(ヘルシオデリ)",
     "recipeNumber": "HC-038",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 1050,
     "ingredients": [
@@ -4415,7 +4415,7 @@
     "title": "いなり煮こみ",
     "recipeNumber": "0211",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 550,
     "ingredients": [
@@ -4714,7 +4714,7 @@
     "title": "いも・かぼちゃ(ゆで)",
     "recipeNumber": "0086",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -6178,7 +6178,7 @@
     "title": "うまい！岩手のたこ飯(ヘルシオデリ)",
     "recipeNumber": "HC-053",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 700,
     "ingredients": [
@@ -6957,7 +6957,7 @@
     "title": "海老と白身魚の洋風トマト炒め(ヘルシオデリ)",
     "recipeNumber": "HC-059",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 3,
     "totalWeightG": 250,
     "ingredients": [
@@ -7222,7 +7222,7 @@
     "title": "えびと大根のとろとろ煮",
     "recipeNumber": "0384",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 3,
     "totalWeightG": 550,
     "ingredients": [
@@ -8150,7 +8150,7 @@
     "title": "おおきなハンバーガー風サンドイッチ(SHOWA)",
     "recipeNumber": "0496",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 300,
     "ingredients": [
@@ -8374,7 +8374,7 @@
     "title": "おかゆ",
     "recipeNumber": "0024",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 1800,
     "ingredients": [
@@ -8493,7 +8493,7 @@
     "title": "おかゆ(離乳食)",
     "recipeNumber": "0452",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 1400,
     "ingredients": [
@@ -8732,7 +8732,7 @@
     "title": "お米入りミートボール",
     "recipeNumber": "0332",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 2100,
     "ingredients": [
@@ -10245,7 +10245,7 @@
     "title": "貝柱とブロッコリーの炒め物",
     "recipeNumber": "0541",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 1350,
     "ingredients": [
@@ -10858,7 +10858,7 @@
     "title": "勝間流たっぷり野菜の蒸し煮(ブレイズ)",
     "recipeNumber": "0208",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 950,
     "ingredients": [
@@ -11126,7 +11126,7 @@
     "title": "かぼちゃコロッケの具",
     "recipeNumber": "0389",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 650,
     "ingredients": [
@@ -11244,7 +11244,7 @@
     "title": "かぼちゃのカレーあんかけ",
     "recipeNumber": "0227",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 950,
     "ingredients": [
@@ -11528,7 +11528,7 @@
     "title": "かぼちゃのそぼろあんかけ",
     "recipeNumber": "0379",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 3,
     "totalWeightG": 1000,
     "ingredients": [
@@ -11675,7 +11675,7 @@
     "title": "かぼちゃのチーズフォンデュ",
     "recipeNumber": "0135",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 600,
     "ingredients": [
@@ -11775,7 +11775,7 @@
     "title": "かぼちゃの肉詰め",
     "recipeNumber": "0136",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 950,
     "ingredients": [
@@ -11907,7 +11907,7 @@
     "title": "かぼちゃの煮物",
     "recipeNumber": "0003",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 600,
     "ingredients": [
@@ -13074,7 +13074,7 @@
     "title": "韓国風ピリ辛炊き込みごはん(エバラ食品)",
     "recipeNumber": "0484",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 900,
     "ingredients": [
@@ -14044,7 +14044,7 @@
     "title": "季節を食卓に　栗ごはん(ヘルシオデリ)",
     "recipeNumber": "HC-117",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 750,
     "ingredients": [
@@ -14152,7 +14152,7 @@
     "title": "季節を食卓に　たけのこごはん(ヘルシオデリ)",
     "recipeNumber": "HC-118",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 650,
     "ingredients": [
@@ -14260,7 +14260,7 @@
     "title": "絹ごし麻婆豆腐(もっとクック専用)",
     "recipeNumber": "HC-119",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 550,
     "ingredients": [
@@ -15488,7 +15488,7 @@
     "title": "きのこのペペロンチーノ",
     "recipeNumber": "0742",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 600,
     "ingredients": [
@@ -15937,7 +15937,7 @@
     "title": "キムチ豆腐",
     "recipeNumber": "0235",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 550,
     "ingredients": [
@@ -16279,7 +16279,7 @@
     "title": "きゅうりと豚肉の炒め物",
     "recipeNumber": "0243",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 750,
     "ingredients": [
@@ -16852,7 +16852,7 @@
     "title": "キーマカレー",
     "recipeNumber": "0008",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 1500,
     "ingredients": [
@@ -16964,7 +16964,7 @@
     "title": "牛すじカレー",
     "recipeNumber": "0159",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 1950,
     "ingredients": [
@@ -17817,7 +17817,7 @@
     "title": "牛肉トマト丼(ホットクック部)",
     "recipeNumber": "0503",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 900,
     "ingredients": [
@@ -18073,7 +18073,7 @@
     "title": "牛肉の赤ワイン煮",
     "recipeNumber": "0291",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 500,
     "ingredients": [
@@ -18516,7 +18516,7 @@
     "title": "牛肉のトマト煮こみ",
     "recipeNumber": "0410",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 1200,
     "ingredients": [
@@ -18738,7 +18738,7 @@
     "title": "魚介とあおさのアヒージョ風（愛知県産あおさ使用）(ヘルシオデリ)",
     "recipeNumber": "HC-153",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -18825,13 +18825,13 @@
     "nutritionPerServing": {
       "servingSizeG": 100,
       "energyKcal": 210,
-      "proteinG": 11.6,
-      "fatG": 7.5,
-      "carbG": 24.2,
+      "proteinG": 8.4,
+      "fatG": 6.5,
+      "carbG": 29.4,
       "saltEquivalentG": 1.2,
       "fiberG": 3,
       "sugarG": 6,
-      "saturatedFatG": 2.6,
+      "saturatedFatG": 2.3,
       "potassiumMg": 380,
       "calciumMg": 90,
       "ironMg": 1.8,
@@ -19290,7 +19290,7 @@
     "title": "栗ごはん",
     "recipeNumber": "0324",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 650,
     "ingredients": [
@@ -19786,7 +19786,7 @@
     "title": "黒豆とさつまいもの温活デトックスおこわ",
     "recipeNumber": "0466",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 600,
     "ingredients": [
@@ -20142,7 +20142,7 @@
     "title": "具だくさん 鶏つみれの肉団子鍋風（春雨入り）(ヘルシオデリ)",
     "recipeNumber": "HC-165",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 3,
     "totalWeightG": 700,
     "ingredients": [
@@ -20558,7 +20558,7 @@
     "title": "グリーンカレー",
     "recipeNumber": "0034",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 1250,
     "ingredients": [
@@ -20821,7 +20821,7 @@
     "title": "ケララ風チキンカレー",
     "recipeNumber": "HC-171",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 1050,
     "ingredients": [
@@ -21140,7 +21140,7 @@
     "title": "玄米ごはん",
     "recipeNumber": "0342",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 2350,
     "ingredients": [
@@ -21621,7 +21621,7 @@
     "title": "子どもも喜ぶ！洋風麻婆豆腐",
     "recipeNumber": "0751",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 650,
     "ingredients": [
@@ -21772,7 +21772,7 @@
     "title": "小松菜と桜えびのサッと煮",
     "recipeNumber": "0325",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 350,
     "ingredients": [
@@ -21884,7 +21884,7 @@
     "title": "小松菜とちりめんじゃこのあえ物",
     "recipeNumber": "0382",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 250,
     "ingredients": [
@@ -21981,7 +21981,7 @@
     "title": "小松菜とツナの煮物",
     "recipeNumber": "0037",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 250,
     "ingredients": [
@@ -22199,7 +22199,7 @@
     "title": "これうま！コクうまブイヤベース",
     "recipeNumber": "0321",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 1150,
     "ingredients": [
@@ -23441,7 +23441,7 @@
     "title": "バルサミコ酢豚～5種のカラフル野菜～(ヘルシオデリ)",
     "recipeNumber": "HC-193",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -23559,7 +23559,7 @@
     "title": "ごはん",
     "recipeNumber": "0139",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -23638,7 +23638,7 @@
     "title": "ごはん(しゃっきり)",
     "recipeNumber": "0523",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -23716,7 +23716,7 @@
     "title": "ごはん(２合)＆おかず",
     "recipeNumber": "0290",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 450,
     "ingredients": [
@@ -23837,7 +23837,7 @@
     "title": "ごはん(早炊き)",
     "recipeNumber": "0521",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -23915,7 +23915,7 @@
     "title": "ごはん(ふっくら)",
     "recipeNumber": "0522",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -23993,7 +23993,7 @@
     "title": "ごはん(無洗米)",
     "recipeNumber": "0520",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -25482,7 +25482,7 @@
     "title": "さけとブロッコリーのクリーム煮(取り分け離乳食)",
     "recipeNumber": "HC-211",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 1300,
     "ingredients": [
@@ -25654,7 +25654,7 @@
     "title": "酒の肴セット",
     "recipeNumber": "0265",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 300,
     "ingredients": [
@@ -27876,7 +27876,7 @@
     "title": "サフラン香る有頭海老とムール貝のパエリア(ヘルシオデリ)",
     "recipeNumber": "HC-231",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 800,
     "ingredients": [
@@ -27994,7 +27994,7 @@
     "title": "参鶏湯(サムゲタン)",
     "recipeNumber": "0043",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 900,
     "ingredients": [
@@ -28391,7 +28391,7 @@
     "title": "山菜おこわ",
     "recipeNumber": "0526",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 700,
     "ingredients": [
@@ -28762,7 +28762,7 @@
     "title": "さんまの骨までやわらか煮(トマト風味)",
     "recipeNumber": "0044",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 500,
     "ingredients": [
@@ -28905,7 +28905,7 @@
     "title": "酸辣湯(サンラータン)",
     "recipeNumber": "0058",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 600,
     "ingredients": [
@@ -29304,7 +29304,7 @@
     "title": "塩麹",
     "recipeNumber": "0114",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 550,
     "ingredients": [
@@ -29754,7 +29754,7 @@
     "title": "四川式麻婆豆腐(マーボドーフ)(味の素)",
     "recipeNumber": "0552",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 200,
     "ingredients": [
@@ -31207,7 +31207,7 @@
     "title": "しょうゆ麹",
     "recipeNumber": "0119",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 500,
     "ingredients": [
@@ -31520,7 +31520,7 @@
     "title": "白身魚と野菜のとろみあえ(離乳食)",
     "recipeNumber": "0456",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 350,
     "ingredients": [
@@ -31630,7 +31630,7 @@
     "title": "シンガポールチキンライス（海南鶏飯）(ヘルシオデリ)",
     "recipeNumber": "HC-262",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 3,
     "totalWeightG": 650,
     "ingredients": [
@@ -32194,7 +32194,7 @@
     "title": "シーフードカレー",
     "recipeNumber": "0426",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 1500,
     "ingredients": [
@@ -32679,7 +32679,7 @@
     "title": "治部煮",
     "recipeNumber": "0203",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 300,
     "ingredients": [
@@ -34551,7 +34551,7 @@
     "title": "ジャージャーめん",
     "recipeNumber": "0748",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 950,
     "ingredients": [
@@ -37360,7 +37360,7 @@
     "title": "赤飯",
     "recipeNumber": "0524",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 650,
     "ingredients": [
@@ -37865,7 +37865,7 @@
     "title": "たいのトマト蒸し",
     "recipeNumber": "0347",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 250,
     "ingredients": [
@@ -37980,7 +37980,7 @@
     "title": "たいのミネストローネ(取り分け離乳食)",
     "recipeNumber": "HC-314",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 1000,
     "ingredients": [
@@ -38123,7 +38123,7 @@
     "title": "台湾風ジャージャー麺(ヘルシオデリ)",
     "recipeNumber": "HC-315",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 3,
     "totalWeightG": 200,
     "ingredients": [
@@ -38242,7 +38242,7 @@
     "title": "炊きこみごはん",
     "recipeNumber": "0525",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 2,
     "totalWeightG": 750,
     "ingredients": [
@@ -38809,7 +38809,7 @@
     "title": "タコライス(もっとクック専用)",
     "recipeNumber": "HC-321",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 450,
     "ingredients": [
@@ -40347,7 +40347,7 @@
     "title": "ターメリックライス",
     "recipeNumber": "0437",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "ご飯もの",
     "baseServings": 4,
     "totalWeightG": 400,
     "ingredients": [
@@ -41443,7 +41443,7 @@
     "title": "チキンとポテトのペッパーソース(ヘルシオデリ)",
     "recipeNumber": "HC-343",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 2,
     "totalWeightG": 200,
     "ingredients": [
@@ -41543,7 +41543,7 @@
     "title": "チキンと野菜のカレー(無水カレー)",
     "recipeNumber": "0007",
     "device": "hotcook",
-    "category": "主菜",
+    "category": "副菜",
     "baseServings": 4,
     "totalWeightG": 2150,
     "ingredients": [

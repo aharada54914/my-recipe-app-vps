@@ -1,6 +1,5 @@
 import type {
   CalendarEventRecord,
-  DeviceType,
   Favorite,
   Recipe,
   RecipeCategory,

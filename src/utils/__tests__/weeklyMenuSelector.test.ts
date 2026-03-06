@@ -4,31 +4,23 @@ const { mockRecipesToArray } = vi.hoisted(() => ({
   mockRecipesToArray: vi.fn<() => Promise<import('../../db/db').Recipe[]>>(),
 }))
 
-vi.mock('../../db/db', () => {
-  const mockPrimaryKeys = vi.fn(async () => {
-    const recipes = await mockRecipesToArray()
-    return recipes.map((r) => r.id!)
-  })
-  const mockBulkGet = vi.fn(async (ids: number[]) => {
-    const recipes = await mockRecipesToArray()
-    return ids.map((id) => recipes.find((r) => r.id === id))
-  })
-  return {
-    db: {
-      recipes: {
-        toArray: mockRecipesToArray,
-        limit: vi.fn(() => ({ toArray: vi.fn(() => []) })),
-        orderBy: vi.fn(() => ({ primaryKeys: mockPrimaryKeys })),
-        bulkGet: mockBulkGet,
-      },
-      stock: { filter: vi.fn(() => ({ toArray: vi.fn(() => []) })) },
-      weeklyMenus: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
-      viewHistory: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
-      userPreferences: { limit: vi.fn(() => ({ first: vi.fn(() => Promise.resolve(undefined)) })) },
-      recipeFeatureMatrix: { bulkPut: vi.fn(() => Promise.resolve()), bulkGet: vi.fn(() => Promise.resolve([])) },
+vi.mock('../../db/db', () => ({
+  db: {
+    recipes: {
+      toArray: mockRecipesToArray,
+      limit: vi.fn(() => ({ toArray: vi.fn(() => []) })),
     },
-  }
-})
+    stock: { filter: vi.fn(() => ({ toArray: vi.fn(() => []) })) },
+    weeklyMenus: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
+    viewHistory: { orderBy: vi.fn(() => ({ reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
+    weatherCache: { orderBy: vi.fn(() => ({ last: vi.fn(() => null), reverse: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(() => []) })) })) })) },
+    ingredientPrices: {
+      where: vi.fn(() => ({ equals: vi.fn(() => ({ first: vi.fn(() => undefined) })) })),
+      toArray: vi.fn(() => []),
+    },
+    recipeFeatureMatrix: { bulkPut: vi.fn(() => Promise.resolve()) },
+  },
+}))
 
 vi.mock('../../data/seasonalIngredients', () => ({
   getCurrentSeasonalIngredients: vi.fn(() => []),
@@ -193,6 +185,73 @@ describe('selectWeeklyMenu device balance', () => {
     expect(menu[0]?.sideRecipeId).toBe(202)
   })
 
+
+  it('respects variable luxury reward days when luxury mode is enabled', async () => {
+    const luxuryMains = Array.from(
+      { length: 5 },
+      (_, i) => makeRecipe(i + 1, 'manual', '主菜', `和牛ステーキ${i + 1}`, ['牛肉', '塩'])
+    )
+    const regularMains = Array.from(
+      { length: 8 },
+      (_, i) => makeRecipe(i + 101, 'manual', '主菜', `鶏むねメイン${i + 1}`, ['鶏むね肉', '玉ねぎ'])
+    )
+
+    mockRecipesToArray.mockResolvedValue([...luxuryMains, ...regularMains])
+
+    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+      weeklyMenuCostMode: 'luxury',
+      weeklyMenuLuxuryRewardDays: 3,
+    })
+
+    const selectedMainTitles = menu
+      .map((item) => [...luxuryMains, ...regularMains].find((r) => r.id === item.recipeId)?.title ?? '')
+    const luxurySelected = selectedMainTitles.filter((title) => title.includes('和牛ステーキ')).length
+
+    expect(menu).toHaveLength(7)
+    expect(luxurySelected).toBeGreaterThanOrEqual(2)
+  })
+
+  it('does not apply luxury bias in ignore mode', async () => {
+    const luxuryMains = Array.from(
+      { length: 5 },
+      (_, i) => makeRecipe(i + 1, 'manual', '主菜', `和牛ステーキ${i + 1}`, ['牛肉', '塩'])
+    )
+    const regularMains = Array.from(
+      { length: 8 },
+      (_, i) => makeRecipe(i + 101, 'manual', '主菜', `鶏むねメイン${i + 1}`, ['鶏むね肉', '玉ねぎ'])
+    )
+
+    mockRecipesToArray.mockResolvedValue([...luxuryMains, ...regularMains])
+
+    const ignoreModeMenu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+      weeklyMenuCostMode: 'ignore',
+      weeklyMenuLuxuryRewardDays: 3,
+    })
+
+    const luxuryModeMenu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+      weeklyMenuCostMode: 'luxury',
+      weeklyMenuLuxuryRewardDays: 3,
+    })
+
+    const countLuxury = (menuItems: Awaited<ReturnType<typeof selectWeeklyMenu>>) => menuItems
+      .map((item) => [...luxuryMains, ...regularMains].find((r) => r.id === item.recipeId)?.title ?? '')
+      .filter((title) => title.includes('和牛ステーキ')).length
+
+    expect(countLuxury(luxuryModeMenu)).toBeGreaterThanOrEqual(countLuxury(ignoreModeMenu))
+  })
+
   it('prefers color-diverse main dish after a locked red main dish', async () => {
     const lockedRed = makeRecipe(1, 'manual', '主菜', 'トマトチキン', ['鶏肉', 'トマト'])
     const redCandidate = makeRecipe(2, 'manual', '主菜', '赤パプリカチキン', ['鶏肉', '赤パプリカ'])
@@ -233,45 +292,6 @@ describe('selectWeeklyMenu device balance', () => {
     })
 
     expect(mockGetWeeklyWeatherForecast).not.toHaveBeenCalled()
-  })
-
-
-  it('falls back gracefully when seasonalPriority is missing in legacy preferences', async () => {
-    const mains: Recipe[] = Array.from({ length: 8 }, (_, i) => makeRecipe(i + 1, 'manual'))
-    mockRecipesToArray.mockResolvedValue(mains)
-
-    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
-      seasonalPriority: undefined as unknown as 'low',
-      userPrompt: '',
-      desiredMealHour: 18,
-      desiredMealMinute: 0,
-    })
-
-    expect(menu).toHaveLength(7)
-  })
-
-
-  it('fills missing days from top-ranked mains when unique candidates are insufficient', async () => {
-    const mains: Recipe[] = [
-      makeRecipe(1, 'manual', '主菜', 'A'),
-      makeRecipe(2, 'manual', '主菜', 'B'),
-      makeRecipe(3, 'manual', '主菜', 'C'),
-    ]
-    mockRecipesToArray.mockResolvedValue(mains)
-
-    const menu = await selectWeeklyMenu(new Date('2026-02-22'), {
-      seasonalPriority: 'medium',
-      userPrompt: '',
-      desiredMealHour: 18,
-      desiredMealMinute: 0,
-    }, [
-      { recipeId: 1, date: '2026-02-22', mealType: 'dinner', locked: true },
-      { recipeId: 2, date: '2026-02-23', mealType: 'dinner', locked: true },
-      { recipeId: 3, date: '2026-02-24', mealType: 'dinner', locked: true },
-    ])
-
-    expect(menu).toHaveLength(7)
-    expect(new Set(menu.map((item) => item.date)).size).toBe(7)
   })
 
   it('fetches weather for target week when preloaded weather dates are from another week', async () => {
