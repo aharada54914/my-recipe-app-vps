@@ -1,3 +1,4 @@
+import { addDays, format } from 'date-fns'
 import { db } from '../../db/db'
 
 export interface DailyWeather {
@@ -54,10 +55,9 @@ function buildSyntheticForecast(startDate: Date): DailyWeather[] {
   const baseTemp = monthBaseTemp(month)
 
   for (let i = 0; i < 7; i += 1) {
-    const d = new Date(startDate)
-    d.setDate(startDate.getDate() + i)
+    const d = addDays(startDate, i)
     out.push({
-      date: d.toISOString().slice(0, 10),
+      date: format(d, 'yyyy-MM-dd'),
       maxTempC: baseTemp + (i % 3),
       minTempC: baseTemp - 6 + (i % 2),
       precipitationMm: i % 4 === 0 ? 8 : 0,

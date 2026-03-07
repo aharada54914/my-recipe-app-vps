@@ -189,6 +189,8 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
         </button>
         <button
           onClick={() => toggleFavorite(recipeId)}
+          aria-label={favorited ? 'お気に入りを解除' : 'お気に入りに追加'}
+          data-testid="recipe-favorite-button"
           className="rounded-xl bg-bg-card p-2.5 transition-colors hover:bg-bg-card-hover sm:p-3"
         >
           <Star className={`h-5 w-5 ${favorited ? 'fill-accent text-accent' : 'text-text-secondary'}`} />

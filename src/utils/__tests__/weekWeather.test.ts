@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterForecastForWeek, getWeekDateStrings, isCompleteForecastForWeek } from '../season-weather/weekWeather'
+import { buildDisplayForecastForWeek, filterForecastForWeek, getWeekDateStrings, isCompleteForecastForWeek } from '../season-weather/weekWeather'
 import type { DailyWeather } from '../season-weather/weatherProvider'
 
 describe('weekWeather helpers', () => {
@@ -35,5 +35,22 @@ describe('weekWeather helpers', () => {
 
     expect(isCompleteForecastForWeek(complete, weekStart)).toBe(true)
     expect(isCompleteForecastForWeek(incomplete, weekStart)).toBe(false)
+  })
+
+  it('builds seven display slots in week order even when the forecast is missing a day', () => {
+    const sparse = [
+      make('2026-02-22'),
+      make('2026-02-23'),
+      make('2026-02-24'),
+      make('2026-02-25'),
+      make('2026-02-26'),
+      make('2026-02-27'),
+    ]
+
+    const display = buildDisplayForecastForWeek(sparse, weekStart)
+
+    expect(display).toHaveLength(7)
+    expect(display.map((day) => day.date)).toEqual(getWeekDateStrings(weekStart))
+    expect(display[6]).toMatchObject({ date: '2026-02-28', maxTempC: 20, minTempC: 10, precipitationMm: 0 })
   })
 })

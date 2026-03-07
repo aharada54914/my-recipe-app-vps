@@ -27,6 +27,14 @@ async function addStockItem(page: Page, name: string, quantity: string) {
   await expect(page.getByTestId('stock-inventory').locator(`[data-stock-name="${name}"]`).first()).toBeVisible()
 }
 
+async function expandWeeklyWeather(page: Page) {
+  const weatherToggle = page.getByRole('button', { name: '今週の東京都天気カードを展開' })
+  await expect(weatherToggle).toBeVisible()
+  if ((await weatherToggle.getAttribute('aria-expanded')) !== 'true') {
+    await weatherToggle.click()
+  }
+}
+
 async function readMatchRate(page: Page, query: string, recipeTitle: string): Promise<number> {
   await waitForRouteReady(page, '/search', page.getByPlaceholder('レシピを検索...'))
   const input = page.getByPlaceholder('レシピを検索...')
@@ -95,6 +103,21 @@ test('weekly menu generation creates and persists 7 daily cards', async ({ page 
   await expect(page.getByRole('button', { name: '主菜を変更' })).toHaveCount(7)
 })
 
+test('weekly weather panel always shows seven day cards for the active week', async ({ page }) => {
+  await waitForRouteReady(page, '/weekly-menu', page.getByRole('heading', { name: '週間献立' }))
+  await expandWeeklyWeather(page)
+
+  const rangeLabel = (await page.locator('text=/\\d{1,2}\\/\\d{1,2} - \\d{1,2}\\/\\d{1,2}/').first().innerText()).trim()
+  const [startLabel, endLabel] = rangeLabel.split(' - ')
+
+  const weatherCards = page.getByTestId('weekly-weather-card')
+  await expect(weatherCards).toHaveCount(7)
+  await expect(weatherCards.first()).toContainText(startLabel.replace('/', '/'))
+  await expect(weatherCards.last()).toContainText(endLabel.replace('/', '/'))
+  await expect(page.getByTestId('weekly-weather-label')).toHaveCount(7)
+  await expect(weatherCards.first()).toHaveAttribute('data-weather-variant', /.+/)
+})
+
 test('weekly menu swap replaces the first main dish and persists after reload', async ({ page }) => {
   await ensureWeeklyMenuGenerated(page)
 
@@ -136,4 +159,48 @@ test('stock registration increases search match rate for a seeded recipe', async
 
   const after = await readMatchRate(page, 'きんぴら', recipeTitle)
   expect(after).toBeGreaterThan(before)
+})
+
+test('weekly shopping list opens after menu generation', async ({ page }) => {
+  await ensureWeeklyMenuGenerated(page)
+  await page.getByRole('button', { name: '買い物リスト' }).click()
+
+  const shoppingListPanel = page.getByTestId('weekly-shopping-list-panel')
+  await expect(shoppingListPanel.getByRole('heading', { name: '買い物リスト' })).toBeVisible()
+  await expect(shoppingListPanel.getByText(/^不足材料 \(|全ての材料が揃っています！$/)).toBeVisible()
+})
+
+test('recipe detail updates favorites and history pages', async ({ page }) => {
+  await waitForRouteReady(page, '/recipe/1', page.getByRole('heading', { name: '材料', exact: true }).first())
+  const recipeTitle = (await page.locator('header h1').first().innerText()).trim()
+
+  const favoriteButton = page.getByTestId('recipe-favorite-button')
+  await favoriteButton.click()
+  await expect(favoriteButton).toHaveAttribute('aria-label', 'お気に入りを解除')
+
+  await waitForRouteReady(page, '/favorites', page.getByRole('heading', { name: 'お気に入り' }))
+  await expect(page.getByText(recipeTitle).first()).toBeVisible()
+
+  await waitForRouteReady(page, '/history', page.getByRole('heading', { name: '閲覧履歴' }))
+  await expect(page.getByText(recipeTitle).first()).toBeVisible()
+})
+
+test('settings persist desired meal time after reload', async ({ page }) => {
+  await waitForRouteReady(page, '/settings/notify', page.getByRole('heading', { name: '通知', exact: true }))
+
+  const notificationSettings = page.getByTestId('notification-settings')
+  const updatedAtBefore = await notificationSettings.getAttribute('data-preferences-updated-at')
+  const desiredMealHour = page.getByTestId('desired-meal-hour')
+  const desiredMealMinute = page.getByTestId('desired-meal-minute')
+
+  await desiredMealHour.fill('19')
+  await desiredMealHour.blur()
+  await desiredMealMinute.fill('15')
+  await desiredMealMinute.blur()
+  await expect(notificationSettings).not.toHaveAttribute('data-preferences-updated-at', updatedAtBefore ?? '')
+
+  await page.reload()
+  await expect(page.getByTestId('notification-settings')).toBeVisible()
+  await expect(page.getByTestId('desired-meal-hour')).toHaveValue('19')
+  await expect(page.getByTestId('desired-meal-minute')).toHaveValue('15')
 })

@@ -52,5 +52,6 @@ describe('getWeeklyWeatherForecast', () => {
     const out = await getWeeklyWeatherForecast(START)
     expect(out).toHaveLength(7)
     expect(out[0].date).toBe('2026-03-01')
+    expect(out[6].date).toBe('2026-03-07')
   })
 })

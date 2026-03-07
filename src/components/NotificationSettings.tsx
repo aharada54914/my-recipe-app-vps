@@ -36,7 +36,11 @@ export function NotificationSettings() {
   }
 
   return (
-    <div className="rounded-2xl bg-bg-card p-4">
+    <div
+      data-testid="notification-settings"
+      data-preferences-updated-at={preferences.updatedAt instanceof Date ? preferences.updatedAt.toISOString() : String(preferences.updatedAt)}
+      className="rounded-2xl bg-bg-card p-4"
+    >
       <div className="mb-3 flex items-center gap-2">
         <Bell className="h-4 w-4 text-accent" />
         <h4 className="text-base font-bold text-text-secondary">通知設定</h4>
@@ -116,6 +120,7 @@ export function NotificationSettings() {
               min={0}
               max={23}
               value={preferences.desiredMealHour}
+              data-testid="desired-meal-hour"
               onChange={(e) => updatePreference('desiredMealHour', Number(e.target.value))}
               className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
             />
@@ -126,6 +131,7 @@ export function NotificationSettings() {
               max={59}
               step={5}
               value={String(preferences.desiredMealMinute).padStart(2, '0')}
+              data-testid="desired-meal-minute"
               onChange={(e) => updatePreference('desiredMealMinute', Number(e.target.value))}
               className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
             />

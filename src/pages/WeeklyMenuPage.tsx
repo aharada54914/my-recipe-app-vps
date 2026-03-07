@@ -38,10 +38,12 @@ import jsQR from 'jsqr'
 import { WEEKLY_MENU_IMPORT_PARAM } from '../utils/weeklyMenuQr'
 import { analyzeWeeklyMenuNutrition } from '../utils/weeklyMenuNutritionInsights'
 import { getWeeklyWeatherForecast, type DailyWeather } from '../utils/season-weather/weatherProvider'
-import { filterForecastForWeek, isCompleteForecastForWeek } from '../utils/season-weather/weekWeather'
+import { buildDisplayForecastForWeek, filterForecastForWeek, isCompleteForecastForWeek } from '../utils/season-weather/weekWeather'
 import { WeatherIllustration } from '../components/weather/WeatherIllustration'
 import { learnTOptFromHistory } from '../utils/season-weather/tOptLearner'
 import { logWeeklyMenuSwap } from '../utils/weeklyMenuSelectionLogging'
+import { getWeatherPresentation } from '../utils/season-weather/weatherPresentation'
+import { WEATHER_TILE_TOKENS } from '../components/weather/weatherIllustrationTokens'
 
 const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', string> = {
   'heuristic-3': '3段階推定',
@@ -87,6 +89,10 @@ export function WeeklyMenuPage() {
   const stockItems = useLiveQuery(() => db.stock.filter(s => s.inStock).toArray(), [])
   const latestWeather = useLiveQuery(() => db.weatherCache.orderBy('fetchedAt').last(), [])
   const stockNames = useMemo(() => new Set((stockItems ?? []).map(s => s.name)), [stockItems])
+  const weeklyWeatherCards = useMemo(
+    () => (weeklyWeather.length > 0 ? buildDisplayForecastForWeek(weeklyWeather, weekStart) : []),
+    [weeklyWeather, weekStart],
+  )
 
   const loadRecipes = useCallback(async (recipeIds: number[]) => {
     const loaded = await db.recipes.bulkGet(recipeIds)
@@ -591,17 +597,54 @@ export function WeeklyMenuPage() {
                 <p className="text-xs text-text-secondary">天気予報を読み込み中...</p>
               ) : (
                 <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
-                  {weeklyWeather.map((w) => (
-                    <div key={w.date} className="rounded-lg bg-white/5 p-2">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <p className="font-semibold text-text-primary">{format(parse(w.date, 'yyyy-MM-dd', new Date()), 'M/d (E)', { locale: ja })}</p>
-                        <WeatherIllustration weather={w} size={42} />
+                  {weeklyWeatherCards.map((w) => {
+                    const presentation = getWeatherPresentation(w)
+                    const tileToken = WEATHER_TILE_TOKENS[presentation.variant]
+
+                    return (
+                      <div
+                        key={w.date}
+                        data-testid="weekly-weather-card"
+                        data-weather-date={w.date}
+                        data-weather-variant={presentation.variant}
+                        className="rounded-xl p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                        style={{
+                          background: tileToken.background,
+                          border: `1px solid ${tileToken.border}`,
+                        }}
+                      >
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-white">{format(parse(w.date, 'yyyy-MM-dd', new Date()), 'M/d (E)', { locale: ja })}</p>
+                            <span
+                              data-testid="weekly-weather-label"
+                              className="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold"
+                              style={{ backgroundColor: tileToken.badgeBg, color: tileToken.badgeText }}
+                            >
+                              {presentation.label}
+                            </span>
+                          </div>
+                          <div className="shrink-0 rounded-xl bg-black/15 p-1.5 ring-1 ring-white/10">
+                            <WeatherIllustration weather={w} size={48} />
+                          </div>
+                        </div>
+
+                        <div className="mb-1 flex items-end gap-2">
+                          <span className="text-lg font-extrabold" style={{ color: tileToken.tempHigh }}>
+                            {w.maxTempC}℃
+                          </span>
+                          <span className="text-sm font-semibold" style={{ color: tileToken.tempLow }}>
+                            / {w.minTempC}℃
+                          </span>
+                        </div>
+
+                        <div className="space-y-0.5 text-[12px] text-white/82">
+                          <p>降水目安: {w.precipitationMm}mm</p>
+                          <p>湿度: {w.humidityPercent != null ? `${w.humidityPercent}%` : '—'}</p>
+                        </div>
                       </div>
-                      <p className="text-text-secondary">{w.maxTempC}℃ / {w.minTempC}℃</p>
-                      <p className="text-text-secondary">降水目安: {w.precipitationMm}mm</p>
-                      <p className="text-text-secondary">湿度: {w.humidityPercent != null ? `${w.humidityPercent}%` : '—'}</p>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -888,6 +931,7 @@ export function WeeklyMenuPage() {
           {/* Shopping list — below the buttons, scrollable */}
           {showShoppingList && stockItems && menu && (
             <div
+              data-testid="weekly-shopping-list-panel"
               className="max-h-[55vh] overflow-y-auto border-t border-border p-4"
               style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
