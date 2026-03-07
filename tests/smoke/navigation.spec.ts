@@ -127,9 +127,13 @@ test('settings persist desired meal time after reload', async ({ page }) => {
 
   await desiredMealHour.fill(nextHour)
   await desiredMealHour.blur()
+  await expect(planningSettings).not.toHaveAttribute('data-preferences-updated-at', updatedAtBefore ?? '')
+  const updatedAtAfterHour = await planningSettings.getAttribute('data-preferences-updated-at')
+
   await desiredMealMinute.fill(nextMinute)
   await desiredMealMinute.blur()
-  await expect(planningSettings).not.toHaveAttribute('data-preferences-updated-at', updatedAtBefore ?? '')
+  await expect.poll(async () => planningSettings.getAttribute('data-preferences-updated-at')).not.toBe(updatedAtAfterHour)
+  await expect(desiredMealMinute).toHaveValue(nextMinute)
 
   await page.reload()
   await expect(page.getByTestId('planning-schedule-settings')).toBeVisible()

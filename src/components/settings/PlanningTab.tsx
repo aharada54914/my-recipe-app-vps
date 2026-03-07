@@ -1,6 +1,76 @@
+import { useCallback, useEffect, useState } from 'react'
 import { CalendarRange, UtensilsCrossed } from 'lucide-react'
 import { MealPlanSettings } from '../MealPlanSettings'
 import { usePreferences } from '../../hooks/usePreferences'
+
+function normalizeTimeDraft(
+  rawValue: string,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const parsed = Number(rawValue)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, Math.trunc(parsed)))
+}
+
+function formatTimeDraft(value: number, pad = false): string {
+  return pad ? String(value).padStart(2, '0') : String(value)
+}
+
+interface TimeInputProps {
+  value: number
+  min: number
+  max: number
+  pad?: boolean
+  testId?: string
+  className: string
+  onCommit: (value: number) => Promise<void>
+}
+
+function TimeInput({
+  value,
+  min,
+  max,
+  pad = false,
+  testId,
+  className,
+  onCommit,
+}: TimeInputProps) {
+  const [draft, setDraft] = useState(() => formatTimeDraft(value, pad))
+
+  useEffect(() => {
+    setDraft(formatTimeDraft(value, pad))
+  }, [pad, value])
+
+  const commit = useCallback(async (rawValue: string) => {
+    const nextValue = normalizeTimeDraft(rawValue, value, min, max)
+    setDraft(formatTimeDraft(nextValue, pad))
+    if (nextValue === value) return
+    await onCommit(nextValue)
+  }, [max, min, onCommit, pad, value])
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={draft}
+      data-testid={testId}
+      onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ''))}
+      onBlur={(e) => {
+        void commit(e.currentTarget.value)
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter') return
+        e.preventDefault()
+        void commit((e.currentTarget as HTMLInputElement).value)
+        ;(e.currentTarget as HTMLInputElement).blur()
+      }}
+      className={className}
+    />
+  )
+}
 
 export function PlanningTab() {
   const { preferences, updatePreference } = usePreferences()
@@ -25,24 +95,22 @@ export function PlanningTab() {
               食事開始希望時刻
             </label>
             <div className="flex items-center gap-1">
-              <input
-                type="number"
+              <TimeInput
+                value={preferences.desiredMealHour}
                 min={0}
                 max={23}
-                value={preferences.desiredMealHour}
-                data-testid="desired-meal-hour"
-                onChange={(e) => updatePreference('desiredMealHour', Number(e.target.value))}
+                testId="desired-meal-hour"
+                onCommit={(value) => updatePreference('desiredMealHour', value)}
                 className="ui-input w-12 px-2 py-2 text-center sm:w-14"
               />
               <span className="text-text-secondary">:</span>
-              <input
-                type="number"
+              <TimeInput
+                value={preferences.desiredMealMinute}
                 min={0}
                 max={59}
-                step={5}
-                value={String(preferences.desiredMealMinute).padStart(2, '0')}
-                data-testid="desired-meal-minute"
-                onChange={(e) => updatePreference('desiredMealMinute', Number(e.target.value))}
+                pad
+                testId="desired-meal-minute"
+                onCommit={(value) => updatePreference('desiredMealMinute', value)}
                 className="ui-input w-12 px-2 py-2 text-center sm:w-14"
               />
             </div>
