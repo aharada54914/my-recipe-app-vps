@@ -474,7 +474,6 @@ export async function selectWeeklyMenu(
 
   if (context.mainEligible.length === 0) return []
 
-  const costMode = config.weeklyMenuCostMode ?? 'ignore'
   const targetLuxuryDays = Math.min(7, Math.max(1, config.weeklyMenuLuxuryRewardDays ?? 2))
 
   const lockedMap = new Map<string, number>()
