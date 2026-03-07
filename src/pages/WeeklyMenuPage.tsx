@@ -679,6 +679,7 @@ export function WeeklyMenuPage() {
                 return (
                   <div
                     key={item.date}
+                    data-testid="weekly-day-card"
                     className={`rounded-2xl bg-bg-card p-4 ${isToday ? 'ring-1 ring-accent/40' : ''}`}
                   >
                     {/* Day header */}

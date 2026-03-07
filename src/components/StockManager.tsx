@@ -83,7 +83,7 @@ function StockRow({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl">
+    <div className="relative overflow-hidden rounded-xl" data-testid="stock-row" data-stock-name={name}>
       {onDelete && (
         <div className="absolute inset-y-0 right-0 flex w-[84px] items-center justify-center rounded-r-xl bg-red-500/80">
           <button
@@ -349,7 +349,7 @@ export function StockManager() {
 
       {/* In-stock section */}
       {inStockItems.length > 0 && (
-        <div className="mb-6 space-y-3">
+        <div className="mb-6 space-y-3" data-testid="stock-inventory">
           <h3 className="text-sm font-bold text-text-secondary">在庫あり ({inStockItems.length})</h3>
 
           {inStockBasicSeasonings.length > 0 && (
@@ -394,7 +394,7 @@ export function StockManager() {
 
       {/* Search results section */}
       {searchResults.length > 0 && (
-        <div>
+        <div data-testid="stock-search-results">
           <h3 className="mb-2 text-sm font-bold text-text-secondary">検索結果 ({searchResults.length})</h3>
           <div className="space-y-2">
             {searchResults.map((ing) => (

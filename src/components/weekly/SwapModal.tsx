@@ -49,6 +49,7 @@ export function SwapModal({
     return createPortal(
         <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60" onClick={onClose}>
             <div
+                data-testid="swap-modal"
                 className="flex max-h-[75vh] w-full max-w-lg flex-col rounded-t-2xl bg-bg-primary"
                 onClick={e => e.stopPropagation()}
             >
@@ -86,12 +87,13 @@ export function SwapModal({
                         filtered!.length > 0 ? (
                             <div className="space-y-2">
                                 {filtered!.map(recipe => (
-                                    <RecipeCard
-                                        key={recipe.id}
-                                        recipe={recipe}
-                                        matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
-                                        onClick={() => onSelect(recipe)}
-                                    />
+                                    <div key={recipe.id} data-testid="swap-candidate" data-recipe-title={recipe.title}>
+                                        <RecipeCard
+                                            recipe={recipe}
+                                            matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                                            onClick={() => onSelect(recipe)}
+                                        />
+                                    </div>
                                 ))}
                             </div>
                         ) : (
@@ -108,12 +110,13 @@ export function SwapModal({
                                     </div>
                                     <div className="space-y-2">
                                         {favorites.slice(0, 5).map(recipe => (
-                                            <RecipeCard
-                                                key={recipe.id}
-                                                recipe={recipe}
-                                                matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
-                                                onClick={() => onSelect(recipe)}
-                                            />
+                                            <div key={recipe.id} data-testid="swap-candidate" data-recipe-title={recipe.title}>
+                                                <RecipeCard
+                                                    recipe={recipe}
+                                                    matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                                                    onClick={() => onSelect(recipe)}
+                                                />
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
@@ -124,12 +127,13 @@ export function SwapModal({
                                 <div className="mb-2 text-xs font-bold text-text-secondary">在庫でつくれるレシピ</div>
                                 <div className="space-y-2">
                                     {topAlternatives.map(recipe => (
-                                        <RecipeCard
-                                            key={recipe.id}
-                                            recipe={recipe}
-                                            matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
-                                            onClick={() => onSelect(recipe)}
-                                        />
+                                        <div key={recipe.id} data-testid="swap-candidate" data-recipe-title={recipe.title}>
+                                            <RecipeCard
+                                                recipe={recipe}
+                                                matchRate={calculateMatchRate(recipe.ingredients, stockNames)}
+                                                onClick={() => onSelect(recipe)}
+                                            />
+                                        </div>
                                     ))}
                                 </div>
                             </div>
