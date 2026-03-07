@@ -10,7 +10,7 @@ function getApiKey(): string {
 
 function GeminiApiKeyHint() {
   return (
-    <p className="rounded-xl bg-white/5 px-4 py-3 text-sm text-text-secondary">
+    <p className="ui-inline-note">
       Gemini APIキーが未設定です。設定 → 献立タブから登録してください。
     </p>
   )
@@ -69,7 +69,7 @@ export function ChatTab() {
               <button
                 key={q}
                 onClick={() => setChatDraftInput(q)}
-                className="rounded-xl bg-white/5 px-3 py-2 text-sm text-text-secondary hover:bg-white/10 hover:text-text-primary"
+                className="ui-btn ui-btn-secondary px-3 py-2 text-sm"
               >
                 {q}
               </button>
@@ -114,7 +114,7 @@ export function ChatTab() {
           placeholder="メッセージを入力... (Enterで送信)"
           rows={2}
           disabled={!hasKey || chatLoading}
-          className="min-h-[56px] flex-1 resize-none rounded-xl bg-bg-card px-4 py-3 text-base text-text-primary placeholder:text-text-secondary outline-none ring-1 ring-white/10 focus:ring-accent disabled:opacity-40"
+          className="ui-input min-h-[56px] flex-1 resize-none disabled:opacity-40"
         />
         <button
           onClick={handleSend}

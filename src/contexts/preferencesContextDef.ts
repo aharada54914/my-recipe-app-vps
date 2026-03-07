@@ -1,7 +1,9 @@
 import { createContext } from 'react'
-import type { UserPreferences } from '../db/db'
+import type { AppearanceMode, UserPreferences } from '../db/db'
+import type { ResolvedTheme } from '../lib/theme'
 
 export const DEFAULT_PREFERENCES: Omit<UserPreferences, 'id'> = {
+  appearanceMode: 'system',
   familyCalendarId: undefined,
   mealStartHour: 18,
   mealStartMinute: 0,
@@ -41,8 +43,10 @@ export const DEFAULT_PREFERENCES: Omit<UserPreferences, 'id'> = {
 
 export interface PreferencesContextValue {
   preferences: UserPreferences
+  resolvedTheme: ResolvedTheme
   updatePreference: <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => Promise<void>
   updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>
+  setAppearanceMode: (mode: AppearanceMode) => Promise<void>
   resetToDefaults: () => Promise<void>
 }
 

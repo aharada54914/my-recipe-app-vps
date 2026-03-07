@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Package, Loader2, RotateCcw, ImagePlus, WandSparkles, FilePenLine, Upload, Trash2 } from 'lucide-react'
+import { Package, Loader2, RotateCcw, ImagePlus, WandSparkles, FilePenLine, Upload, Trash2, Sparkles } from 'lucide-react'
 import { db } from '../../db/db'
 import type { Recipe } from '../../db/db'
 import { GeminiIcon } from '../GeminiIcon'
@@ -12,19 +12,12 @@ import { generateRecipesFromIngredients } from '../../utils/geminiMenuGenerator'
 import { RecipeEditorModal } from '../RecipeEditorModal'
 import { useGeminiStore } from '../../stores/geminiStore'
 import { formatMissingNutritionMessage, validateRequiredNutrition } from '../../utils/nutritionValidation'
+import { StatusNotice } from '../StatusNotice'
 
 const INGREDIENT_CACHE_KEY = 'photo_ingredients_cache_v1'
 
 function getApiKey(): string {
   return resolveGeminiApiKey() ?? ''
-}
-
-function GeminiApiKeyHint() {
-  return (
-    <p className="rounded-xl bg-white/5 px-4 py-3 text-sm text-text-secondary">
-      Gemini APIキーが未設定です。設定 → 献立タブから登録してください。
-    </p>
-  )
 }
 
 function parseIngredientList(input: string): string[] {
@@ -60,7 +53,9 @@ export function SuggestTab() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorSaving, setEditorSaving] = useState(false)
   const [editingRecipe, setEditingRecipe] = useState<Omit<Recipe, 'id'> | null>(null)
-  const [editorSessionKey, setEditorSessionKey] = useState('suggest-editor-initial')
+  const [editorSessionVersion, setEditorSessionVersion] = useState(0)
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>('info')
+  const [lastAction, setLastAction] = useState<'extract' | 'generate' | null>(null)
 
   const data = useLiveQuery(async () => {
     const stockItems = await db.stock.filter(s => (s.quantity ?? 0) > 0 || s.inStock).toArray()
@@ -90,11 +85,13 @@ export function SuggestTab() {
     setPhotoFiles(files)
     setGeneratedRecipes([])
     setStatusMessage(null)
+    setLastAction(null)
   }
 
   const handleExtractFromPhotos = async () => {
     if (!hasKey || photoFiles.length === 0) return
 
+    setLastAction('extract')
     setExtracting(true)
     setStatusMessage(null)
 
@@ -104,8 +101,10 @@ export function SuggestTab() {
       const text = ingredients.join('、')
       setIngredientsDraft(text)
       sessionStorage.setItem(INGREDIENT_CACHE_KEY, text)
+      setStatusTone('success')
       setStatusMessage(`食材を${ingredients.length}件抽出しました。必要なら編集してください。`)
     } catch (e) {
+      setStatusTone('error')
       setStatusMessage(e instanceof Error ? e.message : '食材抽出に失敗しました。')
     } finally {
       setExtracting(false)
@@ -120,19 +119,23 @@ export function SuggestTab() {
     const mergedIngredients = Array.from(new Set([...imageIngredients, ...stockIngredients]))
 
     if (mergedIngredients.length === 0) {
+      setStatusTone('error')
       setStatusMessage('先に写真から食材を抽出するか、食材リストを入力してください。')
       return
     }
 
+    setLastAction('generate')
     setGenerating(true)
     setStatusMessage(null)
 
     try {
       const recipes = await generateRecipesFromIngredients(mergedIngredients, getApiKey())
       setGeneratedRecipes(recipes)
+      setStatusTone('success')
       setStatusMessage('献立候補を生成しました。保存してレシピ一覧に追加できます。')
       sessionStorage.setItem(INGREDIENT_CACHE_KEY, imageIngredients.join('、'))
     } catch (e) {
+      setStatusTone('error')
       setStatusMessage(e instanceof Error ? e.message : '献立生成に失敗しました。')
     } finally {
       setGenerating(false)
@@ -142,6 +145,7 @@ export function SuggestTab() {
   const handleSaveGeneratedRecipe = async (recipe: Omit<Recipe, 'id'>) => {
     const nutritionCheck = validateRequiredNutrition(recipe)
     if (!nutritionCheck.ok) {
+      setStatusTone('error')
       setStatusMessage(formatMissingNutritionMessage(nutritionCheck.missingFields))
       return
     }
@@ -154,6 +158,7 @@ export function SuggestTab() {
     setEditorSaving(true)
     await db.recipes.add({ ...recipe, isUserAdded: true } as Recipe)
     setEditorSaving(false)
+    setStatusTone('success')
     setStatusMessage(`「${recipe.title}」を保存しました。`)
   }
 
@@ -161,11 +166,56 @@ export function SuggestTab() {
 
   const { stockItems } = data
   const selectionLabel = photoFiles.length === 0 ? '未選択' : `${photoFiles.length}枚選択中`
+  const statusNotice = !hasKey
+    ? {
+      tone: 'warning' as const,
+      title: 'Gemini APIキーが必要です',
+      message: '写真解析と献立生成を使うには、設定の献立タブで Gemini API キーを登録してください。',
+      actionLabel: 'Gemini設定を開く',
+      onAction: () => navigate('/settings/menu'),
+    }
+    : extracting
+      ? {
+        tone: 'info' as const,
+        title: '写真から食材を抽出しています',
+        message: '画像をまとめて解析しています。完了までそのままお待ちください。',
+        actionLabel: undefined,
+        onAction: undefined,
+      }
+      : generating
+        ? {
+          tone: 'info' as const,
+          title: '在庫と食材リストから献立を生成しています',
+          message: 'Gemini で候補を作成中です。完了後に保存前レビューへ進めます。',
+          actionLabel: undefined,
+          onAction: undefined,
+        }
+        : statusMessage
+          ? {
+            tone: statusTone === 'error' ? 'error' as const : statusTone === 'success' ? 'success' as const : 'info' as const,
+            title: statusTone === 'error' ? 'AI処理に失敗しました' : statusTone === 'success' ? 'AI処理が完了しました' : 'AI処理の状況',
+            message: statusMessage,
+            actionLabel: statusTone === 'error'
+              ? lastAction === 'extract'
+                ? 'もう一度抽出'
+                : lastAction === 'generate'
+                  ? 'もう一度生成'
+                  : undefined
+              : undefined,
+            onAction: statusTone === 'error'
+              ? lastAction === 'extract'
+                ? () => { void handleExtractFromPhotos() }
+                : lastAction === 'generate'
+                  ? () => { void runGeneration() }
+                  : undefined
+              : undefined,
+          }
+          : null
 
   return (
     <div className="space-y-5">
       <RecipeEditorModal
-        key={editorSessionKey}
+        key={`suggest-editor-${editorSessionVersion}`}
         open={editorOpen}
         title="生成された献立を編集"
         initialRecipe={editingRecipe}
@@ -173,6 +223,17 @@ export function SuggestTab() {
         onClose={() => setEditorOpen(false)}
         onSave={handleSaveGeneratedRecipe}
       />
+
+      {statusNotice && (
+        <StatusNotice
+          tone={statusNotice.tone}
+          title={statusNotice.title}
+          message={statusNotice.message}
+          actionLabel={statusNotice.actionLabel}
+          onAction={statusNotice.onAction}
+          icon={<Sparkles className="h-4 w-4" />}
+        />
+      )}
 
       <div className="ui-panel">
         <p className="ui-section-kicker">Context</p>
@@ -193,7 +254,7 @@ export function SuggestTab() {
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {stockItems.slice(0, 20).map(s => (
-              <span key={s.id} className="rounded-lg bg-white/5 px-2 py-0.5 text-xs text-text-secondary">
+              <span key={s.id} className="ui-chip-muted">
                 {s.name}
               </span>
             ))}
@@ -240,6 +301,7 @@ export function SuggestTab() {
                 setPhotoFiles([])
                 setPreviewUrls([])
                 setStatusMessage(null)
+                setLastAction(null)
               }}
               className="ui-btn ui-btn-secondary flex min-w-[44px] items-center justify-center"
               aria-label="選択画像をクリア"
@@ -302,18 +364,12 @@ export function SuggestTab() {
         <button
           onClick={runGeneration}
           disabled={!hasKey || generating || normalizedIngredients.length === 0}
-          className="ui-btn ui-btn-secondary flex w-full items-center justify-center gap-2 transition-colors hover:bg-white/20 disabled:opacity-40"
+          className="ui-btn ui-btn-secondary flex w-full items-center justify-center gap-2 transition-colors disabled:opacity-40"
         >
           <RotateCcw className="h-4 w-4" />
           献立を作り直して
         </button>
       </div>
-
-      {!hasKey && <GeminiApiKeyHint />}
-
-      {statusMessage && (
-        <p className="rounded-xl bg-white/5 px-4 py-3 text-sm text-text-secondary">{statusMessage}</p>
-      )}
 
       {generatedRecipes.length > 0 && (
         <div className="space-y-3">
@@ -328,7 +384,7 @@ export function SuggestTab() {
                 <button
                   onClick={() => {
                     setEditingRecipe(recipe)
-                    setEditorSessionKey(`suggest-${recipe.title}-${Date.now()}`)
+                    setEditorSessionVersion((prev) => prev + 1)
                     setEditorOpen(true)
                   }}
                   className="ui-btn ui-btn-primary flex items-center gap-1 px-3 py-2 text-xs transition-colors hover:bg-accent-hover"

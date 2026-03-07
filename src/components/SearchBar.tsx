@@ -40,7 +40,7 @@ export function SearchBar({
   return (
     <div className="mb-6 relative">
       <form
-        className="flex min-h-[48px] items-center gap-3 rounded-2xl bg-bg-card px-4 py-3 ring-1 ring-white/10"
+        className="flex min-h-[48px] items-center gap-3 rounded-2xl border border-border-soft bg-bg-card px-4 py-3"
         onSubmit={(e) => {
           e.preventDefault()
           commitDraft(draftValue)
@@ -68,7 +68,7 @@ export function SearchBar({
       </form>
 
       {focused && suggestions.length > 0 && (
-        <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-2xl bg-bg-overlay py-2 ring-1 ring-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.65)]">
+        <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-2xl border border-border-soft bg-bg-overlay py-2 shadow-[0_8px_32px_rgba(0,0,0,0.24)]">
           {suggestions.map((entry) => (
             <button
               key={entry}
@@ -76,7 +76,7 @@ export function SearchBar({
                 commitDraft(entry)
                 onSelectHistory?.(entry)
               }}
-              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-text-secondary hover:bg-white/5 hover:text-text-primary"
+              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-text-secondary hover:bg-bg-card-hover hover:text-text-primary"
             >
               <Search className="h-4 w-4" />
               <span>{entry}</span>

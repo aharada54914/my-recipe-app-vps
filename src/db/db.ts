@@ -160,6 +160,7 @@ export interface CalendarEventRecord {
 
 export type SeasonalPriority = 'low' | 'medium' | 'high'
 export type WeeklyMenuCostMode = 'saving' | 'ignore' | 'luxury'
+export type AppearanceMode = 'system' | 'light' | 'dark'
 
 export interface IngredientPrice {
   id?: number
@@ -250,6 +251,8 @@ export interface WeeklyMenuSelectionLog {
 
 export interface UserPreferences {
   id?: number
+  // Appearance settings
+  appearanceMode: AppearanceMode
   // Calendar settings
   familyCalendarId?: string
   mealStartHour: number
@@ -764,6 +767,28 @@ class RecipeDB extends Dexie {
       weatherCache: '++id, &date, fetchedAt, updatedAt',
       recipeFeatureMatrix: '++id, &recipeId, confidence, source',
       weeklyMenuSelectionLogs: '++id, eventType, weekStartDate, createdAt, selectedRecipeId, replacedRecipeId',
+    })
+
+    this.version(18).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+      ingredientPrices: '++id, &normalizedName, updatedAt',
+      ingredientPriceSyncLogs: '++id, startedAt, status',
+      ingredientSimilarityCache: '++id, name, candidateName, score',
+      weatherCache: '++id, &date, fetchedAt, updatedAt',
+      recipeFeatureMatrix: '++id, &recipeId, confidence, source',
+      weeklyMenuSelectionLogs: '++id, eventType, weekStartDate, createdAt, selectedRecipeId, replacedRecipeId',
+    }).upgrade(async (tx) => {
+      await tx.table('userPreferences').toCollection().modify((record) => {
+        const prefs = record as UserPreferences
+        if (!prefs.appearanceMode) prefs.appearanceMode = 'system'
+      })
     })
   }
 }

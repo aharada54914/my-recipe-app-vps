@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDebounce } from './useDebounce'
 
 interface SearchInputControllerOptions {
@@ -15,18 +15,17 @@ export function useSearchInputController({
   const [draftValue, setDraftValue] = useState(value)
   const [isComposing, setIsComposing] = useState(false)
   const debouncedDraft = useDebounce(draftValue, delay)
-
-  useEffect(() => {
-    setDraftValue(value)
-  }, [value])
+  const lastCommittedValueRef = useRef(value)
 
   useEffect(() => {
     if (isComposing || debouncedDraft === value) return
+    lastCommittedValueRef.current = debouncedDraft
     onCommit(debouncedDraft)
   }, [debouncedDraft, isComposing, onCommit, value])
 
   const commitDraft = useCallback((nextValue = draftValue) => {
     setDraftValue(nextValue)
+    lastCommittedValueRef.current = nextValue
     onCommit(nextValue)
   }, [draftValue, onCommit])
 

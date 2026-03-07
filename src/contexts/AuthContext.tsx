@@ -2,6 +2,13 @@ import { useState, useCallback, useEffect, type ReactNode } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { AuthContext } from './authContextDef'
 import type { GoogleUser, AuthContextValue } from './authContextDef'
+import {
+  getQaGoogleModeEventName,
+  getQaGoogleMockToken,
+  getQaGoogleMockUser,
+  isQaGoogleModeEnabled,
+  setQaGoogleModeEnabled,
+} from '../lib/qaGoogleMode'
 
 export type { GoogleUser, AuthContextValue }
 
@@ -65,6 +72,7 @@ function loadStoredUser(): GoogleUser | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [qaEnabled, setQaEnabled] = useState(() => isQaGoogleModeEnabled())
   const [user, setUser] = useState<GoogleUser | null>(() => loadStoredUser())
   const [loading, setLoading] = useState(false)
   const [providerToken, setProviderToken] = useState<string | null>(() => loadStoredToken())
@@ -90,6 +98,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [clientId])
 
+  useEffect(() => {
+    const syncQaMode = () => {
+      setQaEnabled(isQaGoogleModeEnabled())
+    }
+
+    const eventName = getQaGoogleModeEventName()
+    window.addEventListener('storage', syncQaMode)
+    window.addEventListener(eventName, syncQaMode)
+    return () => {
+      window.removeEventListener('storage', syncQaMode)
+      window.removeEventListener(eventName, syncQaMode)
+    }
+  }, [])
+
   const storeToken = useCallback((token: string, expiresIn: number) => {
     const expiry = new Date(Date.now() + expiresIn * 1000).toISOString()
     try {
@@ -98,6 +120,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore storage errors */ }
     setProviderToken(token)
   }, [])
+
+  if (qaEnabled) {
+    const signInWithGoogle = () => {
+      setQaGoogleModeEnabled(true)
+      setUser(getQaGoogleMockUser())
+      setProviderToken(getQaGoogleMockToken())
+    }
+
+    const signOut = () => {
+      setQaGoogleModeEnabled(false)
+      setUser(null)
+      setProviderToken(null)
+      clearAuthStorage()
+    }
+
+    return (
+      <AuthContext.Provider value={{
+        user: getQaGoogleMockUser(),
+        loading: false,
+        isOAuthAvailable: true,
+        providerToken: getQaGoogleMockToken(),
+        isQaGoogleMode: true,
+        signInWithGoogle,
+        signOut,
+      }}>
+        {children}
+      </AuthContext.Provider>
+    )
+  }
 
   if (!clientId) {
     const signInWithGoogle = () => { }
@@ -109,7 +160,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return (
-      <AuthContext.Provider value={{ user, loading: false, isOAuthAvailable: false, providerToken, signInWithGoogle, signOut }}>
+      <AuthContext.Provider value={{
+        user,
+        loading: false,
+        isOAuthAvailable: false,
+        providerToken,
+        isQaGoogleMode: false,
+        signInWithGoogle,
+        signOut,
+      }}>
         {children}
       </AuthContext.Provider>
     )
@@ -234,7 +293,15 @@ function OAuthEnabledAuthProvider({
   }, [user, silentGoogleLogin])
 
   return (
-    <AuthContext.Provider value={{ user, loading, isOAuthAvailable: true, providerToken, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      isOAuthAvailable: true,
+      providerToken,
+      isQaGoogleMode: false,
+      signInWithGoogle,
+      signOut,
+    }}>
       {children}
     </AuthContext.Provider>
   )

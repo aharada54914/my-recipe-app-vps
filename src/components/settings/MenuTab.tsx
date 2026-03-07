@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Eye, EyeOff, Lock, Unlock, Wifi, WifiOff, Gauge, RotateCcw, Sparkles } from 'lucide-react'
 import { MealPlanSettings } from '../MealPlanSettings'
 import { generateGeminiText } from '../../lib/geminiClient'
 import { usePreferences } from '../../hooks/usePreferences'
+import { StatusNotice } from '../StatusNotice'
 import {
   cacheGeminiApiKeyForSession,
   getCachedGeminiApiKey,
@@ -23,6 +24,7 @@ import {
   type GeminiFeatureModelConfig,
   type GeminiModelId,
 } from '../../lib/geminiSettings'
+import { getGeminiIntegrationStatus } from '../../lib/integrationStatus'
 
 const FEATURE_ORDER: GeminiFeatureKey[] = [
   'chat',
@@ -39,6 +41,9 @@ function modelCaption(modelId: GeminiModelId): string {
 
 export function MenuTab() {
   const { preferences, updatePreferences } = usePreferences()
+  const credentialsSectionRef = useRef<HTMLDivElement>(null)
+  const modelsSectionRef = useRef<HTMLDivElement>(null)
+  const usageSectionRef = useRef<HTMLDivElement>(null)
   const [apiKey, setApiKey] = useState('')
   const [passphrase, setPassphrase] = useState('')
   const [unlockPassphrase, setUnlockPassphrase] = useState('')
@@ -96,6 +101,41 @@ export function MenuTab() {
     })),
     [featureConfig.models, usageStats.byFeature]
   )
+
+  const geminiStatus = useMemo(
+    () => getGeminiIntegrationStatus(featureConfig.estimatedDailyLimit, {
+      isBusy: vaultStatus === 'saving' || vaultStatus === 'unlocking' || testStatus === 'testing',
+      lastError: vaultStatus === 'error'
+        ? vaultMessage || 'Gemini の鍵処理でエラーが発生しました。'
+        : testStatus === 'error'
+          ? '接続テストに失敗しました。APIキー、接続状況、利用制限を確認してください。'
+          : null,
+    }),
+    [featureConfig.estimatedDailyLimit, testStatus, vaultMessage, vaultStatus]
+  )
+
+  const scrollToSection = (ref: RefObject<HTMLDivElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const handleGeminiStatusAction = () => {
+    switch (geminiStatus.actionId) {
+      case 'open-gemini-settings':
+      case 'unlock-gemini-key':
+      case 'encrypt-gemini-key':
+        handleUnlock()
+        scrollToSection(credentialsSectionRef)
+        return
+      case 'open-gemini-models':
+        scrollToSection(modelsSectionRef)
+        return
+      case 'open-gemini-usage':
+        scrollToSection(usageSectionRef)
+        return
+      default:
+        break
+    }
+  }
 
   const handleUnlock = () => {
     setIsLocked(false)
@@ -203,12 +243,22 @@ export function MenuTab() {
     <>
       <MealPlanSettings />
 
-      <div className="rounded-2xl bg-bg-card p-4">
+      <StatusNotice
+        tone={geminiStatus.tone}
+        title={geminiStatus.title}
+        message={geminiStatus.message}
+        actionLabel={geminiStatus.actionLabel}
+        onAction={geminiStatus.actionLabel ? handleGeminiStatusAction : undefined}
+        icon={<Sparkles className="h-4 w-4" />}
+        className="mb-4"
+      />
+
+      <div ref={credentialsSectionRef} className="ui-panel">
         <div className="mb-3 flex items-center justify-between">
           <h4 className="text-sm font-bold text-text-secondary">Gemini API（AI連携機能）の設定</h4>
           <button
             onClick={isLocked ? handleUnlock : () => setIsLocked(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:text-accent"
+            className="ui-btn ui-btn-secondary flex min-h-[38px] items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium"
           >
             {isLocked ? (
               <>
@@ -225,7 +275,7 @@ export function MenuTab() {
         </div>
 
         {isLocked ? (
-          <div className="flex items-center gap-2 rounded-xl bg-white/5 px-4 py-3">
+          <div className="ui-panel-muted flex items-center gap-2">
             <span className="flex-1 text-sm text-text-secondary font-mono">
               {apiKey ? maskedKey : '未設定'}
             </span>
@@ -238,7 +288,7 @@ export function MenuTab() {
                 value={apiKey}
                 onChange={(e) => { setApiKey(e.target.value); setConfirmSave(false); setVaultMessage('') }}
                 placeholder="APIキーを入力..."
-                className="w-full rounded-xl bg-white/5 px-4 py-3 pr-10 text-base text-text-primary font-mono placeholder:text-text-secondary outline-none ring-1 ring-accent/30"
+                className="ui-input w-full pr-10 font-mono"
               />
               <button
                 onClick={() => setShowKey(!showKey)}
@@ -251,23 +301,23 @@ export function MenuTab() {
             <div className="flex gap-2">
               <button
                 onClick={handleCancel}
-                className="flex-1 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10"
+                className="ui-btn ui-btn-secondary flex-1"
               >
                 キャンセル
               </button>
               <button
                 onClick={handleSave}
                 disabled={vaultStatus === 'saving'}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-bold text-white transition-colors ${confirmSave
-                  ? 'bg-red-500 hover:bg-red-600'
-                  : 'bg-accent hover:bg-accent-hover'
+                className={`ui-btn flex-1 text-white ${confirmSave
+                  ? 'bg-error'
+                  : 'ui-btn-primary'
                   }`}
               >
                 {vaultStatus === 'saving' ? '暗号化中...' : confirmSave ? '本当に保存しますか？' : '暗号化して保存'}
               </button>
             </div>
 
-            <div className="rounded-xl bg-white/5 p-3">
+            <div className="ui-panel-muted p-3">
               <label className="mb-1 block text-xs font-bold text-text-secondary">
                 保存用パスフレーズ（8文字以上）
               </label>
@@ -276,7 +326,7 @@ export function MenuTab() {
                 value={passphrase}
                 onChange={(e) => { setPassphrase(e.target.value); setConfirmSave(false) }}
                 placeholder="パスフレーズを入力..."
-                className="w-full rounded-xl bg-bg-card px-3 py-2.5 text-sm text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                className="ui-input w-full"
               />
               <p className="mt-2 text-[11px] leading-relaxed text-text-secondary">
                 APIキーはこのパスフレーズでWebCrypto暗号化して端末内に保存されます。パスフレーズを忘れると復号できません。
@@ -286,7 +336,7 @@ export function MenuTab() {
         )}
 
         {(hasEncryptedKey || hasLegacyKey) && (
-          <div className="mt-3 rounded-xl bg-white/5 p-3">
+          <div className="ui-panel-muted mt-3 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-xs font-bold text-text-secondary">保存状態</p>
               <span className="text-[11px] text-text-secondary">
@@ -300,12 +350,12 @@ export function MenuTab() {
                   value={unlockPassphrase}
                   onChange={(e) => setUnlockPassphrase(e.target.value)}
                   placeholder="復号パスフレーズ"
-                  className="flex-1 rounded-xl bg-bg-card px-3 py-2 text-sm text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                  className="ui-input flex-1 px-3 py-2 text-sm"
                 />
                 <button
                   onClick={handleUnlockEncryptedKey}
                   disabled={vaultStatus === 'unlocking'}
-                  className="rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-text-primary hover:bg-white/15 disabled:opacity-50"
+                  className="ui-btn ui-btn-secondary px-3 py-2 text-xs font-semibold disabled:opacity-50"
                 >
                   {vaultStatus === 'unlocking' ? '復号中...' : '復号'}
                 </button>
@@ -328,7 +378,7 @@ export function MenuTab() {
         <button
           onClick={handleTest}
           disabled={!apiKey.trim() || testStatus === 'testing'}
-          className="ui-btn ui-btn-secondary mt-3 flex w-full items-center justify-center gap-2 text-sm font-semibold transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
+          className="ui-btn ui-btn-secondary mt-3 flex w-full items-center justify-center gap-2 text-sm font-semibold disabled:opacity-30"
         >
           {testStatus === 'testing' ? (
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -347,7 +397,7 @@ export function MenuTab() {
         </button>
       </div>
 
-      <div className="rounded-2xl bg-bg-card p-4">
+      <div ref={modelsSectionRef} className="ui-panel">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-accent" />
@@ -355,7 +405,7 @@ export function MenuTab() {
           </div>
           <button
             onClick={resetAiConfig}
-            className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-xs text-text-secondary hover:text-accent"
+            className="ui-btn ui-btn-secondary flex min-h-[34px] items-center gap-1 px-2 py-1.5 text-xs"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             初期値に戻す
@@ -368,20 +418,20 @@ export function MenuTab() {
 
         <div className="space-y-2">
           {featureUsageRows.map((row) => (
-            <div key={row.feature} className="rounded-xl bg-white/5 p-3">
+            <div key={row.feature} className="ui-panel-muted p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-text-primary">{row.label}</p>
                   <p className="text-[11px] text-text-secondary">今日の推定利用: {row.count}回</p>
                 </div>
-                <span className="rounded-md bg-white/5 px-2 py-1 text-[10px] font-bold text-text-secondary">
+                <span className="rounded-md bg-bg-primary/50 px-2 py-1 text-[10px] font-bold text-text-secondary">
                   {modelCaption(row.modelId)}
                 </span>
               </div>
               <select
                 value={row.modelId}
                 onChange={(e) => updateFeatureModel(row.feature, e.target.value as GeminiModelId)}
-                className="w-full rounded-xl bg-bg-card px-3 py-2.5 text-sm text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+                className="ui-input w-full"
               >
                 {GEMINI_MODEL_OPTIONS.map((option) => (
                   <option key={option.id} value={option.id}>
@@ -393,7 +443,7 @@ export function MenuTab() {
           ))}
         </div>
 
-        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-white/5 px-3 py-3">
+        <label className="ui-panel-muted mt-4 flex cursor-pointer items-start gap-3">
           <input
             type="checkbox"
             checked={featureConfig.retryEscalationForUrlAndImage}
@@ -409,24 +459,24 @@ export function MenuTab() {
         </label>
       </div>
 
-      <div className="rounded-2xl bg-bg-card p-4">
+      <div ref={usageSectionRef} className="ui-panel">
         <div className="mb-3 flex items-center gap-2">
           <Gauge className="h-4 w-4 text-accent" />
           <h4 className="text-sm font-bold text-text-secondary">AI推定使用量（今日）</h4>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-white/5 p-3">
+          <div className="ui-stat-card">
             <p className="text-xs text-text-secondary">推定利用回数</p>
             <p className="mt-1 text-lg font-bold text-text-primary">{usageStats.requestCount}回</p>
           </div>
-          <div className="rounded-xl bg-white/5 p-3">
+          <div className="ui-stat-card">
             <p className="text-xs text-text-secondary">推定残り回数</p>
             <p className="mt-1 text-lg font-bold text-accent">{estimatedRemaining}回</p>
           </div>
         </div>
 
-        <div className="mt-3 rounded-xl bg-white/5 p-3">
+        <div className="ui-panel-muted mt-3 p-3">
           <label className="mb-1 block text-xs font-bold text-text-secondary">1日の目安上限（推定残量の計算用）</label>
           <input
             type="number"
@@ -434,7 +484,7 @@ export function MenuTab() {
             max={9999}
             value={featureConfig.estimatedDailyLimit}
             onChange={(e) => updateEstimatedDailyLimit(Number(e.target.value))}
-            className="w-full rounded-xl bg-bg-card px-3 py-2.5 text-sm text-text-primary outline-none ring-1 ring-white/10 focus:ring-accent"
+            className="ui-input w-full"
           />
           <p className="mt-2 text-xs leading-relaxed text-text-secondary">
             この数値はアプリ内の目安です。公式の無料枠残量を直接取得しているわけではありません。
@@ -443,7 +493,7 @@ export function MenuTab() {
 
         <div className="mt-3 space-y-2">
           {modelUsageRows.map((row) => (
-            <div key={row.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-xs">
+            <div key={row.id} className="flex items-center justify-between rounded-lg border border-border-soft bg-bg-card-hover px-3 py-2 text-xs">
               <span className="text-text-primary">{row.label}</span>
               <span className="font-bold text-text-secondary">{row.count}回</span>
             </div>
@@ -451,10 +501,10 @@ export function MenuTab() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white/5 px-4 py-3">
+      <div className="ui-inline-note">
         <p className="text-xs text-text-secondary leading-relaxed">
           APIキーはユーザーパスフレーズを用いてWebCryptoで暗号化した上で端末のローカルストレージに保存され、Google Drive バックアップには含まれません。
-          <code className="mx-1 rounded bg-white/10 px-1 py-0.5 text-[10px]">.env</code>
+          <code className="mx-1 rounded bg-bg-primary/50 px-1 py-0.5 text-[10px]">.env</code>
           ファイルにキーが設定されている場合はそちらが優先されます。
         </p>
       </div>

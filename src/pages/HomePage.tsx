@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Search, Leaf, Sparkles, ChevronRight, Flame, Cloud } from 'lucide-react'
+import { ArrowRight, BrainCircuit, ChevronRight, Cloud, Flame, Leaf, Search, Sparkles, UtensilsCrossed } from 'lucide-react'
+import { format } from 'date-fns'
 import { db } from '../db/db'
 import type { Recipe } from '../db/db'
 import { RecipeCard } from '../components/RecipeCard'
+import { GeminiIcon } from '../components/GeminiIcon'
+import { StatusNotice } from '../components/StatusNotice'
 import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
 import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
 import { getLocalRecommendations } from '../utils/geminiRecommender'
@@ -15,6 +18,8 @@ import type { DailyWeather } from '../utils/season-weather/weatherProvider'
 import {
   computeUnifiedWeatherScore,
 } from '../utils/season-weather/weatherScoring'
+import { getGeminiIntegrationStatus } from '../lib/integrationStatus'
+import { getWeekStartDate } from '../utils/weeklyMenuSelector'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
@@ -172,16 +177,20 @@ export function HomePage() {
   const [todayWeather, setTodayWeather] = useState<DailyWeather | null>(null)
 
   const data = useLiveQuery(async () => {
-    const [recipes, stockItems, prefs] = await Promise.all([
-      db.recipes.limit(200).toArray(),
+    const currentWeekStart = format(getWeekStartDate(new Date()), 'yyyy-MM-dd')
+    const [recipes, recipeCount, stockItems, prefs, weeklyMenu] = await Promise.all([
+      db.recipes.toArray(),
+      db.recipes.count(),
       db.stock.filter(item => item.inStock).toArray(),
       db.userPreferences.limit(1).toArray(),
+      db.weeklyMenus.where('weekStartDate').equals(currentWeekStart).first(),
     ])
     const stockNames = new Set(stockItems.map((s) => s.name))
     const seasonal = findSeasonalRecipes(recipes)
     const hasStock = stockItems.length > 0
     const tOpt = prefs[0]?.tOpt ?? 22  // T_opt個人最適気温（デフォルト22°C）
-    return { recipes, seasonal, stockNames, hasStock, tOpt }
+    const estimatedDailyLimit = prefs[0]?.geminiEstimatedDailyLimit ?? 20
+    return { recipes, recipeCount, seasonal, stockNames, hasStock, tOpt, estimatedDailyLimit, weeklyMenu, stockCount: stockItems.length }
   })
 
   // Load recommendations when stock data is available
@@ -209,73 +218,162 @@ export function HomePage() {
 
   if (!data) return null
 
-  const { recipes, seasonal, stockNames, tOpt } = data
+  const { recipes, seasonal, stockNames, tOpt, estimatedDailyLimit, weeklyMenu, recipeCount, stockCount } = data
 
   const displayRecs = data.hasStock ? recommendations : []
   const recMatchRates = new Map(displayRecs.map(r => [r.recipe.id!, r.matchRate]))
 
   const todayRecipes = findTodayRecipes(recipes, todayWeather, tOpt)
+  const geminiStatus = getGeminiIntegrationStatus(estimatedDailyLimit)
+  const weeklySummaryLabel = weeklyMenu
+    ? `${weeklyMenu.items.length}日分の献立があります`
+    : '今週の献立はまだ作成されていません'
 
   return (
-    <div>
-      {/* Search bar — navigates to /search on tap */}
-      <button
-        onClick={() => navigate('/search')}
-        className="mt-4 mb-5 flex min-h-[48px] w-full items-center gap-3 rounded-2xl bg-bg-card px-4 py-3 ring-1 ring-white/10"
-      >
-        <Search className="h-5 w-5 text-text-secondary" />
-        <span className="text-base text-text-secondary">レシピを検索...</span>
-      </button>
+    <div className="space-y-5 pt-4">
+      <section className="space-y-3">
+        <button
+          type="button"
+          data-testid="home-primary-search"
+          onClick={() => navigate('/search')}
+          className="ui-action-card block w-full text-left transition-transform hover:-translate-y-0.5"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="ui-section-kicker">Primary Flow</p>
+              <div className="mt-2 flex items-center gap-2">
+                <Search className="h-5 w-5 text-accent" />
+                <h3 className="text-lg font-extrabold text-text-primary">レシピを検索</h3>
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-text-secondary">
+                作りたい料理名、食材、カテゴリから最短で探せます。
+              </p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent/14 text-accent">
+              <ArrowRight className="h-4 w-4" />
+            </span>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="ui-stat-card">
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">Recipes</p>
+              <p className="mt-1 text-lg font-extrabold text-text-primary">{recipeCount}</p>
+            </div>
+            <div className="ui-stat-card">
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">Stock</p>
+              <p className="mt-1 text-lg font-extrabold text-text-primary">{stockCount}</p>
+            </div>
+          </div>
+        </button>
 
-      {/* Quick actions */}
-      <div className="mb-5 flex gap-2">
-        {todayRecipes.length > 0 && (
-          <button
-            onClick={() => todayFoodRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="ui-btn ui-btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm font-semibold transition-colors hover:text-accent active:scale-95"
-          >
-            <Flame className="h-4 w-4 text-orange-400" />
-            今日食べたい料理
-          </button>
-        )}
-        {displayRecs.length > 0 && (
-          <button
-            onClick={() => stockSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="ui-btn ui-btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm font-semibold transition-colors hover:text-accent active:scale-95"
-          >
-            <Sparkles className="h-4 w-4 text-accent" />
-            在庫レシピ
-          </button>
-        )}
-        {seasonal.length > 0 && (
-          <button
-            onClick={() => seasonalSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="ui-btn ui-btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm font-semibold transition-colors hover:text-accent active:scale-95"
-          >
-            <Leaf className="h-4 w-4 text-green-400" />
-            旬のレシピ
-          </button>
-        )}
-      </div>
+        <div data-testid="home-primary-gemini" className="ui-action-card">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="ui-section-kicker">AI Assistant</p>
+              <div className="mt-2 flex items-center gap-2">
+                <GeminiIcon className="h-5 w-5 text-accent-ai" />
+                <h3 className="text-lg font-extrabold text-text-primary">AI に相談</h3>
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-text-secondary">
+                URL 取込、在庫から提案、料理相談を 1 画面で切り替えられます。
+              </p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[color:color-mix(in_srgb,var(--accent-ai)_16%,transparent)] text-accent-ai">
+              <BrainCircuit className="h-4 w-4" />
+            </span>
+          </div>
+          <StatusNotice
+            tone={geminiStatus.tone}
+            title={geminiStatus.title}
+            message={geminiStatus.message}
+            className="mt-4"
+            icon={<GeminiIcon className="h-4 w-4" />}
+          />
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/gemini')}
+              className="ui-btn ui-btn-primary flex items-center justify-center gap-2"
+            >
+              <GeminiIcon className="h-4 w-4" />
+              Gemini を開く
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(geminiStatus.tone === 'success' ? '/gemini' : '/settings/menu')}
+              className="ui-btn ui-btn-secondary flex items-center justify-center gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              {geminiStatus.tone === 'success' ? 'すぐ相談する' : '設定する'}
+            </button>
+          </div>
+        </div>
+      </section>
 
-      {/* Category grid */}
-      <div className="mb-6">
-        <CategoryGrid />
-      </div>
+      <section data-testid="home-weekly-summary" className="space-y-3">
+        <div className="ui-action-card">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="ui-section-kicker">This Week</p>
+              <div className="mt-1 flex items-center gap-2">
+                <UtensilsCrossed className="h-4 w-4 text-accent" />
+                <h3 className="ui-section-title">今週の献立</h3>
+              </div>
+              <p className="mt-2 text-sm text-text-secondary">{weeklySummaryLabel}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/weekly-menu')}
+              className="ui-btn ui-btn-secondary shrink-0 px-3 text-xs"
+            >
+              週間献立へ
+            </button>
+          </div>
+        </div>
+        <div>
+          <WeeklyMenuTimeline compact />
+        </div>
+      </section>
 
-      {/* Weekly menu compact timeline */}
-      <div className="mb-6">
-        <WeeklyMenuTimeline compact />
-      </div>
+      <section className="space-y-2">
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {todayRecipes.length > 0 && (
+            <button
+              onClick={() => todayFoodRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="ui-btn ui-btn-secondary flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm transition-colors hover:text-accent active:scale-95"
+            >
+              <Flame className="h-4 w-4 text-orange-400" />
+              今日食べたい料理
+            </button>
+          )}
+          {displayRecs.length > 0 && (
+            <button
+              onClick={() => stockSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="ui-btn ui-btn-secondary flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm transition-colors hover:text-accent active:scale-95"
+            >
+              <Sparkles className="h-4 w-4 text-accent" />
+              在庫レシピ
+            </button>
+          )}
+          {seasonal.length > 0 && (
+            <button
+              onClick={() => seasonalSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="ui-btn ui-btn-secondary flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm transition-colors hover:text-accent active:scale-95"
+            >
+              <Leaf className="h-4 w-4 text-accent-fresh" />
+              旬のレシピ
+            </button>
+          )}
+        </div>
+      </section>
 
       {/* Seasonal recipes — 2×2, placed directly below WeeklyMenuTimeline */}
       {seasonal.length > 0 && (
-        <div ref={seasonalSectionRef}>
+        <section ref={seasonalSectionRef}>
           <div className="mb-3 flex flex-wrap gap-1.5">
             {seasonalIngredients.map((name) => (
               <span
                 key={name}
-                className="rounded-lg bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400"
+                className="ui-chip-muted"
               >
                 {name}
               </span>
@@ -289,12 +387,12 @@ export function HomePage() {
             onMore={() => navigate('/search?filter=seasonal')}
             onSelect={(id) => navigate(`/recipe/${id}`)}
           />
-        </div>
+        </section>
       )}
 
       {/* 今日食べたい料理 — weather × seasonal scoring, 2×2 */}
       {todayRecipes.length > 0 && (
-        <div ref={todayFoodRef}>
+        <section ref={todayFoodRef}>
           {todayWeather?.weatherText && (
             <div className="mb-2 flex items-center gap-1.5 text-xs text-text-secondary">
               <Cloud className="h-3.5 w-3.5" />
@@ -308,12 +406,12 @@ export function HomePage() {
             stockNames={stockNames}
             onSelect={(id) => navigate(`/recipe/${id}`)}
           />
-        </div>
+        </section>
       )}
 
       {/* Stock-based recommendations — 2×2 */}
       {displayRecs.length > 0 && (
-        <div ref={stockSectionRef}>
+        <section ref={stockSectionRef}>
           <TwoColRecipeSection
             icon={<Sparkles className="h-5 w-5 text-accent" />}
             title="在庫でつくれるレシピ"
@@ -322,8 +420,25 @@ export function HomePage() {
             matchRates={recMatchRates}
             onSelect={(id) => navigate(`/recipe/${id}`)}
           />
-        </div>
+        </section>
       )}
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="ui-section-kicker">Browse</p>
+            <h3 className="ui-section-title mt-1">カテゴリから探す</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/search')}
+            className="text-sm font-semibold text-accent"
+          >
+            すべての検索へ
+          </button>
+        </div>
+        <CategoryGrid />
+      </section>
     </div>
   )
 }

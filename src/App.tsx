@@ -12,11 +12,17 @@ import { SplashScreen } from './components/SplashScreen'
 import { NotificationScheduler } from './components/NotificationScheduler'
 import { GeminiProcessingBanner } from './components/GeminiProcessingBanner'
 import { WeeklyMenuImportModal } from './components/WeeklyMenuImportModal'
+import { useUIStore } from './stores/uiStore'
 import { WEEKLY_MENU_IMPORT_PARAM } from './utils/weeklyMenuQr'
 import { getStartupNotice, shouldShowBlockingSplash, type AppStartupStatus } from './utils/startupUi'
+import { syncQaGoogleModeFromUrl } from './lib/qaGoogleMode'
 
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 const STARTUP_TIMEOUT_MS = 6000
+
+if (typeof window !== 'undefined') {
+  syncQaGoogleModeFromUrl()
+}
 const RecipeList = lazy(() => import('./components/RecipeList').then((module) => ({ default: module.RecipeList })))
 const RecipeDetail = lazy(() => import('./components/RecipeDetail').then((module) => ({ default: module.RecipeDetail })))
 const StockManager = lazy(() => import('./components/StockManager').then((module) => ({ default: module.StockManager })))
@@ -40,18 +46,19 @@ function RouteFallback() {
 function AppLayout({ startupNotice }: { startupNotice: string | null }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const addToast = useUIStore((state) => state.addToast)
 
   // Detect ?import-menu=<base64> URL parameter
   const importMenuParam = new URLSearchParams(location.search).get(WEEKLY_MENU_IMPORT_PARAM)
 
   return (
-    <div className="min-h-dvh bg-bg-primary liquid-background">
+    <div className="min-h-dvh bg-bg-primary">
       <Header
         onSettings={() => navigate('/settings')}
         onStock={() => navigate('/stock')}
       />
       <GeminiProcessingBanner />
-      <main className="px-4 pb-24">
+      <main className="px-4 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]">
         {startupNotice && (
           <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             {startupNotice}
@@ -73,7 +80,7 @@ function AppLayout({ startupNotice }: { startupNotice: string | null }) {
           onImported={(weekStartDate) => {
             history.replaceState(null, '', '/weekly-menu')
             navigate('/weekly-menu', { replace: true })
-            alert(`${weekStartDate}週の献立を取り込みました！`)
+            addToast({ type: 'success', message: `${weekStartDate}週の献立を取り込みました`, durationMs: 4000 })
           }}
         />
       )}

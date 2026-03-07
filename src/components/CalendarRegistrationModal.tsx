@@ -17,6 +17,8 @@ import {
 import { formatQuantityVibe } from '../utils/recipeUtils'
 import { getMissingIngredients } from '../utils/shoppingUtils'
 import { formatShoppingDisplay } from '../utils/shoppingUnitConverter'
+import { StatusNotice } from './StatusNotice'
+import { getCalendarIntegrationStatus } from '../lib/integrationStatus'
 
 interface CalendarRegistrationModalProps {
   recipe: Recipe
@@ -32,7 +34,7 @@ export function CalendarRegistrationModal({
   stockItems,
   onClose,
 }: CalendarRegistrationModalProps) {
-  const { providerToken, signInWithGoogle } = useAuth()
+  const { providerToken, isQaGoogleMode, signInWithGoogle } = useAuth()
   const { preferences } = usePreferences()
 
   const [mode, setMode] = useState<RegistrationMode>('meal')
@@ -44,6 +46,11 @@ export function CalendarRegistrationModal({
   const [endHour, setEndHour] = useState(preferences.mealEndHour)
   const [endMinute, setEndMinute] = useState(preferences.mealEndMinute)
   const [enableReminder, setEnableReminder] = useState(true)
+  const [loadedCalendarToken, setLoadedCalendarToken] = useState<string | null>(providerToken)
+  const [calendarErrorState, setCalendarErrorState] = useState<{ token: string | null; message: string }>({
+    token: providerToken,
+    message: '',
+  })
   const [status, setStatus] = useState<Status>('idle')
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -64,6 +71,8 @@ export function CalendarRegistrationModal({
     listCalendars(providerToken)
       .then((cals) => {
         setCalendars(cals)
+        setLoadedCalendarToken(providerToken)
+        setCalendarErrorState({ token: providerToken, message: '' })
         const defaultCal = preferences.defaultCalendarId
           ?? cals.find((c) => c.primary)?.id
           ?? cals[0]?.id
@@ -72,10 +81,31 @@ export function CalendarRegistrationModal({
       })
       .catch((err) => {
         if (err instanceof GoogleCalendarError && err.status === 401) {
-          setErrorMessage('カレンダーへのアクセスが期限切れです。再ログインしてください。')
+          const message = 'カレンダーへのアクセスが期限切れです。再ログインしてください。'
+          setErrorMessage(message)
+          setCalendarErrorState({ token: providerToken, message })
+        } else {
+          const message = 'カレンダー一覧の取得に失敗しました。再読み込みしてください。'
+          setErrorMessage(message)
+          setCalendarErrorState({ token: providerToken, message })
         }
+        setLoadedCalendarToken(providerToken)
       })
   }, [providerToken, preferences.defaultCalendarId])
+
+  const loading = !!providerToken && loadedCalendarToken !== providerToken
+  const calendarLoadError = calendarErrorState.token === providerToken ? calendarErrorState.message : ''
+
+  const calendarStatus = getCalendarIntegrationStatus({
+    isOAuthAvailable: true,
+    userPresent: !!providerToken,
+    providerTokenPresent: !!providerToken,
+    isQaMode: isQaGoogleMode,
+    loading,
+    error: calendarLoadError,
+    calendarCount: calendars.length,
+    selectedCalendarIdPresent: !!selectedCalendarId,
+  })
 
   const formatIngredientsText = useCallback((ingredients: Ingredient[]) => {
     return ingredients
@@ -147,19 +177,23 @@ export function CalendarRegistrationModal({
           <div className="mb-4 text-center">
             <Calendar className="mx-auto mb-2 h-8 w-8 text-accent" />
             <h3 className="text-lg font-bold">カレンダー連携</h3>
-            <p className="mt-2 text-sm text-text-secondary">
-              Googleカレンダーに献立を登録するにはログインが必要です。
-            </p>
           </div>
+          <StatusNotice
+            tone={calendarStatus.tone}
+            title={calendarStatus.title}
+            message={calendarStatus.message}
+            icon={<Calendar className="h-4 w-4" />}
+            className="mb-4"
+          />
           <button
             onClick={signInWithGoogle}
-            className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-white transition-colors hover:bg-accent-hover"
+            className="ui-btn ui-btn-primary w-full"
           >
             Googleでログイン
           </button>
           <button
             onClick={onClose}
-            className="mt-2 w-full rounded-xl bg-white/5 py-2.5 text-sm text-text-secondary transition-colors hover:bg-white/10"
+            className="ui-btn ui-btn-secondary mt-2 w-full"
           >
             閉じる
           </button>
@@ -172,6 +206,7 @@ export function CalendarRegistrationModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
       <div
+        data-testid="calendar-registration-modal"
         className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-bg-overlay p-5 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -184,34 +219,40 @@ export function CalendarRegistrationModal({
         </div>
 
         {/* Mode toggle */}
-        <div className="mb-4 flex gap-2">
+        <div className="ui-segmented mb-4">
           <button
             onClick={() => setMode('meal')}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-medium transition-colors ${
-              mode === 'meal' ? 'bg-accent text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'
-            }`}
+            aria-pressed={mode === 'meal'}
+            className="ui-segmented-button flex items-center justify-center gap-1.5"
           >
             <Calendar className="h-4 w-4" />
             献立予定
           </button>
           <button
             onClick={() => setMode('shopping')}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-medium transition-colors ${
-              mode === 'shopping' ? 'bg-accent text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'
-            }`}
+            aria-pressed={mode === 'shopping'}
+            className="ui-segmented-button flex items-center justify-center gap-1.5"
           >
             <ShoppingCart className="h-4 w-4" />
             買い物リスト
           </button>
         </div>
 
-        {/* Calendar selector */}
+        <StatusNotice
+          data-testid="calendar-registration-status"
+          tone={calendarStatus.tone}
+          title={calendarStatus.title}
+          message={calendarStatus.message}
+          icon={loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+          className="mb-4"
+        />
+
         <div className="mb-3">
-          <label className="mb-1 block text-xs font-medium text-text-secondary">カレンダー</label>
+          <label className="ui-field-label">カレンダー</label>
           <select
             value={selectedCalendarId}
             onChange={(e) => setSelectedCalendarId(e.target.value)}
-            className="w-full rounded-xl bg-white/5 px-4 py-2.5 text-base text-text-primary outline-none"
+            className="ui-input"
           >
             {calendars.map((cal) => (
               <option key={cal.id} value={cal.id}>
@@ -223,12 +264,12 @@ export function CalendarRegistrationModal({
 
         {/* Date */}
         <div className="mb-3">
-          <label className="mb-1 block text-xs font-medium text-text-secondary">日付</label>
+          <label className="ui-field-label">日付</label>
           <div className="grid grid-cols-3 gap-2">
             <select
               value={year}
               onChange={(e) => updateDatePart(Number(e.target.value), month, day)}
-              className="w-full rounded-xl bg-white/5 px-3 py-2.5 text-base text-text-primary outline-none"
+              className="ui-input px-3 py-2.5"
             >
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}年</option>
@@ -237,7 +278,7 @@ export function CalendarRegistrationModal({
             <select
               value={month}
               onChange={(e) => updateDatePart(year, Number(e.target.value), day)}
-              className="w-full rounded-xl bg-white/5 px-3 py-2.5 text-base text-text-primary outline-none"
+              className="ui-input px-3 py-2.5"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>{m}月</option>
@@ -246,7 +287,7 @@ export function CalendarRegistrationModal({
             <select
               value={day}
               onChange={(e) => updateDatePart(year, month, Number(e.target.value))}
-              className="w-full rounded-xl bg-white/5 px-3 py-2.5 text-base text-text-primary outline-none"
+              className="ui-input px-3 py-2.5"
             >
               {dayOptions.map((d) => (
                 <option key={d} value={d}>{d}日</option>
@@ -261,7 +302,7 @@ export function CalendarRegistrationModal({
         {/* Time range (meal mode) */}
         {mode === 'meal' && (
           <div className="mb-3">
-            <label className="mb-1 block text-xs font-medium text-text-secondary">時間帯</label>
+            <label className="ui-field-label">時間帯</label>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <input
@@ -270,7 +311,7 @@ export function CalendarRegistrationModal({
                   max={23}
                   value={startHour}
                   onChange={(e) => setStartHour(Number(e.target.value))}
-                  className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                  className="ui-input w-14 px-2 py-2 text-center"
                 />
                 <span className="text-text-secondary">:</span>
                 <input
@@ -280,7 +321,7 @@ export function CalendarRegistrationModal({
                   step={5}
                   value={String(startMinute).padStart(2, '0')}
                   onChange={(e) => setStartMinute(Number(e.target.value))}
-                  className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                  className="ui-input w-14 px-2 py-2 text-center"
                 />
               </div>
               <span className="text-text-secondary">〜</span>
@@ -291,7 +332,7 @@ export function CalendarRegistrationModal({
                   max={23}
                   value={endHour}
                   onChange={(e) => setEndHour(Number(e.target.value))}
-                  className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                  className="ui-input w-14 px-2 py-2 text-center"
                 />
                 <span className="text-text-secondary">:</span>
                 <input
@@ -301,7 +342,7 @@ export function CalendarRegistrationModal({
                   step={5}
                   value={String(endMinute).padStart(2, '0')}
                   onChange={(e) => setEndMinute(Number(e.target.value))}
-                  className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                  className="ui-input w-14 px-2 py-2 text-center"
                 />
               </div>
             </div>
@@ -311,7 +352,7 @@ export function CalendarRegistrationModal({
         {/* Shopping list time */}
         {mode === 'shopping' && (
           <div className="mb-3">
-            <label className="mb-1 block text-xs font-medium text-text-secondary">時刻</label>
+            <label className="ui-field-label">時刻</label>
             <div className="flex items-center gap-1">
               <input
                 type="number"
@@ -319,7 +360,7 @@ export function CalendarRegistrationModal({
                 max={23}
                 value={startHour}
                 onChange={(e) => setStartHour(Number(e.target.value))}
-                className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                className="ui-input w-14 px-2 py-2 text-center"
               />
               <span className="text-text-secondary">:</span>
               <input
@@ -329,7 +370,7 @@ export function CalendarRegistrationModal({
                 step={5}
                 value={String(startMinute).padStart(2, '0')}
                 onChange={(e) => setStartMinute(Number(e.target.value))}
-                className="w-14 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none"
+                className="ui-input w-14 px-2 py-2 text-center"
               />
             </div>
           </div>
@@ -337,7 +378,7 @@ export function CalendarRegistrationModal({
 
         {/* Reminder option (meal only) */}
         {mode === 'meal' && recipe.totalTimeMinutes > 0 && (
-          <div className="mb-4 flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3">
+          <label className="ui-panel-muted mb-4 flex cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               checked={enableReminder}
@@ -347,21 +388,19 @@ export function CalendarRegistrationModal({
             <span className="text-sm text-text-secondary">
               調理開始{recipe.totalTimeMinutes}分前にリマインダー
             </span>
-          </div>
+          </label>
         )}
 
         {/* Error */}
         {errorMessage && (
-          <div className="mb-3 rounded-xl bg-red-500/10 px-4 py-2 text-sm text-red-400">
-            {errorMessage}
-          </div>
+          <StatusNotice tone="error" title="登録できませんでした" message={errorMessage} className="mb-3" />
         )}
 
         {/* Register button */}
         <button
           onClick={handleRegister}
           disabled={status === 'loading' || status === 'success' || !selectedCalendarId}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-bold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+          className="ui-btn ui-btn-primary flex w-full items-center justify-center gap-2 disabled:opacity-50"
         >
           {status === 'loading' ? (
             <>

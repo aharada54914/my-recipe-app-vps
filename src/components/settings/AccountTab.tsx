@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Eye, EyeOff, Lock, Unlock,
   LogIn, LogOut, User, HardDriveUpload, RefreshCw, Cloud,
@@ -8,6 +8,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '../../hooks/useAuth'
 import { useGoogleDriveSync } from '../../hooks/useGoogleDriveSync'
 import { db } from '../../db/db'
+import { StatusNotice } from '../StatusNotice'
+import { getGoogleIntegrationStatus } from '../../lib/integrationStatus'
 
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
@@ -22,7 +24,15 @@ function formatTimeAgo(date: Date): string {
 }
 
 export function AccountTab() {
-  const { user, loading: authLoading, isOAuthAvailable, signInWithGoogle, signOut } = useAuth()
+  const {
+    user,
+    loading: authLoading,
+    isOAuthAvailable,
+    providerToken,
+    isQaGoogleMode,
+    signInWithGoogle,
+    signOut,
+  } = useAuth()
   const { isBackingUp, isRestoring, lastBackupAt, backupNow, error: backupError } = useGoogleDriveSync()
 
   const backupCounts = useLiveQuery(async () => {
@@ -73,12 +83,53 @@ export function AccountTab() {
     setConfirmGoogleSave(false)
   }
 
+  const googleStatus = useMemo(() => getGoogleIntegrationStatus({
+    isOAuthAvailable,
+    userPresent: !!user,
+    providerTokenPresent: !!providerToken,
+    isQaMode: isQaGoogleMode,
+    backupError,
+    isBackingUp,
+    isRestoring,
+  }), [backupError, isBackingUp, isOAuthAvailable, isQaGoogleMode, isRestoring, providerToken, user])
+
+  const handleGoogleStatusAction = () => {
+    switch (googleStatus.actionId) {
+      case 'configure-google-client':
+        handleGoogleUnlock()
+        return
+      case 'backup-now':
+      case 'qa-backup':
+      case 'retry-google':
+        void backupNow()
+        return
+      case 'sign-in-google':
+        signInWithGoogle()
+        return
+      default:
+        if (!isOAuthAvailable) {
+          handleGoogleUnlock()
+        }
+    }
+  }
+
   return (
-    <div className="rounded-2xl bg-bg-card p-4">
+    <div className="ui-panel">
       <div className="mb-3 flex items-center gap-2">
         <User className="h-4 w-4 text-accent" />
         <h4 className="text-sm font-bold text-text-secondary">アカウントとデータのバックアップ</h4>
       </div>
+
+      <StatusNotice
+        data-testid="account-google-status"
+        tone={googleStatus.tone}
+        title={googleStatus.title}
+        message={googleStatus.message}
+        actionLabel={googleStatus.actionLabel}
+        onAction={googleStatus.actionLabel ? handleGoogleStatusAction : undefined}
+        icon={<Cloud className="h-4 w-4" />}
+        className="mb-4"
+      />
 
       {authLoading ? (
         <div className="flex items-center justify-center py-4">
@@ -86,23 +137,26 @@ export function AccountTab() {
         </div>
       ) : user ? (
         <div className="space-y-3">
-          {/* User info */}
-          <div className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3">
+          <div className="ui-panel-muted flex items-center gap-3">
             {user.picture ? (
               <img src={user.picture} alt="" className="h-8 w-8 rounded-full" />
             ) : (
-              <Cloud className="h-5 w-5 text-green-400" />
+              <Cloud className="h-5 w-5 text-accent-fresh" />
             )}
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-text-primary">{user.name}</p>
               <p className="truncate text-xs text-text-secondary">{user.email}</p>
             </div>
+            {isQaGoogleMode && (
+              <span className="rounded-full bg-[color:color-mix(in_srgb,var(--accent-fresh)_18%,transparent)] px-2.5 py-1 text-[11px] font-bold text-accent-fresh">
+                QA モード
+              </span>
+            )}
           </div>
 
-          {/* Backup status */}
-          <div className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-2.5">
-            <HardDriveUpload className="h-4 w-4 text-text-secondary shrink-0" />
-            <div className="flex-1 min-w-0">
+          <div className="ui-panel-muted flex items-center gap-3">
+            <HardDriveUpload className="h-4 w-4 shrink-0 text-text-secondary" />
+            <div className="min-w-0 flex-1">
               <p className="text-xs text-text-secondary">
                 {isRestoring
                   ? 'Drive からデータを復元中...'
@@ -113,14 +167,13 @@ export function AccountTab() {
                       : 'バックアップはまだ作成されていません'}
               </p>
               {backupError && (
-                <p className="text-xs text-red-400 mt-0.5">{backupError}</p>
+                <p className="mt-0.5 text-xs text-error">{backupError}</p>
               )}
             </div>
           </div>
 
-          {/* Backup contents */}
-          <div className="rounded-xl bg-white/5 px-4 py-3 space-y-2">
-            <p className="text-xs font-medium text-text-secondary mb-2">バックアップ対象データ</p>
+          <div className="ui-panel-muted space-y-2">
+            <p className="mb-2 text-xs font-medium text-text-secondary">バックアップ対象データ</p>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { icon: Package, label: '在庫', count: backupCounts?.stock },
@@ -130,8 +183,8 @@ export function AccountTab() {
                 { icon: CalendarDays, label: '献立', count: backupCounts?.weeklyMenus },
                 { icon: CalendarClock, label: 'カレンダー', count: backupCounts?.calendarEvents },
               ].map(({ icon: Icon, label, count, suffix }) => (
-                <div key={label} className="flex items-center gap-2">
-                  <Icon className="h-3.5 w-3.5 text-text-secondary shrink-0" />
+                <div key={label} className="flex items-center gap-2 rounded-xl bg-bg-primary/40 px-2.5 py-2">
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-text-secondary" />
                   <span className="text-xs text-text-secondary truncate">{label}</span>
                   <span className="ml-auto text-xs font-bold text-text-primary tabular-nums">
                     {count === undefined ? '…' : count}
@@ -144,23 +197,21 @@ export function AccountTab() {
             </div>
           </div>
 
-          {/* Backup now */}
           <button
             onClick={backupNow}
             disabled={isBackingUp || isRestoring}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-accent disabled:opacity-30"
+            className="ui-btn ui-btn-secondary flex w-full items-center justify-center gap-2 disabled:opacity-30"
           >
             <RefreshCw className={`h-4 w-4 ${isBackingUp ? 'animate-spin' : ''}`} />
             {isBackingUp ? 'バックアップを保存中...' : '今すぐ手動でバックアップする'}
           </button>
 
-          {/* Sign out */}
           <button
             onClick={signOut}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-red-400"
+            className="ui-btn ui-btn-secondary flex w-full items-center justify-center gap-2"
           >
             <LogOut className="h-4 w-4" />
-            ログアウト
+            {isQaGoogleMode ? 'QA モードを終了' : 'ログアウト'}
           </button>
         </div>
       ) : isOAuthAvailable || googleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
@@ -168,13 +219,13 @@ export function AccountTab() {
           {isOAuthAvailable ? (
             <button
               onClick={signInWithGoogle}
-              className="ui-btn ui-btn-primary flex w-full items-center justify-center gap-2 transition-colors hover:bg-accent-hover"
+              className="ui-btn ui-btn-primary flex w-full items-center justify-center gap-2"
             >
               <LogIn className="h-4 w-4" />
               Googleでログイン
             </button>
           ) : (
-            <div className="rounded-xl bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
+            <div className="status-notice status-notice--warning text-sm">
               Google Client ID は設定されていますが、GoogleOAuthProviderのロードが完了していないか、再読み込みが必要です。ページをリロードしてください。
             </div>
           )}
@@ -186,7 +237,7 @@ export function AccountTab() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3 rounded-xl bg-white/5 px-4 py-3">
+        <div className="ui-panel-muted space-y-3">
           <p className="text-sm text-text-primary">Googleアカウントでログインするには、環境変数の設定が必要です。</p>
           <p className="text-xs text-text-secondary">
             `VITE_GOOGLE_CLIENT_ID` を設定した上で再デプロイしていただくと、こちらにログインボタンが表示されます。
@@ -202,12 +253,12 @@ export function AccountTab() {
         </div>
       )}
 
-      <div className="mt-6 rounded-2xl bg-bg-card">
+      <div className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h4 className="text-sm font-bold text-text-secondary">Google Client ID（ログイン設定用）</h4>
           <button
             onClick={isGoogleIdLocked ? handleGoogleUnlock : () => setIsGoogleIdLocked(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:text-accent cursor-pointer"
+            className="ui-btn ui-btn-secondary flex min-h-[38px] items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium"
           >
             {isGoogleIdLocked ? (
               <>
@@ -224,7 +275,7 @@ export function AccountTab() {
         </div>
 
         {isGoogleIdLocked ? (
-          <div className="flex items-center gap-2 rounded-xl bg-white/5 px-4 py-3">
+          <div className="ui-panel-muted flex items-center gap-2">
             <span className="flex-1 text-sm text-text-secondary font-mono">
               {googleClientId ? maskedGoogleId : '未設定'}
             </span>
@@ -237,11 +288,11 @@ export function AccountTab() {
                 value={googleClientId}
                 onChange={(e) => { setGoogleClientId(e.target.value); setConfirmGoogleSave(false) }}
                 placeholder="Google Client ID を入力..."
-                className="w-full rounded-xl bg-white/5 px-4 py-3 pr-10 text-base text-text-primary font-mono placeholder:text-text-secondary outline-none ring-1 ring-accent/30 cursor-text"
+                className="ui-input w-full pr-10 font-mono"
               />
               <button
                 onClick={() => setShowGoogleId(!showGoogleId)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-accent cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-accent"
               >
                 {showGoogleId ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -250,13 +301,13 @@ export function AccountTab() {
             <div className="flex gap-2">
               <button
                 onClick={handleGoogleCancel}
-                className="flex-1 rounded-xl bg-white/5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-white/10 cursor-pointer"
+                className="ui-btn ui-btn-secondary flex-1"
               >
                 キャンセル
               </button>
               <button
                 onClick={handleGoogleSave}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-bold text-white transition-colors cursor-pointer ${confirmGoogleSave ? 'bg-red-500 hover:bg-red-600' : 'bg-accent hover:bg-accent-hover'}`}
+                className={`ui-btn flex-1 text-white ${confirmGoogleSave ? 'bg-error' : 'ui-btn-primary'}`}
               >
                 {confirmGoogleSave ? '本当に保存しますか？' : '保存'}
               </button>
@@ -264,7 +315,7 @@ export function AccountTab() {
           </div>
         )}
 
-        <div className="mt-3 rounded-2xl bg-white/5 px-4 py-3">
+        <div className="ui-inline-note mt-3">
           <p className="text-xs text-text-secondary leading-relaxed">
             クライアントIDはお客様のブラウザ内（手元の端末）にのみ保存され、Google Drive バックアップには含まれません。.envファイルで設定されている場合はそちらが優先されることがあります。<br />
             設定後、サインイン機能（バックアップ等）を利用するには、念のため一度ページを再読み込み（リロード）してください。

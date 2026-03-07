@@ -153,7 +153,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
   return (
     <div className="min-h-dvh bg-bg-primary">
       {/* Header */}
-      <header className="sticky top-0 z-50 flex items-start gap-2 bg-bg-primary/95 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] backdrop-blur-md sm:items-center sm:gap-3">
+      <header className="sticky top-0 z-50 flex items-start gap-2 border-b border-border-soft bg-bg-primary/98 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] sm:items-center sm:gap-3">
         <button
           onClick={onBack}
           className="rounded-xl bg-bg-card p-2.5 transition-colors hover:bg-bg-card-hover sm:p-3"
@@ -183,6 +183,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
         )}
         <button
           onClick={() => setShowCalendarModal(true)}
+          aria-label="カレンダーに登録"
           className="rounded-xl bg-bg-card p-2.5 transition-colors hover:bg-bg-card-hover sm:p-3"
         >
           <Calendar className="h-5 w-5 text-text-secondary" />
@@ -235,7 +236,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
           <div
             className={`rounded-xl border px-3 py-2 text-xs ${isLowConfidenceNutrition
               ? 'border-amber-400/40 bg-amber-500/10 text-amber-200'
-              : 'border-white/10 bg-white/5 text-text-secondary'
+              : 'border-border-soft bg-bg-card-hover text-text-secondary'
               }`}
           >
             <div className="flex items-center gap-1.5">
@@ -244,7 +245,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                 栄養は {nutritionMeta?.referenceLabel ?? '成分表'} を基に推定
               </span>
               {nutritionConfidencePct !== undefined && (
-                <span className="ml-auto rounded-md bg-black/20 px-1.5 py-0.5 text-[10px]">
+                <span className="ml-auto rounded-md bg-bg-primary/55 px-1.5 py-0.5 text-[10px] text-text-primary">
                   信頼度 {nutritionConfidencePct}%
                 </span>
               )}
@@ -269,22 +270,18 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
         {recipe.rawSteps && recipe.rawSteps.length > 0 ? (
           <>
             {/* Tab buttons */}
-            <div className="flex gap-2">
+            <div className="ui-segmented">
               <button
                 onClick={() => setActiveTab('ingredients')}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${activeTab === 'ingredients'
-                  ? 'bg-accent text-white'
-                  : 'bg-bg-card text-text-secondary hover:text-text-primary'
-                  }`}
+                aria-pressed={activeTab === 'ingredients'}
+                className="ui-segmented-button"
               >
                 材料
               </button>
               <button
                 onClick={() => setActiveTab('steps')}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${activeTab === 'steps'
-                  ? 'bg-accent text-white'
-                  : 'bg-bg-card text-text-secondary hover:text-text-primary'
-                  }`}
+                aria-pressed={activeTab === 'steps'}
+                className="ui-segmented-button"
               >
                 手順
               </button>
@@ -297,7 +294,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                   <h4 className="text-sm font-bold text-text-secondary">材料</h4>
                   <button
                     onClick={() => setShowShoppingList(prev => !prev)}
-                    className="flex items-center gap-1 rounded-lg bg-accent/20 px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/30"
+                    className="ui-btn ui-btn-secondary flex min-h-[34px] items-center gap-1 px-2 py-1 text-xs font-medium"
                   >
                     <ShoppingCart className="h-3.5 w-3.5" />
                     買い物リスト
@@ -310,21 +307,21 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                 </div>
 
                 {showShoppingList && (
-                  <div className="mb-4 rounded-xl bg-white/5 p-3">
+                  <div className="ui-panel-muted mb-4 p-3">
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-xs font-medium text-text-secondary">
                         不足材料 ({missing.length}件)
                       </span>
                       <button
                         onClick={handleCopyShoppingList}
-                        className="flex items-center gap-1 rounded-lg bg-bg-card px-2 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent"
+                        className="ui-btn ui-btn-secondary flex min-h-[32px] items-center gap-1 px-2 py-1 text-[10px] font-medium"
                       >
                         {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
                         {copied ? 'コピー済み' : 'LINEに送る'}
                       </button>
                     </div>
                     {missing.length === 0 ? (
-                      <p className="text-xs text-green-400">全ての材料が揃っています！</p>
+                      <p className="text-xs text-accent-fresh">全ての材料が揃っています！</p>
                     ) : (
                       <ul className="space-y-1">
                         {missing.map(ing => (
@@ -353,7 +350,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                                 if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
                                 return next
                               })}
-                              className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                              className={`cursor-pointer select-none border-b border-border-soft/50 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-bg-card-hover'
                                 }`}
                             >
                               <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
@@ -386,7 +383,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                                 if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
                                 return next
                               })}
-                              className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                              className={`cursor-pointer select-none border-b border-border-soft/50 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-bg-card-hover'
                                 }`}
                             >
                               <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
@@ -407,7 +404,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                 {missingIngNames.size > 0 && (
                   <button
                     onClick={handleAskGemini}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent/20 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/30 active:scale-[0.98]"
+                    className="ui-btn ui-btn-secondary mt-3 flex w-full items-center justify-center gap-2"
                   >
                     <MessageCircleQuestion className="h-4 w-4" />
                     代替食材を Gemini に相談（{missingIngNames.size}件）
@@ -419,7 +416,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                 <h4 className="mb-3 text-sm font-bold text-text-secondary">調理手順</h4>
                 <div className="space-y-3">
                   {recipe.rawSteps.map((step, i) => (
-                    <div key={i} className="flex items-start gap-3 rounded-xl bg-white/5 p-3">
+                    <div key={i} className="ui-panel-muted flex items-start gap-3 p-3">
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
                         {i + 1}
                       </span>
@@ -437,7 +434,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
               <h4 className="text-sm font-bold text-text-secondary">材料</h4>
               <button
                 onClick={() => setShowShoppingList(prev => !prev)}
-                className="flex items-center gap-1 rounded-lg bg-accent/20 px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/30"
+                className="ui-btn ui-btn-secondary flex min-h-[34px] items-center gap-1 px-2 py-1 text-xs font-medium"
               >
                 <ShoppingCart className="h-3.5 w-3.5" />
                 買い物リスト
@@ -450,21 +447,21 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             </div>
 
             {showShoppingList && (
-              <div className="mb-4 rounded-xl bg-white/5 p-3">
+              <div className="ui-panel-muted mb-4 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-text-secondary">
                     不足材料 ({missing.length}件)
                   </span>
                   <button
                     onClick={handleCopyShoppingList}
-                    className="flex items-center gap-1 rounded-lg bg-bg-card px-2 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent"
+                    className="ui-btn ui-btn-secondary flex min-h-[32px] items-center gap-1 px-2 py-1 text-[10px] font-medium"
                   >
                     {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
                     {copied ? 'コピー済み' : 'LINEに送る'}
                   </button>
                 </div>
                 {missing.length === 0 ? (
-                  <p className="text-xs text-green-400">全ての材料が揃っています！</p>
+                  <p className="text-xs text-accent-fresh">全ての材料が揃っています！</p>
                 ) : (
                   <ul className="space-y-1">
                     {missing.map(ing => (
@@ -493,7 +490,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                             if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
                             return next
                           })}
-                          className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                          className={`cursor-pointer select-none border-b border-border-soft/50 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-bg-card-hover'
                             }`}
                         >
                           <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
@@ -526,7 +523,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
                             if (next.has(ing.name)) { next.delete(ing.name) } else { next.add(ing.name) }
                             return next
                           })}
-                          className={`cursor-pointer select-none border-b border-white/5 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-white/5'
+                          className={`cursor-pointer select-none border-b border-border-soft/50 last:border-0 transition-colors ${isMissing ? 'border-l-2 border-red-500 bg-red-500/5' : 'hover:bg-bg-card-hover'
                             }`}
                         >
                           <td className={`py-1.5 pl-2 text-sm ${isMissing ? 'text-red-400/70 line-through' : ''}`}>
@@ -547,7 +544,7 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             {missingIngNames.size > 0 && (
               <button
                 onClick={handleAskGemini}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent/20 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/30 active:scale-[0.98]"
+                className="ui-btn ui-btn-secondary mt-3 flex w-full items-center justify-center gap-2"
               >
                 <MessageCircleQuestion className="h-4 w-4" />
                 代替食材を Gemini に相談（{missingIngNames.size}件）
@@ -570,15 +567,15 @@ export function RecipeDetail({ recipeId, onBack }: RecipeDetailProps) {
             onChange={(e) => setNoteText(e.target.value)}
             placeholder="調理メモを記入...（例：塩をやや少なめにした）"
             rows={3}
-            className="w-full resize-none rounded-xl bg-white/5 px-4 py-3 text-base text-text-primary placeholder:text-text-secondary outline-none"
+            className="ui-input w-full resize-none"
           />
           <div className="mt-2 flex items-center justify-end gap-2">
             {noteSaved && (
-              <span className="text-xs text-green-400">保存しました ✓</span>
+              <span className="text-xs text-accent-fresh">保存しました ✓</span>
             )}
             <button
               onClick={handleSaveNote}
-              className="rounded-lg bg-accent/20 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/30"
+              className="ui-btn ui-btn-secondary min-h-[34px] px-3 py-1.5 text-xs font-medium"
             >
               保存
             </button>

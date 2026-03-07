@@ -4,7 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams } from 'react-router-dom'
 import { db } from '../db/db'
 import type { Recipe, RecipeCategory, DeviceType } from '../db/db'
-import { Loader2 } from 'lucide-react'
+import { Clock3, Flame, Leaf, Loader2 } from 'lucide-react'
 import { SearchBar } from './SearchBar'
 import { CategoryTags } from './CategoryTags'
 import { RecipeCard } from './RecipeCard'
@@ -12,6 +12,14 @@ import { useRecipeSearchModel } from '../hooks/useRecipeSearchModel'
 
 const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
 const SEARCH_HISTORY_KEY = 'recipe_search_history'
+
+function formatViewedAtLabel(date: Date): string {
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
+  if (diffMinutes < 60) return `${diffMinutes || 1}分前`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}時間前`
+  return `${Math.floor(diffHours / 24)}日前`
+}
 
 interface RecipeListProps {
   onSelectRecipe: (id: number) => void
@@ -131,6 +139,24 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
   const { results: withRates, categoryCounts } = useRecipeSearchModel(searchModelInput)
 
+  const recipeById = useMemo(
+    () => new Map(data.recipes.filter((recipe): recipe is Recipe & { id: number } => recipe.id != null).map((recipe) => [recipe.id, recipe])),
+    [data.recipes]
+  )
+
+  const recentViewedRecipes = useMemo(() => {
+    const seen = new Set<number>()
+    return data.viewHistory
+      .map((entry) => {
+        const recipe = recipeById.get(entry.recipeId)
+        if (!recipe || seen.has(recipe.id!)) return null
+        seen.add(recipe.id!)
+        return { recipe, viewedAt: entry.viewedAt }
+      })
+      .filter((entry): entry is { recipe: Recipe; viewedAt: Date } => !!entry)
+      .slice(0, 4)
+  }, [data.viewHistory, recipeById])
+
   useEffect(() => {
     setIsFiltering(true)
     const timer = window.setTimeout(() => setIsFiltering(false), 100)
@@ -170,6 +196,8 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       : seasonalFilter ? '旬のレシピ'
         : null
 
+  const hasActiveFilters = !!activeFilterLabel || selectedCategories.length > 0
+
   const saveSearchHistory = useCallback((keyword: string) => {
     const normalized = keyword.trim()
     if (!normalized) return
@@ -197,8 +225,74 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     saveSearchHistory(value)
   }, [commitSearchQuery, saveSearchHistory])
 
+  const quickFilterButtons = [
+    {
+      key: 'device:hotcook',
+      label: 'ホットクック',
+      icon: null,
+      active: deviceFilter === 'hotcook',
+      onClick: () => {
+        setDeviceFilter(deviceFilter === 'hotcook' ? null : 'hotcook')
+        setSelectedCategories([])
+        setQuickFilter(false)
+        setSeasonalFilter(false)
+      },
+    },
+    {
+      key: 'device:healsio',
+      label: 'ヘルシオ',
+      icon: null,
+      active: deviceFilter === 'healsio',
+      onClick: () => {
+        setDeviceFilter(deviceFilter === 'healsio' ? null : 'healsio')
+        setSelectedCategories([])
+        setQuickFilter(false)
+        setSeasonalFilter(false)
+      },
+    },
+    {
+      key: 'quick',
+      label: '時短 30分以内',
+      icon: <Flame className="h-3.5 w-3.5" />,
+      active: quickFilter,
+      onClick: () => {
+        setQuickFilter((prev) => !prev)
+        setSelectedCategories([])
+        setDeviceFilter(null)
+        setSeasonalFilter(false)
+      },
+    },
+    {
+      key: 'seasonal',
+      label: '旬を優先',
+      icon: <Leaf className="h-3.5 w-3.5" />,
+      active: seasonalFilter,
+      onClick: () => {
+        setSeasonalFilter((prev) => !prev)
+        setSelectedCategories([])
+        setDeviceFilter(null)
+        setQuickFilter(false)
+      },
+    },
+  ]
+
   return (
     <>
+      <div className="pt-4">
+        <p className="ui-section-kicker">Search</p>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-extrabold text-text-primary">レシピ検索</h2>
+            <p className="mt-1 text-sm text-text-secondary">料理名、食材、カテゴリからすぐ探せます。</p>
+          </div>
+          {hasActiveFilters && (
+            <span className="ui-chip-muted text-xs">
+              絞り込み中
+            </span>
+          )}
+        </div>
+      </div>
+
       <SearchBar
         value={searchQuery}
         onChange={commitSearchQuery}
@@ -207,16 +301,90 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         onSelectHistory={handleSelectHistory}
         searching={isFiltering}
       />
+
+      <div data-testid="search-quick-filters" className="mb-4 flex gap-2 overflow-x-auto pb-1">
+        {quickFilterButtons.map((filter) => (
+          <button
+            key={filter.key}
+            type="button"
+            onClick={filter.onClick}
+            className={`ui-btn flex min-h-[44px] shrink-0 items-center gap-1.5 px-4 py-2 text-sm transition-colors ${
+              filter.active
+                ? 'bg-accent text-white'
+                : 'ui-btn-secondary text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            {filter.icon}
+            <span>{filter.label}</span>
+          </button>
+        ))}
+      </div>
+
       <CategoryTags
         selectedCategories={selectedCategories}
         onToggle={handleCategoryToggle}
         counts={categoryCounts}
       />
 
+      {!searchQuery.trim() && searchHistory.length > 0 && !hasActiveFilters && (
+        <section data-testid="search-recent-searches" className="ui-panel mb-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-text-primary">最近の検索</h3>
+            <span className="text-xs text-text-secondary">ワンタップで再検索</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {searchHistory.map((entry) => (
+              <button
+                key={entry}
+                type="button"
+                onClick={() => handleSelectHistory(entry)}
+                className="ui-btn ui-btn-secondary px-3 py-2 text-sm"
+              >
+                {entry}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!searchQuery.trim() && recentViewedRecipes.length > 0 && !hasActiveFilters && (
+        <section data-testid="search-recent-viewed" className="ui-panel mb-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-text-primary">最近見たレシピ</h3>
+              <p className="mt-1 text-xs text-text-secondary">前回の続きから見返せます</p>
+            </div>
+            <Clock3 className="h-4 w-4 text-text-secondary" />
+          </div>
+          <div className="space-y-2">
+            {recentViewedRecipes.map(({ recipe, viewedAt }) => (
+              <button
+                key={`${recipe.id}-${viewedAt.toISOString()}`}
+                type="button"
+                onClick={() => handleSelectRecipe(recipe.id!)}
+                className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-xl border border-border-soft bg-bg-card-hover px-3 py-3 text-left transition-colors hover:bg-bg-card"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-text-primary">{recipe.title}</p>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    {recipe.device === 'hotcook' ? 'ホットクック' : recipe.device === 'healsio' ? 'ヘルシオ' : '手動調理'}
+                    {' · '}
+                    {recipe.totalTimeMinutes}分
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs font-medium text-text-secondary">
+                  {formatViewedAtLabel(viewedAt)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Active special filter badge */}
       {activeFilterLabel && (
         <div className="mb-4 flex items-center gap-2">
-          <span className="rounded-xl bg-accent/20 px-3 py-1 text-sm font-medium text-accent">
+          <span className="ui-chip-muted border-accent/30 bg-accent/12 px-3 py-1 text-sm font-medium text-accent">
             {activeFilterLabel}
           </span>
           <button
@@ -233,7 +401,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
       )}
 
       {isFiltering && (
-        <div className="mb-3 inline-flex items-center gap-2 rounded-xl bg-bg-card px-3 py-1.5 text-xs text-text-secondary">
+        <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-border-soft bg-bg-card px-3 py-1.5 text-xs text-text-secondary">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           絞り込み中...
         </div>
@@ -248,7 +416,7 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
           ref={parentRef}
           className="overflow-auto"
           style={{
-            height: 'calc(100dvh - 220px)',
+            height: 'calc(100dvh - 18.5rem)',
             opacity: isFiltering ? 0.7 : 1,
             transition: 'opacity 150ms',
           }}

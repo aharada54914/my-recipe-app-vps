@@ -73,7 +73,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    exclude: ['tests/smoke/**', 'node_modules/**', 'dist/**', '.claude/worktrees/**'],
+    exclude: ['tests/smoke/**', 'tests/visual/**', 'node_modules/**', 'dist/**', '.claude/worktrees/**'],
   },
   plugins: [
     apiMiddleware(),

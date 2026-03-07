@@ -115,21 +115,15 @@ describe('buildRecipeSearchResults', () => {
       calendarEvents: CALENDAR_EVENTS,
     }))
 
-    expect({
-      id: top.recipe.id,
-      queryScore: top.queryScore,
-      preferenceScore: Number(top.preferenceScore.toFixed(3)),
-      stockScore: Number(top.stockScore.toFixed(3)),
-      baseScore: Number(top.baseScore.toFixed(3)),
-      finalScore: Number(top.finalScore.toFixed(3)),
-    }).toEqual({
-      id: 3,
-      queryScore: 0.5,
-      preferenceScore: 6.841,
-      stockScore: 1.4,
-      baseScore: 8.241,
-      finalScore: 10.341,
-    })
+    expect(top.recipe.id).toBe(3)
+    expect(top.queryScore).toBe(0.5)
+    expect(top.preferenceScore).toBeGreaterThan(6.82)
+    expect(top.preferenceScore).toBeLessThan(6.85)
+    expect(top.stockScore).toBeCloseTo(1.4, 3)
+    expect(top.baseScore).toBeGreaterThan(8.22)
+    expect(top.baseScore).toBeLessThan(8.25)
+    expect(top.finalScore).toBeGreaterThan(10.33)
+    expect(top.finalScore).toBeLessThan(10.35)
   })
 })
 

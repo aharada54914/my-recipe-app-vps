@@ -11,7 +11,10 @@ node_modules
 dist
 dist-ssr
 playwright-report
-test-results
+playwright-report/*
+!playwright-report/.gitkeep
+test-results/*
+!test-results/.gitkeep
 public/seed
 *.local
 .env
@@ -28,3 +31,4 @@ public/seed
 *.sw?
 .vercel
 .claude/worktrees
+.tmp-ui-audit/

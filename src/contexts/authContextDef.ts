@@ -12,6 +12,7 @@ export interface AuthContextValue {
   loading: boolean
   isOAuthAvailable: boolean
   providerToken: string | null
+  isQaGoogleMode: boolean
   signInWithGoogle: () => void
   signOut: () => void
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Link, Loader2 } from 'lucide-react'
+import { Link, Loader2, RotateCcw, Sparkles } from 'lucide-react'
 import { db } from '../../db/db'
 import type { Recipe } from '../../db/db'
 import { parseRecipeFromUrl, parseRecipeText } from '../../utils/geminiParser'
@@ -9,17 +9,10 @@ import { RecipeEditorModal } from '../RecipeEditorModal'
 import { SUPPORTED_RECIPE_SITES } from '../../constants/supportedRecipeSites'
 import { resolveGeminiApiKey } from '../../lib/geminiClient'
 import { formatMissingNutritionMessage, validateRequiredNutrition } from '../../utils/nutritionValidation'
+import { StatusNotice } from '../StatusNotice'
 
 function getApiKey(): string {
   return resolveGeminiApiKey() ?? ''
-}
-
-function GeminiApiKeyHint() {
-  return (
-    <p className="rounded-xl bg-white/5 px-4 py-3 text-sm text-text-secondary">
-      Gemini APIキーが未設定です。設定 → 献立タブから登録してください。
-    </p>
-  )
 }
 
 export function ImportTab() {
@@ -30,23 +23,27 @@ export function ImportTab() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorSaving, setEditorSaving] = useState(false)
   const [draftRecipe, setDraftRecipe] = useState<Omit<Recipe, 'id'> | null>(null)
-  const [editorSessionKey, setEditorSessionKey] = useState('import-editor-initial')
+  const [editorSessionVersion, setEditorSessionVersion] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [resultMessage, setResultMessage] = useState<string | null>(null)
+  const [lastAttempt, setLastAttempt] = useState<{ url: string; text: string } | null>(null)
 
   const canParse = url.trim() || text.trim()
   const hasKey = !!getApiKey()
 
-  const handleParse = async () => {
+  const handleParse = async (attempt: { url: string; text: string } = { url, text }) => {
+    setLastAttempt(attempt)
     setStatus('parsing')
     setError(null)
     setResultMessage(null)
     try {
-      const result = url.trim()
-        ? await parseRecipeFromUrl(url.trim())
-        : await parseRecipeText(text)
+      const nextUrl = attempt.url.trim()
+      const nextText = attempt.text.trim()
+      const result = nextUrl
+        ? await parseRecipeFromUrl(nextUrl)
+        : await parseRecipeText(nextText)
       setDraftRecipe(result)
-      setEditorSessionKey(`import-${result.title}-${Date.now()}`)
+      setEditorSessionVersion((prev) => prev + 1)
       setEditorOpen(true)
       setStatus('idle')
     } catch (e) {
@@ -74,10 +71,36 @@ export function ImportTab() {
     navigate('/search')
   }
 
+  const statusNotice = !hasKey
+    ? {
+      tone: 'warning' as const,
+      title: 'Gemini APIキーが必要です',
+      message: 'URL解析とテキスト解析を使うには、設定の献立タブで Gemini API キーを登録してください。',
+      actionLabel: 'Gemini設定を開く',
+      onAction: () => navigate('/settings/menu'),
+    }
+    : error
+      ? {
+        tone: 'error' as const,
+        title: 'レシピ解析に失敗しました',
+        message: error,
+        actionLabel: lastAttempt ? 'もう一度解析' : undefined,
+        onAction: lastAttempt ? () => { void handleParse(lastAttempt) } : undefined,
+      }
+      : resultMessage
+        ? {
+          tone: 'success' as const,
+          title: '解析結果を保存しました',
+          message: resultMessage,
+          actionLabel: '検索画面へ移動',
+          onAction: () => navigate('/search'),
+        }
+        : null
+
   return (
     <div className="space-y-5">
       <RecipeEditorModal
-        key={editorSessionKey}
+        key={`import-editor-${editorSessionVersion}`}
         open={editorOpen}
         title="URL/テキスト取り込み結果を編集"
         initialRecipe={draftRecipe}
@@ -85,6 +108,19 @@ export function ImportTab() {
         onClose={() => setEditorOpen(false)}
         onSave={handleSaveEditedRecipe}
       />
+
+      {statusNotice && (
+        <StatusNotice
+          tone={statusNotice.tone}
+          title={statusNotice.title}
+          message={statusNotice.message}
+          actionLabel={statusNotice.actionLabel}
+          onAction={statusNotice.onAction}
+          icon={statusNotice.tone === 'error'
+            ? <RotateCcw className="h-4 w-4" />
+            : <Sparkles className="h-4 w-4" />}
+        />
+      )}
 
       <div className="ui-panel">
         <p className="ui-section-kicker">Step 1</p>
@@ -130,27 +166,35 @@ export function ImportTab() {
         </div>
       </div>
 
-      {error && (
-        <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</p>
-      )}
-      {resultMessage && (
-        <p className="rounded-xl bg-white/5 px-4 py-3 text-sm text-text-secondary">{resultMessage}</p>
-      )}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button
+          onClick={() => {
+            void handleParse()
+          }}
+          disabled={!canParse || status === 'parsing' || !hasKey}
+          className="ui-btn ui-btn-primary flex min-h-[48px] w-full items-center justify-center gap-2 transition-colors hover:bg-accent-hover disabled:opacity-40"
+        >
+          {status === 'parsing' ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <GeminiIcon className="h-4 w-4" />
+          )}
+          {status === 'parsing' ? '解析中...' : 'Geminiで解析'}
+        </button>
 
-      {!hasKey && <GeminiApiKeyHint />}
-
-      <button
-        onClick={handleParse}
-        disabled={!canParse || status === 'parsing' || !hasKey}
-        className="ui-btn ui-btn-primary flex w-full items-center justify-center gap-2 transition-colors hover:bg-accent-hover disabled:opacity-40"
-      >
-        {status === 'parsing' ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <GeminiIcon className="h-4 w-4" />
-        )}
-        {status === 'parsing' ? '解析中...' : 'Geminiで解析'}
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (!lastAttempt || status === 'parsing' || !hasKey) return
+            void handleParse(lastAttempt)
+          }}
+          disabled={!lastAttempt || status === 'parsing' || !hasKey}
+          className="ui-btn ui-btn-secondary flex min-h-[48px] w-full items-center justify-center gap-2 transition-colors disabled:opacity-40"
+        >
+          <RotateCcw className="h-4 w-4" />
+          前回の入力で再試行
+        </button>
+      </div>
     </div>
   )
 }

@@ -1,49 +1,41 @@
 /**
  * Weekly Menu Preview/Edit Page
  *
- * Shows 7 days of selected recipes with lock, swap, regenerate,
- * calendar registration, and shopping list features.
- * Each day shows main dish + side dish in a 2-tile horizontal grid.
+ * Keeps rendering concerns in the page and moves data/state orchestration
+ * into a dedicated controller hook.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { Lock, Unlock, RefreshCw, ShoppingCart, Calendar, CalendarClock, Clock3, UtensilsCrossed, ChevronDown, ChevronUp } from 'lucide-react'
-import { format, addDays, parse, addMinutes } from 'date-fns'
-import { ja } from 'date-fns/locale'
-import { db, type Recipe, type WeeklyMenu } from '../db/db'
-import { usePreferences } from '../hooks/usePreferences'
-import { useAuth } from '../hooks/useAuth'
-import { selectWeeklyMenu, getWeekStartDate } from '../utils/weeklyMenuSelector'
+import { useMemo, useState, type CSSProperties } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  aggregateIngredients,
-  buildWeeklyMenuRecipesWithServings,
-  filterBySeasoningOption,
-  formatWeeklyShoppingListByStoreSection,
-  getMissingWeeklyIngredients,
-} from '../utils/weeklyShoppingUtils'
-import { registerWeeklyMenuToCalendar, registerShoppingListToCalendar } from '../utils/weeklyMenuCalendar'
-import { calculateMatchRate, isHelsioDeli } from '../utils/recipeUtils'
+  Calendar,
+  CalendarClock,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  Lock,
+  RefreshCw,
+  Share2,
+  ShoppingCart,
+  Unlock,
+  UtensilsCrossed,
+  X,
+} from 'lucide-react'
+import { format, parse } from 'date-fns'
+import { ja } from 'date-fns/locale'
 import { RecipeCard } from '../components/RecipeCard'
 import { EditableShoppingList } from '../components/EditableShoppingList'
-import { createWeeklyMenuShareCode, parseWeeklyMenuShareCode } from '../utils/weeklyMenuShare'
-import { getNotificationPermission, showLocalNotification } from '../utils/notifications'
-import { isRecipeAllowedForRole } from '../utils/mealRoleRules'
 import { SwapModal } from '../components/weekly/SwapModal'
 import { GanttDayModal } from '../components/weekly/GanttDayModal'
 import { ShareMenuModal } from '../components/weekly/ShareMenuModal'
 import { ServingsStepper } from '../components/weekly/ServingsStepper'
-import jsQR from 'jsqr'
-import { WEEKLY_MENU_IMPORT_PARAM } from '../utils/weeklyMenuQr'
-import { analyzeWeeklyMenuNutrition } from '../utils/weeklyMenuNutritionInsights'
-import { getWeeklyWeatherForecast, type DailyWeather } from '../utils/season-weather/weatherProvider'
-import { buildDisplayForecastForWeek, filterForecastForWeek, isCompleteForecastForWeek } from '../utils/season-weather/weekWeather'
 import { WeatherIllustration } from '../components/weather/WeatherIllustration'
-import { learnTOptFromHistory } from '../utils/season-weather/tOptLearner'
-import { logWeeklyMenuSwap } from '../utils/weeklyMenuSelectionLogging'
-import { getWeatherPresentation } from '../utils/season-weather/weatherPresentation'
 import { WEATHER_TILE_TOKENS } from '../components/weather/weatherIllustrationTokens'
+import { calculateMatchRate } from '../utils/recipeUtils'
+import { getWeatherPresentation } from '../utils/season-weather/weatherPresentation'
+import { aggregateIngredients } from '../utils/weeklyShoppingUtils'
+import { useWeeklyMenuController } from '../hooks/useWeeklyMenuController'
+import type { Ingredient, Recipe, WeeklyMenuItem } from '../db/db'
 
 const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', string> = {
   'heuristic-3': '3段階推定',
@@ -51,519 +43,359 @@ const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', 
   'nutrition-7': '7段階栄養',
 }
 
-export function WeeklyMenuPage() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { preferences, updatePreferences } = usePreferences()
-  const { providerToken, signInWithGoogle, isOAuthAvailable } = useAuth()
+interface WeeklyRecipeSlotProps {
+  ariaLabel: string
+  emptyLabel: string
+  recipe?: Recipe
+  matchRate?: number
+  servings?: number
+  onAdjustServings?: (next: number) => void
+  onClickRecipe: (id: number) => void
+}
 
-  const [weekStart, setWeekStart] = useState(() => getWeekStartDate(new Date()))
-  const weekStartStr = format(weekStart, 'yyyy-MM-dd')
-
-  // Load existing menu for this week
-  const existingMenu = useLiveQuery(
-    () => db.weeklyMenus.where('weekStartDate').equals(weekStartStr).first(),
-    [weekStartStr]
+function WeeklyRecipeSlot({
+  ariaLabel,
+  emptyLabel,
+  recipe,
+  matchRate,
+  servings,
+  onAdjustServings,
+  onClickRecipe,
+}: WeeklyRecipeSlotProps) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
+        <span>{ariaLabel}</span>
+        {recipe && typeof servings === 'number' && onAdjustServings && (
+          <ServingsStepper
+            value={servings}
+            ariaLabel={`${ariaLabel}の人数`}
+            onChange={onAdjustServings}
+          />
+        )}
+      </div>
+      {recipe ? (
+        <RecipeCard
+          recipe={recipe}
+          matchRate={matchRate}
+          onClick={() => onClickRecipe(recipe.id!)}
+          variant="menu"
+        />
+      ) : (
+        <div className="ui-panel-muted flex min-h-[88px] items-center justify-center text-xs text-text-secondary">
+          {emptyLabel}
+        </div>
+      )}
+    </div>
   )
+}
 
-  const [menu, setMenu] = useState<WeeklyMenu | null>(null)
-  const [recipes, setRecipes] = useState<Map<number, Recipe>>(new Map())
-  const [generating, setGenerating] = useState(false)
-  const [registering, setRegistering] = useState(false)
-  const [showShoppingList, setShowShoppingList] = useState(false)
-  const [includeSeasonings, setIncludeSeasonings] = useState(false)
-  const [swapDayIndex, setSwapDayIndex] = useState<number | null>(null)
-  const [swapType, setSwapType] = useState<'main' | 'side'>('main')
-  const [swapCandidates, setSwapCandidates] = useState<Recipe[]>([])
-  const [swapFavorites, setSwapFavorites] = useState<Recipe[]>([])
-  const [swapSearchQuery, setSwapSearchQuery] = useState('')
-  const [ganttDayIndex, setGanttDayIndex] = useState<number | null>(null)
-  const [shareOpen, setShareOpen] = useState(false)
-  const [shareCodeInput, setShareCodeInput] = useState('')
-  const [swapLoading, setSwapLoading] = useState(false)
-  const [weeklyWeather, setWeeklyWeather] = useState<DailyWeather[]>([])
-  const [weatherExpanded, setWeatherExpanded] = useState(false)
-  const [weatherLoading, setWeatherLoading] = useState(false)
-  const [weatherLastFetchedAt, setWeatherLastFetchedAt] = useState<Date | null>(null)
+interface WeeklyDayAccordionCardProps {
+  item: WeeklyMenuItem
+  index: number
+  isFeatured: boolean
+  featuredLabel: string
+  expanded: boolean
+  onToggleExpanded?: () => void
+  onToggleLock: () => void
+  onOpenSwap: (type: 'main' | 'side') => void
+  onOpenTimeline: () => void
+  onClickRecipe: (id: number) => void
+  onAdjustServings: (type: 'main' | 'side', next: number) => void
+  mainRecipe?: Recipe
+  sideRecipe?: Recipe
+  stockNames: Set<string>
+  cookStart: Date | null
+  desiredMealTime: Date
+  swapLoading: boolean
+}
 
-  const stockItems = useLiveQuery(() => db.stock.filter(s => s.inStock).toArray(), [])
-  const latestWeather = useLiveQuery(() => db.weatherCache.orderBy('fetchedAt').last(), [])
-  const stockNames = useMemo(() => new Set((stockItems ?? []).map(s => s.name)), [stockItems])
-  const weeklyWeatherCards = useMemo(
-    () => (weeklyWeather.length > 0 ? buildDisplayForecastForWeek(weeklyWeather, weekStart) : []),
-    [weeklyWeather, weekStart],
-  )
-
-  const loadRecipes = useCallback(async (recipeIds: number[]) => {
-    const loaded = await db.recipes.bulkGet(recipeIds)
-    const map = new Map<number, Recipe>()
-    for (const r of loaded) {
-      if (r?.id != null) map.set(r.id, r)
-    }
-    setRecipes(map)
-  }, [])
-
-  // Load existing menu from DB
-  useEffect(() => {
-    if (existingMenu) {
-      setMenu(existingMenu)
-      const ids: number[] = []
-      for (const item of existingMenu.items) {
-        ids.push(item.recipeId)
-        if (item.sideRecipeId != null) ids.push(item.sideRecipeId)
-      }
-      loadRecipes(ids)
-    }
-  }, [existingMenu, loadRecipes])
-
-  // Generate new menu
-  const handleGenerate = useCallback(async () => {
-    setGenerating(true)
-    try {
-      const items = await selectWeeklyMenu(
-        weekStart,
-        {
-          ...preferences,
-          preloadedWeather: isCompleteForecastForWeek(weeklyWeather, weekStart) ? filterForecastForWeek(weeklyWeather, weekStart) : undefined,
-        },
-        menu?.items,
-      )
-
-      const newMenu: WeeklyMenu = {
-        id: menu?.id,
-        weekStartDate: weekStartStr,
-        items,
-        status: 'draft',
-        createdAt: menu?.createdAt ?? new Date(),
-        updatedAt: new Date(),
-      }
-
-      if (menu?.id != null) {
-        await db.weeklyMenus.update(menu.id, {
-          items,
-          status: 'draft',
-          updatedAt: new Date(),
-        })
-      } else {
-        const id = await db.weeklyMenus.add(newMenu)
-        newMenu.id = id
-      }
-
-      setMenu(newMenu)
-      const ids: number[] = []
-      for (const item of items) {
-        ids.push(item.recipeId)
-        if (item.sideRecipeId != null) ids.push(item.sideRecipeId)
-      }
-      await loadRecipes(ids)
-
-      if (preferences.notifyWeeklyMenuDone && getNotificationPermission() === 'granted') {
-        await showLocalNotification({
-          title: '週間献立を作成しました',
-          body: `${format(weekStart, 'M/d')}開始の献立を更新しました。`,
-          tag: `weekly_menu_${weekStartStr}`,
-        })
-      }
-    } catch (err) {
-      console.error('献立の生成に失敗しました', err)
-      const detail = err instanceof Error ? err.message : '不明なエラー'
-      alert(`献立の生成に失敗しました。\n${detail}`)
-    } finally {
-      setGenerating(false)
-    }
-  }, [weekStart, weekStartStr, preferences, menu, loadRecipes, weeklyWeather])
-
-  // Toggle lock
-  const handleToggleLock = useCallback((dayIndex: number) => {
-    if (!menu) return
-    const newItems = [...menu.items]
-    newItems[dayIndex] = { ...newItems[dayIndex], locked: !newItems[dayIndex].locked }
-    const updated = { ...menu, items: newItems, updatedAt: new Date() }
-    setMenu(updated)
-    if (menu.id != null) {
-      db.weeklyMenus.update(menu.id, { items: newItems, updatedAt: new Date() })
-    }
-  }, [menu])
-
-  // Swap recipe
-  const handleOpenSwap = useCallback(async (dayIndex: number, type: 'main' | 'side') => {
-    if (!menu) return
-    setSwapLoading(true)
-    try {
-      const usedIds = new Set(menu.items.flatMap(i => {
-        const ids: number[] = [i.recipeId]
-        if (i.sideRecipeId != null) ids.push(i.sideRecipeId)
-        return ids
-      }))
-
-      // Load candidates from all recipes excluding used + ヘルシオデリ, sorted by stock match
-      const [allRecipes, favRecords] = await Promise.all([
-        db.recipes.toArray(),
-        db.favorites.toArray(),
-      ])
-
-      const favIds = new Set(favRecords.map(f => f.recipeId))
-      const role = type === 'main' ? 'main' : 'side'
-      const candidates = allRecipes
-        .filter((r) => r.id != null && !usedIds.has(r.id) && !isHelsioDeli(r))
-        .filter((r) => isRecipeAllowedForRole(r, role))
-        .map(r => ({ recipe: r, matchRate: calculateMatchRate(r.ingredients ?? [], stockNames) }))
-        .sort((a, b) => b.matchRate - a.matchRate)
-        .map(r => r.recipe)
-
-      const favorites = candidates.filter(r => favIds.has(r.id!))
-
-      setSwapCandidates(candidates)
-      setSwapFavorites(favorites)
-      setSwapSearchQuery('')
-      setSwapDayIndex(dayIndex)
-      setSwapType(type)
-    } catch (error) {
-      console.error('Failed to open swap modal', error)
-      alert('レシピ変更候補の読み込みに失敗しました。データを確認して再度お試しください。')
-    } finally {
-      setSwapLoading(false)
-    }
-  }, [menu, stockNames])
-
-  const handleSelectSwap = useCallback(async (recipe: Recipe) => {
-    if (!menu || swapDayIndex === null) return
-    if (!isRecipeAllowedForRole(recipe, swapType === 'main' ? 'main' : 'side')) {
-      alert('選択したレシピはこの枠に割り当てできません。')
-      return
-    }
-    const newItems = [...menu.items]
-    const previousRecipeId = swapType === 'main'
-      ? newItems[swapDayIndex].recipeId
-      : newItems[swapDayIndex].sideRecipeId
-    if (swapType === 'main') {
-      newItems[swapDayIndex] = { ...newItems[swapDayIndex], recipeId: recipe.id!, mainServings: undefined }
-    } else {
-      newItems[swapDayIndex] = { ...newItems[swapDayIndex], sideRecipeId: recipe.id!, sideServings: undefined }
-    }
-    const updated = { ...menu, items: newItems, updatedAt: new Date() }
-    setMenu(updated)
-    setRecipes(prev => new Map(prev).set(recipe.id!, recipe))
-    setSwapDayIndex(null)
-    if (menu.id != null) {
-      db.weeklyMenus.update(menu.id, { items: newItems, updatedAt: new Date() })
-    }
-    if (previousRecipeId != null) {
-      void logWeeklyMenuSwap({
-        weekStartDate: weekStartStr,
-        dayIndex: swapDayIndex,
-        role: swapType,
-        replacedRecipeId: previousRecipeId,
-        selectedRecipeId: recipe.id!,
-      })
-    }
-  }, [menu, swapDayIndex, swapType, weekStartStr])
-
-  const selectedRecipes = useMemo(() => {
-    if (!menu) return [] as Recipe[]
-    return buildWeeklyMenuRecipesWithServings(menu, recipes)
-  }, [menu, recipes])
-
-  const nutritionInsights = useMemo(() => analyzeWeeklyMenuNutrition(selectedRecipes), [selectedRecipes])
-
-  const recommendationReasons = useMemo(() => {
-    const modeLabel = preferences.weeklyMenuCostMode === 'saving'
-      ? '価格モード: 節約重視'
-      : preferences.weeklyMenuCostMode === 'luxury'
-        ? `価格モード: 贅沢重視（ご褒美枠 ${preferences.weeklyMenuLuxuryRewardDays}日）`
-        : '価格モード: 価格を気にしない'
-    const weatherLabel = latestWeather
-      ? `気象補正: 気温${Math.round(latestWeather.temperatureC)}℃・湿度${Math.round(latestWeather.humidityPercent)}%`
-      : '気象補正: キャッシュなし（季節スコアのみ）'
-    const userAddedCount = selectedRecipes.filter((r) => r.isUserAdded).length
-    const confidenceLabel = userAddedCount > 0
-      ? `特徴量行列: 公式CSV/Geminiを同一基準で評価（Gemini ${userAddedCount}件は低信頼下限20%適用）`
-      : '特徴量行列: 公式CSV/登録済みレシピを同一基準で評価'
-    return [modeLabel, weatherLabel, confidenceLabel]
-  }, [preferences.weeklyMenuCostMode, preferences.weeklyMenuLuxuryRewardDays, latestWeather, selectedRecipes])
-  const lowConfidenceNutritionCount = useMemo(
-    () => selectedRecipes.filter((r) => r.nutritionMeta?.source === 'estimated' && r.nutritionMeta?.lowConfidence).length,
-    [selectedRecipes]
-  )
-  const fallbackNutritionCount = useMemo(
-    () => selectedRecipes.filter((r) => r.nutritionMeta?.source === 'estimated' && r.nutritionMeta?.usedFallback).length,
-    [selectedRecipes]
-  )
-
-  const handleAdjustServings = useCallback((dayIndex: number, type: 'main' | 'side', delta: number) => {
-    if (!menu) return
-    const item = menu.items[dayIndex]
-    if (!item) return
-
-    const recipe = type === 'main'
-      ? recipes.get(item.recipeId)
-      : item.sideRecipeId != null ? recipes.get(item.sideRecipeId) : undefined
-    if (!recipe) return
-
-    const current = type === 'main'
-      ? (item.mainServings ?? recipe.baseServings)
-      : (item.sideServings ?? recipe.baseServings)
-    const nextValue = Math.min(10, Math.max(1, current + delta))
-
-    const newItems = [...menu.items]
-    newItems[dayIndex] = type === 'main'
-      ? { ...item, mainServings: nextValue }
-      : { ...item, sideServings: nextValue }
-
-    const updated = { ...menu, items: newItems, updatedAt: new Date() }
-    setMenu(updated)
-    if (menu.id != null) {
-      db.weeklyMenus.update(menu.id, { items: newItems, updatedAt: new Date() })
-    }
-  }, [menu, recipes])
-
-  // Calendar registration
-  const handleRegisterCalendar = useCallback(async () => {
-    if (!menu) return
-    if (!isOAuthAvailable) {
-      alert('Google OAuthが未設定です。環境変数 VITE_GOOGLE_CLIENT_ID を設定してください。')
-      return
-    }
-    if (!providerToken) {
-      signInWithGoogle()
-      return
-    }
-
-    setRegistering(true)
-    try {
-      const mealRecipes = Array.from(recipes.values())
-      const result = await registerWeeklyMenuToCalendar(providerToken, menu, mealRecipes, preferences)
-
-      if (stockItems) {
-        const missing = filterBySeasoningOption(
-          getMissingWeeklyIngredients(selectedRecipes, stockItems),
-          includeSeasonings
-        )
-        if (missing.length > 0) {
-          const shoppingListText = formatWeeklyShoppingListByStoreSection(weekStartStr, missing)
-          await registerShoppingListToCalendar(providerToken, shoppingListText, weekStart, preferences, menu, recipes)
-        }
-      }
-
-      if (result.errors.length > 0) {
-        alert(`カレンダー登録: ${result.registered}件成功 / ${result.errors.length}件失敗\n${result.errors.join('\n')}`)
-      } else {
-        alert(`カレンダー登録が完了しました（${result.registered}件）`)
-      }
-
-      // カレンダー登録（status: 'registered'）後に T_opt を学習・更新（ノンブロッキング）
-      void learnTOptFromHistory(preferences.tOpt).then((updatedTOpt) => {
-        void updatePreferences({ tOpt: updatedTOpt })
-      })
-    } finally {
-      setRegistering(false)
-    }
-  }, [includeSeasonings, isOAuthAvailable, menu, preferences, providerToken, recipes, selectedRecipes, signInWithGoogle, stockItems, updatePreferences, weekStart, weekStartStr])
-
-  // Week navigation
-  const adjustWeek = (delta: number) => {
-    setWeekStart(prev => addDays(prev, delta * 7))
-    setMenu(null)
-    setShowShoppingList(false)
-  }
-
-  // Time display helpers
-  const desiredMealTime = useMemo(() => {
-    const d = new Date()
-    d.setHours(preferences.desiredMealHour, preferences.desiredMealMinute, 0, 0)
-    return d
-  }, [preferences.desiredMealHour, preferences.desiredMealMinute])
-
-  const getCookingStartTime = useCallback((mainRecipe: Recipe | undefined) => {
-    if (!mainRecipe || !mainRecipe.totalTimeMinutes) return null
-    return addMinutes(desiredMealTime, -mainRecipe.totalTimeMinutes)
-  }, [desiredMealTime])
-
-  const weekEndStr = format(addDays(weekStart, 6), 'M/d')
-  const weekStartDisplay = format(weekStart, 'M/d')
-  const shareCode = useMemo(() => {
-    if (!menu) return ''
-    return createWeeklyMenuShareCode(weekStartStr, menu.items)
-  }, [menu, weekStartStr])
-  const isOverlayOpen = swapDayIndex !== null || ganttDayIndex !== null || shareOpen
-
-  const applySharedMenu = useCallback(async (code: string) => {
-    const shared = parseWeeklyMenuShareCode(code)
-    const existing = await db.weeklyMenus.where('weekStartDate').equals(shared.weekStartDate).first()
-
-    const nextMenu: WeeklyMenu = {
-      id: existing?.id,
-      weekStartDate: shared.weekStartDate,
-      items: shared.items,
-      status: 'draft',
-      createdAt: existing?.createdAt ?? new Date(),
-      updatedAt: new Date(),
-    }
-
-    if (existing?.id != null) {
-      await db.weeklyMenus.update(existing.id, {
-        items: shared.items,
-        status: 'draft',
-        updatedAt: new Date(),
-      })
-    } else {
-      const id = await db.weeklyMenus.add(nextMenu)
-      nextMenu.id = id
-    }
-
-    const importedWeek = new Date(`${shared.weekStartDate}T00:00:00`)
-    setWeekStart(importedWeek)
-    setMenu(nextMenu)
-    const ids: number[] = []
-    for (const item of shared.items) {
-      ids.push(item.recipeId)
-      if (item.sideRecipeId != null) ids.push(item.sideRecipeId)
-    }
-    await loadRecipes(ids)
-  }, [loadRecipes])
-
-  useEffect(() => {
-    const code = new URLSearchParams(location.search).get('shared')
-    if (!code) return
-
-    applySharedMenu(code)
-      .then(() => {
-        alert('共有された週間献立を読み込みました')
-      })
-      .catch((err) => {
-        alert(`共有コードの読み込みに失敗しました: ${err instanceof Error ? err.message : '不明なエラー'}`)
-      })
-      .finally(() => {
-        navigate('/weekly-menu', { replace: true })
-      })
-  }, [location.search, applySharedMenu, navigate])
-
-  const handleShareLink = useCallback(async () => {
-    if (!menu) return
-    const url = `${window.location.origin}/weekly-menu?shared=${encodeURIComponent(shareCode)}`
-
-    if (navigator.share) {
-      await navigator.share({
-        title: `Kitchen App 週間献立 ${weekStartDisplay}〜${weekEndStr}`,
-        text: '週間献立を共有します',
-        url,
-      })
-      return
-    }
-
-    await navigator.clipboard.writeText(url)
-    alert('共有リンクをコピーしました')
-  }, [menu, shareCode, weekEndStr, weekStartDisplay])
-
-  const handleImportFromCode = useCallback(async () => {
-    if (!shareCodeInput.trim()) return
-    try {
-      await applySharedMenu(shareCodeInput)
-      setShareOpen(false)
-      setShareCodeInput('')
-      alert('共有コードから週間献立を読み込みました')
-    } catch (err) {
-      alert(`共有コードが不正です: ${err instanceof Error ? err.message : '不明なエラー'}`)
-    }
-  }, [shareCodeInput, applySharedMenu])
-
-  // 画像から週間献立QRを読み取る
-  const handleScanMenuImage = useCallback((file: File) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth
-      canvas.height = img.naturalHeight
-      const ctx = canvas.getContext('2d')
-      if (!ctx) { URL.revokeObjectURL(url); alert('Canvasが使えません'); return }
-      ctx.drawImage(img, 0, 0)
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' })
-      URL.revokeObjectURL(url)
-      if (!code?.data) {
-        alert('QRコードが見つかりませんでした。別の画像を試してください。')
-        return
-      }
-      // QRに含まれるURLからimport-menuパラメータを抽出
-      try {
-        const qrUrl = new URL(code.data)
-        const param = qrUrl.searchParams.get(WEEKLY_MENU_IMPORT_PARAM)
-        if (param) {
-          navigate(`/weekly-menu?${WEEKLY_MENU_IMPORT_PARAM}=${encodeURIComponent(param)}`, { replace: false })
-          return
-        }
-      } catch {
-        // URL形式でない場合は続行して共有コードとして試す
-      }
-      // 共有コードQRの可能性
-      applySharedMenu(code.data)
-        .then(() => alert('共有コードから週間献立を読み込みました'))
-        .catch(() => alert('QRデータを読み取れませんでした。週間献立用QRを使ってください。'))
-    }
-    img.onerror = () => { URL.revokeObjectURL(url); alert('画像の読み込みに失敗しました') }
-    img.src = url
-  }, [navigate, applySharedMenu])
-
-  const refreshWeeklyWeather = useCallback(async () => {
-    setWeatherLoading(true)
-    try {
-      const forecast = await getWeeklyWeatherForecast(weekStart)
-      setWeeklyWeather(filterForecastForWeek(forecast, weekStart))
-      setWeatherLastFetchedAt(new Date())
-    } finally {
-      setWeatherLoading(false)
-    }
-  }, [weekStart])
-
-  useEffect(() => {
-    void refreshWeeklyWeather()
-  }, [refreshWeeklyWeather])
-
-
-
-  useEffect(() => {
-    if (!showShoppingList) return
-    if (!stockItems || !preferences.notifyShoppingListDone) return
-    if (getNotificationPermission() !== 'granted') return
-
-    const missing = getMissingWeeklyIngredients(selectedRecipes, stockItems)
-    if (missing.length === 0) return
-
-    showLocalNotification({
-      title: '買い物リストを確認しましょう',
-      body: `${missing.length}件の不足食材があります。`,
-      tag: `shopping_${weekStartStr}`,
-    })
-  }, [showShoppingList, stockItems, preferences.notifyShoppingListDone, selectedRecipes, weekStartStr])
+function WeeklyDayAccordionCard({
+  item,
+  index,
+  isFeatured,
+  featuredLabel,
+  expanded,
+  onToggleExpanded,
+  onToggleLock,
+  onOpenSwap,
+  onOpenTimeline,
+  onClickRecipe,
+  onAdjustServings,
+  mainRecipe,
+  sideRecipe,
+  stockNames,
+  cookStart,
+  desiredMealTime,
+  swapLoading,
+}: WeeklyDayAccordionCardProps) {
+  const date = parse(item.date, 'yyyy-MM-dd', new Date())
+  const mainMatchRate = mainRecipe ? calculateMatchRate(mainRecipe.ingredients as Ingredient[], stockNames) : undefined
+  const sideMatchRate = sideRecipe ? calculateMatchRate(sideRecipe.ingredients as Ingredient[], stockNames) : undefined
+  const mainServings = mainRecipe ? (item.mainServings ?? mainRecipe.baseServings) : 0
+  const sideServings = sideRecipe ? (item.sideServings ?? sideRecipe.baseServings) : 0
+  const title = mainRecipe?.title ?? '未設定'
+  const subtitle = sideRecipe?.title ? `＋ ${sideRecipe.title}` : '副菜・スープなし'
 
   return (
-    <div>
-      <h2 className="pt-4 pb-3 text-lg font-bold">週間献立</h2>
-
-      <div className={`space-y-4 ${showShoppingList ? 'pb-[65vh]' : 'pb-44'}`}>
-        {/* Week navigation */}
-        <div className="flex items-center justify-center gap-3">
-          <button
-            onClick={() => adjustWeek(-1)}
-            className="rounded-xl bg-bg-card-hover px-3 py-1 text-sm transition-colors hover:text-accent"
-          >
-            前の週
-          </button>
-          <div className="text-center">
-            <div className="text-xl font-bold text-accent">
-              {weekStartDisplay} - {weekEndStr}
+    <div
+      data-testid="weekly-day-card"
+      data-day-date={item.date}
+      className={`rounded-2xl border bg-bg-card p-4 ${isFeatured ? 'border-accent/30 shadow-[0_12px_28px_rgba(227,127,67,0.14)]' : 'border-border-soft'}`}
+    >
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={onToggleExpanded}
+          className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left"
+        >
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={`text-base font-bold ${isFeatured ? 'text-accent' : 'text-text-primary'}`}>
+                {format(date, 'M/d (E)', { locale: ja })}
+              </span>
+              {isFeatured && (
+                <span className="rounded-md bg-accent/16 px-2 py-0.5 text-xs font-bold text-accent">
+                  {featuredLabel}
+                </span>
+              )}
+              {item.locked && (
+                <span className="rounded-md bg-bg-card-hover px-2 py-0.5 text-[11px] font-semibold text-text-secondary">
+                  固定
+                </span>
+              )}
+            </div>
+            <p data-testid="weekly-day-title" className="mt-2 truncate text-sm font-bold text-text-primary">{title}</p>
+            <p data-testid="weekly-day-subtitle" className="mt-1 truncate text-xs text-text-secondary">{subtitle}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+              {cookStart && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  開始 {format(cookStart, 'HH:mm')}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5">
+                <UtensilsCrossed className="h-3.5 w-3.5 text-accent" />
+                食事 {format(desiredMealTime, 'HH:mm')}
+              </span>
             </div>
           </div>
+          {onToggleExpanded ? (
+            expanded ? <ChevronUp className="mt-1 h-4 w-4 shrink-0 text-text-secondary" /> : <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-text-secondary" />
+          ) : null}
+        </button>
+        <button
+          type="button"
+          onClick={onToggleLock}
+          className="rounded-xl border border-border-soft bg-bg-card-hover p-2 text-text-secondary transition-colors hover:text-accent"
+          aria-label={item.locked ? `献立${index + 1}を固定解除` : `献立${index + 1}を固定`}
+        >
+          {item.locked ? <Lock className="h-4 w-4 text-accent" /> : <Unlock className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-4 space-y-4">
           <button
-            onClick={() => adjustWeek(1)}
-            className="rounded-xl bg-bg-card-hover px-3 py-1 text-sm transition-colors hover:text-accent"
+            type="button"
+            onClick={onOpenTimeline}
+            className="ui-panel-muted flex w-full items-center justify-between text-left"
           >
-            次の週
+            <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
+              {cookStart && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock3 className="h-4 w-4 shrink-0" />
+                  調理開始 <span className="font-bold text-text-primary">{format(cookStart, 'HH:mm')}</span>
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarClock className="h-4 w-4 shrink-0 text-accent" />
+                食事時間 <span className="font-bold text-accent">{format(desiredMealTime, 'HH:mm')}</span>
+              </span>
+            </div>
+            <CalendarClock className="h-5 w-5 shrink-0 text-text-secondary" />
+          </button>
+
+          <div className="grid grid-cols-1 gap-4">
+            <WeeklyRecipeSlot
+              ariaLabel="主菜"
+              emptyLabel="主菜なし"
+              recipe={mainRecipe}
+              matchRate={mainMatchRate}
+              servings={mainServings}
+              onAdjustServings={(next) => onAdjustServings('main', next)}
+              onClickRecipe={onClickRecipe}
+            />
+            <WeeklyRecipeSlot
+              ariaLabel="副菜 / スープ"
+              emptyLabel="副菜なし"
+              recipe={sideRecipe}
+              matchRate={sideMatchRate}
+              servings={sideServings}
+              onAdjustServings={(next) => onAdjustServings('side', next)}
+              onClickRecipe={onClickRecipe}
+            />
+          </div>
+
+          {!item.locked && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onOpenSwap('main')}
+                disabled={swapLoading}
+                data-testid="weekly-swap-main"
+                className="ui-btn ui-btn-secondary text-xs disabled:opacity-50"
+              >
+                {swapLoading ? '読込中...' : '主菜を変更'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenSwap('side')}
+                disabled={swapLoading}
+                data-testid="weekly-swap-side"
+                className="ui-btn ui-btn-secondary text-xs disabled:opacity-50"
+              >
+                {swapLoading ? '読込中...' : '副菜を変更'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function WeeklyMenuPage() {
+  const navigate = useNavigate()
+  const {
+    adjustWeek,
+    desiredMealTime,
+    fallbackNutritionCount,
+    ganttDayIndex,
+    generating,
+    getCookingStartTime,
+    handleAdjustServings,
+    handleGenerate,
+    handleImportFromCode,
+    handleOpenSwap,
+    handleRegisterCalendar,
+    handleScanMenuImage,
+    handleSelectSwap,
+    handleShareLink,
+    handleToggleLock,
+    includeSeasonings,
+    isOverlayOpen,
+    lowConfidenceNutritionCount,
+    menu,
+    nutritionInsights,
+    providerToken,
+    recommendationReasons,
+    recipes,
+    refreshWeeklyWeather,
+    registering,
+    selectedRecipes,
+    setGanttDayIndex,
+    setIncludeSeasonings,
+    setShareCodeInput,
+    setShareOpen,
+    setShowShoppingList,
+    setSwapDayIndex,
+    setSwapSearchQuery,
+    setWeatherExpanded,
+    shareCode,
+    shareCodeInput,
+    shareOpen,
+    showShoppingList,
+    stockItems,
+    stockNames,
+    swapCandidates,
+    swapDayIndex,
+    swapFavorites,
+    swapLoading,
+    swapSearchQuery,
+    swapType,
+    weatherExpanded,
+    weatherLastFetchedAt,
+    weatherLoading,
+    weekEndStr,
+    weekStartDisplay,
+    weekStartStr,
+    weeklyWeatherCards,
+  } = useWeeklyMenuController()
+
+  const [expandedDate, setExpandedDate] = useState<string | null>(null)
+
+  const shoppingIngredients = useMemo(
+    () => (stockItems ? aggregateIngredients(selectedRecipes, stockItems) : []),
+    [selectedRecipes, stockItems],
+  )
+  const visibleShoppingIngredients = useMemo(
+    () => shoppingIngredients.filter((ingredient) => includeSeasonings || ingredient.ingredientCategory === 'main'),
+    [includeSeasonings, shoppingIngredients],
+  )
+  const missingCount = visibleShoppingIngredients.filter((ingredient) => !ingredient.inStock).length
+  const lockedCount = menu?.items.filter((item) => item.locked).length ?? 0
+  const featuredIndex = useMemo(() => {
+    if (!menu) return -1
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const todayIndex = menu.items.findIndex((item) => item.date === today)
+    return todayIndex >= 0 ? todayIndex : 0
+  }, [menu])
+  const featuredItem = featuredIndex >= 0 && menu ? menu.items[featuredIndex] : null
+  const isFeaturedToday = !!featuredItem && featuredItem.date === format(new Date(), 'yyyy-MM-dd')
+  const restItems = useMemo(
+    () => (menu ? menu.items.filter((_, index) => index !== featuredIndex) : []),
+    [featuredIndex, menu],
+  )
+  const activeExpandedDate = menu?.items.some((item) => item.date === expandedDate) ? expandedDate : null
+
+  const toggleExpandedDate = (date: string) => {
+    setExpandedDate((current) => (current === date ? null : date))
+  }
+
+  return (
+    <div className="pt-4">
+      <div className={`space-y-4 ${menu ? 'pb-36' : 'pb-24'}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="ui-section-kicker">Weekly Plan</p>
+            <h2 className="mt-1 text-xl font-extrabold text-text-primary">週間献立</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            disabled={!menu}
+            className="ui-btn ui-btn-secondary min-w-[44px] px-3 text-xs disabled:opacity-40"
+          >
+            共有
           </button>
         </div>
 
-        <div className="rounded-2xl bg-bg-card p-4">
+        <div className="ui-panel">
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => adjustWeek(-1)}
+              className="ui-btn ui-btn-secondary px-3 text-sm"
+            >
+              前の週
+            </button>
+            <div className="text-center">
+              <div className="text-xl font-extrabold text-accent">
+                {weekStartDisplay} - {weekEndStr}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => adjustWeek(1)}
+              className="ui-btn ui-btn-secondary px-3 text-sm"
+            >
+              次の週
+            </button>
+          </div>
+        </div>
+
+        <div className="ui-panel">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
@@ -579,10 +411,10 @@ export function WeeklyMenuPage() {
               type="button"
               onClick={() => void refreshWeeklyWeather()}
               disabled={weatherLoading}
-              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-bg-card-hover px-2 py-1 text-xs font-semibold text-text-secondary transition-colors hover:text-accent disabled:opacity-50"
+              className="ui-btn ui-btn-secondary min-h-[36px] px-2 py-1 text-xs disabled:opacity-50"
               aria-label="天気予報を再取得"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${weatherLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${weatherLoading ? 'animate-spin' : ''}`} />
               再取得
             </button>
           </div>
@@ -593,19 +425,19 @@ export function WeeklyMenuPage() {
 
           {weatherExpanded && (
             <div className="mt-3">
-              {weatherLoading && weeklyWeather.length === 0 ? (
+              {weatherLoading && weeklyWeatherCards.length === 0 ? (
                 <p className="text-xs text-text-secondary">天気予報を読み込み中...</p>
               ) : (
                 <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
-                  {weeklyWeatherCards.map((w) => {
-                    const presentation = getWeatherPresentation(w)
+                  {weeklyWeatherCards.map((weather) => {
+                    const presentation = getWeatherPresentation(weather)
                     const tileToken = WEATHER_TILE_TOKENS[presentation.variant]
 
                     return (
                       <div
-                        key={w.date}
+                        key={weather.date}
                         data-testid="weekly-weather-card"
-                        data-weather-date={w.date}
+                        data-weather-date={weather.date}
                         data-weather-variant={presentation.variant}
                         className="rounded-xl p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                         style={{
@@ -615,7 +447,7 @@ export function WeeklyMenuPage() {
                       >
                         <div className="mb-2 flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-bold text-white">{format(parse(w.date, 'yyyy-MM-dd', new Date()), 'M/d (E)', { locale: ja })}</p>
+                            <p className="text-sm font-bold text-white">{format(parse(weather.date, 'yyyy-MM-dd', new Date()), 'M/d (E)', { locale: ja })}</p>
                             <span
                               data-testid="weekly-weather-label"
                               className="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold"
@@ -625,22 +457,22 @@ export function WeeklyMenuPage() {
                             </span>
                           </div>
                           <div className="shrink-0 rounded-xl bg-black/15 p-1.5 ring-1 ring-white/10">
-                            <WeatherIllustration weather={w} size={48} />
+                            <WeatherIllustration weather={weather} size={48} />
                           </div>
                         </div>
 
                         <div className="mb-1 flex items-end gap-2">
                           <span className="text-lg font-extrabold" style={{ color: tileToken.tempHigh }}>
-                            {w.maxTempC}℃
+                            {weather.maxTempC}℃
                           </span>
                           <span className="text-sm font-semibold" style={{ color: tileToken.tempLow }}>
-                            / {w.minTempC}℃
+                            / {weather.minTempC}℃
                           </span>
                         </div>
 
                         <div className="space-y-0.5 text-[12px] text-white/82">
-                          <p>降水目安: {w.precipitationMm}mm</p>
-                          <p>湿度: {w.humidityPercent != null ? `${w.humidityPercent}%` : '—'}</p>
+                          <p>降水目安: {weather.precipitationMm}mm</p>
+                          <p>湿度: {weather.humidityPercent != null ? `${weather.humidityPercent}%` : '—'}</p>
                         </div>
                       </div>
                     )
@@ -651,53 +483,72 @@ export function WeeklyMenuPage() {
           )}
         </div>
 
-        {/* Menu content */}
         {!menu ? (
-          <div className="rounded-2xl bg-bg-card p-8 text-center">
-            <p className="mb-4 text-sm text-text-secondary">
+          <div className="ui-action-card text-center">
+            <p className="mb-2 text-base font-bold text-text-primary">
               この週の献立はまだ生成されていません
             </p>
+            <p className="mx-auto mb-5 max-w-xs text-sm leading-relaxed text-text-secondary">
+              まず 1 回作成すると、買い物リスト、共有、Google カレンダー登録までこの画面でまとめて扱えます。
+            </p>
             <button
+              type="button"
               onClick={handleGenerate}
               disabled={generating}
-              className="rounded-xl bg-accent px-6 py-3 text-sm font-bold text-white transition-opacity disabled:opacity-50"
+              className="ui-btn ui-btn-primary w-full disabled:opacity-50"
             >
               {generating ? '生成中...' : '献立を自動生成'}
             </button>
           </div>
         ) : (
           <>
-            <div className="rounded-2xl bg-bg-card p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-sm font-bold text-text-secondary">栄養バランス評価</h4>
+            <div data-testid="weekly-summary-card" className="ui-action-card">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="ui-section-kicker">Summary</p>
+                  <h3 className="mt-1 text-lg font-extrabold text-text-primary">今週の状態</h3>
+                </div>
                 <span className="rounded-lg bg-accent/20 px-2 py-0.5 text-xs font-bold text-accent">
                   {BALANCE_TIER_LABEL[nutritionInsights.tierDecision.tier]}
                 </span>
               </div>
-              <p className="text-xs text-text-secondary">
-                データ充足率: 5段階 {Math.round(nutritionInsights.tierDecision.nutrition5Coverage * 100)}% / 7段階 {Math.round(nutritionInsights.tierDecision.nutrition7Coverage * 100)}%
-              </p>
-              <div className="mt-3 space-y-1.5 text-sm">
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="ui-stat-card">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">Days</p>
+                  <p className="mt-1 text-lg font-extrabold text-text-primary">{menu.items.length}</p>
+                </div>
+                <div className="ui-stat-card">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">Locked</p>
+                  <p className="mt-1 text-lg font-extrabold text-text-primary">{lockedCount}</p>
+                </div>
+                <div className="ui-stat-card">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">Missing</p>
+                  <p className="mt-1 text-lg font-extrabold text-text-primary">{missingCount}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-1.5 text-sm">
                 {nutritionInsights.gaps.map((gap) => (
-                  <p key={gap} className="text-amber-300">・{gap}</p>
+                  <p key={gap} className="text-warning">・{gap}</p>
                 ))}
                 {nutritionInsights.highlights.map((highlight) => (
-                  <p key={highlight} className="text-emerald-300">・{highlight}</p>
+                  <p key={highlight} className="text-accent-fresh">・{highlight}</p>
                 ))}
                 {lowConfidenceNutritionCount > 0 && (
-                  <p className="text-amber-300">
+                  <p className="text-warning">
                     ・推定精度注意: {lowConfidenceNutritionCount} 品は栄養推定の信頼度が低めです
                   </p>
                 )}
                 {fallbackNutritionCount > 0 && (
-                  <p className="text-amber-300">
+                  <p className="text-warning">
                     ・補完推定: {fallbackNutritionCount} 品でエネルギー基準の補完計算を使用
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="rounded-xl bg-white/5 px-3 py-2 text-xs text-text-secondary">
+            <div className="ui-inline-note">
               <p className="font-semibold text-text-primary">推薦理由（簡易）</p>
               <ul className="mt-1 space-y-0.5">
                 {recommendationReasons.map((reason) => (
@@ -706,154 +557,102 @@ export function WeeklyMenuPage() {
               </ul>
             </div>
 
-            {/* Daily menu cards */}
-            <div className="space-y-3">
-              {menu.items.map((item, i) => {
-                const mainRecipe = recipes.get(item.recipeId)
-                const sideRecipe = item.sideRecipeId != null ? recipes.get(item.sideRecipeId) : undefined
-                const date = parse(item.date, 'yyyy-MM-dd', new Date())
-                const isToday = format(new Date(), 'yyyy-MM-dd') === item.date
-                const mainMatchRate = mainRecipe ? calculateMatchRate(mainRecipe.ingredients, stockNames) : undefined
-                const sideMatchRate = sideRecipe ? calculateMatchRate(sideRecipe.ingredients, stockNames) : undefined
-                const cookStart = getCookingStartTime(mainRecipe)
-                const mainServings = mainRecipe ? (item.mainServings ?? mainRecipe.baseServings) : 0
-                const sideServings = sideRecipe ? (item.sideServings ?? sideRecipe.baseServings) : 0
-
-                return (
-                  <div
-                    key={item.date}
-                    data-testid="weekly-day-card"
-                    className={`rounded-2xl bg-bg-card p-4 ${isToday ? 'ring-1 ring-accent/40' : ''}`}
-                  >
-                    {/* Day header */}
-                    <div className="mb-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-base font-bold ${isToday ? 'text-accent' : 'text-text-primary'}`}>
-                          {format(date, 'M/d (E)', { locale: ja })}
-                        </span>
-                        {isToday && (
-                          <span className="rounded-md bg-accent/20 px-2 py-0.5 text-xs font-bold text-accent">
-                            今日
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleLock(i)}
-                        className="rounded-lg p-1.5 text-text-secondary transition-colors hover:text-accent"
-                      >
-                        {item.locked
-                          ? <Lock className="h-4 w-4 text-accent" />
-                          : <Unlock className="h-4 w-4" />}
-                      </button>
-                    </div>
-
-                    {/* Time info row — tap to open Gantt modal */}
-                    <button
-                      type="button"
-                      onClick={() => setGanttDayIndex(i)}
-                      className="mb-3 flex w-full items-center justify-between rounded-xl bg-white/5 px-3.5 py-2.5 text-left transition-colors hover:bg-white/10"
-                    >
-                      <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
-                        {cookStart && (
-                          <span className="inline-flex items-center gap-1.5">
-                            <Clock3 className="h-5 w-5 shrink-0 text-text-secondary" />
-                            調理開始 <span className="font-bold text-text-primary">{format(cookStart, 'HH:mm')}</span>
-                          </span>
-                        )}
-                        <span className="inline-flex items-center gap-1.5">
-                          <UtensilsCrossed className="h-5 w-5 shrink-0 text-accent" />
-                          いただきます <span className="font-bold text-accent">{format(desiredMealTime, 'HH:mm')}</span>
-                        </span>
-                      </div>
-                      <CalendarClock className="h-5 w-5 shrink-0 text-text-secondary" />
-                    </button>
-
-                    {/* 2-tile grid: main | side */}
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Main dish */}
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
-                          <span>分量</span>
-                          {mainRecipe && (
-                            <ServingsStepper
-                              value={mainServings}
-                              ariaLabel="主菜の人数"
-                              onChange={(next) => handleAdjustServings(i, 'main', next - mainServings)}
-                            />
-                          )}
-                        </div>
-                        {mainRecipe ? (
-                          <RecipeCard
-                            recipe={mainRecipe}
-                            matchRate={mainMatchRate}
-                            onClick={() => navigate(`/recipe/${mainRecipe.id}`)}
-                            variant="menu"
-                          />
-                        ) : (
-                          <div className="flex h-24 items-center justify-center rounded-xl bg-white/5 text-xs text-text-secondary">
-                            レシピなし
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Side dish */}
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-text-secondary">
-                          <span>分量</span>
-                          {sideRecipe && (
-                            <ServingsStepper
-                              value={sideServings}
-                              ariaLabel="副菜・スープの人数"
-                              onChange={(next) => handleAdjustServings(i, 'side', next - sideServings)}
-                            />
-                          )}
-                        </div>
-                        {sideRecipe ? (
-                          <RecipeCard
-                            recipe={sideRecipe}
-                            matchRate={sideMatchRate}
-                            onClick={() => navigate(`/recipe/${sideRecipe.id}`)}
-                            variant="menu"
-                          />
-                        ) : (
-                          <div className="flex h-24 items-center justify-center rounded-xl bg-white/5 text-xs text-text-secondary">
-                            副菜なし
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Swap buttons */}
-                    {!item.locked && (
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenSwap(i, 'main')}
-                          disabled={swapLoading}
-                          className="rounded-lg bg-white/5 py-2 text-xs font-medium text-text-secondary transition-colors hover:text-accent disabled:opacity-50"
-                        >
-                          {swapLoading ? '読込中...' : '主菜を変更'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenSwap(i, 'side')}
-                          disabled={swapLoading}
-                          className="rounded-lg bg-white/5 py-2 text-xs font-medium text-text-secondary transition-colors hover:text-accent disabled:opacity-50"
-                        >
-                          {swapLoading ? '読込中...' : '副菜を変更'}
-                        </button>
-                      </div>
-                    )}
+            {featuredItem && (
+              <section data-testid="weekly-featured-day" className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="ui-section-kicker">{isFeaturedToday ? 'Today' : 'Featured'}</p>
+                    <h3 className="ui-section-title mt-1">{isFeaturedToday ? '今日の献立' : '週の先頭メニュー'}</h3>
                   </div>
-                )
-              })}
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowShoppingList(true)}
+                    className="ui-btn ui-btn-secondary px-3 text-xs"
+                  >
+                    買い物リスト
+                  </button>
+                </div>
+                <WeeklyDayAccordionCard
+                  item={featuredItem}
+                  index={featuredIndex}
+                  isFeatured
+                  featuredLabel={isFeaturedToday ? '今日' : '注目'}
+                  expanded
+                  onToggleLock={() => handleToggleLock(featuredIndex)}
+                  onOpenSwap={(type) => handleOpenSwap(featuredIndex, type)}
+                  onOpenTimeline={() => setGanttDayIndex(featuredIndex)}
+                  onClickRecipe={(id) => navigate(`/recipe/${id}`)}
+                  onAdjustServings={(type, next) => {
+                    const recipe = type === 'main'
+                      ? recipes.get(featuredItem.recipeId)
+                      : featuredItem.sideRecipeId != null ? recipes.get(featuredItem.sideRecipeId) : undefined
+                    const current = recipe
+                      ? type === 'main'
+                        ? (featuredItem.mainServings ?? recipe.baseServings)
+                        : (featuredItem.sideServings ?? recipe.baseServings)
+                      : 0
+                    handleAdjustServings(featuredIndex, type, next - current)
+                  }}
+                  mainRecipe={recipes.get(featuredItem.recipeId)}
+                  sideRecipe={featuredItem.sideRecipeId != null ? recipes.get(featuredItem.sideRecipeId) : undefined}
+                  stockNames={stockNames}
+                  cookStart={getCookingStartTime(recipes.get(featuredItem.recipeId))}
+                  desiredMealTime={desiredMealTime}
+                  swapLoading={swapLoading}
+                />
+              </section>
+            )}
 
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="ui-section-kicker">Rest Of Week</p>
+                  <h3 className="ui-section-title mt-1">残りの日程</h3>
+                </div>
+                <span className="text-xs text-text-secondary">{restItems.length}日分</span>
+              </div>
+                <div className="space-y-3">
+                {restItems.map((item) => {
+                  const expanded = activeExpandedDate === item.date
+                  const itemIndex = menu.items.findIndex((candidate) => candidate.date === item.date)
+                  return (
+                    <WeeklyDayAccordionCard
+                      key={item.date}
+                      item={item}
+                      index={itemIndex}
+                      isFeatured={false}
+                      featuredLabel=""
+                      expanded={expanded}
+                      onToggleExpanded={() => toggleExpandedDate(item.date)}
+                      onToggleLock={() => handleToggleLock(itemIndex)}
+                      onOpenSwap={(type) => handleOpenSwap(itemIndex, type)}
+                      onOpenTimeline={() => setGanttDayIndex(itemIndex)}
+                      onClickRecipe={(id) => navigate(`/recipe/${id}`)}
+                      onAdjustServings={(type, next) => {
+                        const recipe = type === 'main'
+                          ? recipes.get(item.recipeId)
+                          : item.sideRecipeId != null ? recipes.get(item.sideRecipeId) : undefined
+                        const current = recipe
+                          ? type === 'main'
+                            ? (item.mainServings ?? recipe.baseServings)
+                            : (item.sideServings ?? recipe.baseServings)
+                          : 0
+                        handleAdjustServings(itemIndex, type, next - current)
+                      }}
+                      mainRecipe={recipes.get(item.recipeId)}
+                      sideRecipe={item.sideRecipeId != null ? recipes.get(item.sideRecipeId) : undefined}
+                      stockNames={stockNames}
+                      cookStart={getCookingStartTime(recipes.get(item.recipeId))}
+                      desiredMealTime={desiredMealTime}
+                      swapLoading={swapLoading}
+                    />
+                  )
+                })}
+              </div>
+            </section>
           </>
         )}
 
-        {/* Swap modal */}
         {swapDayIndex !== null && (
           <SwapModal
             swapType={swapType}
@@ -867,7 +666,6 @@ export function WeeklyMenuPage() {
           />
         )}
 
-        {/* Gantt chart day modal */}
         {ganttDayIndex !== null && menu && (
           <GanttDayModal
             item={menu.items[ganttDayIndex]}
@@ -894,58 +692,83 @@ export function WeeklyMenuPage() {
         )}
       </div>
 
-      {/* Bottom action bar — always visible in Weekly tab, above BottomNav */}
-      {!isOverlayOpen && (
-        <div className="fixed left-0 right-0 z-40 border-t border-border bg-bg-primary/90 backdrop-blur-xl" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}>
-          {/* 3 action buttons — always at top of panel */}
-          <div className="grid grid-cols-3 gap-2 px-4 py-2">
+      {!isOverlayOpen && menu && !showShoppingList && (
+        <div
+          className="fixed left-0 right-0 z-40 border-t border-border-soft bg-bg-primary/98 shadow-[0_-18px_32px_rgba(32,24,15,0.14)]"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}
+        >
+          <div className="grid grid-cols-2 gap-2 px-4 py-2">
             <button
               type="button"
               onClick={handleGenerate}
               disabled={generating}
-              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-bg-card py-2.5 text-sm font-semibold transition-colors hover:bg-bg-card-hover disabled:opacity-50"
+              className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5 disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
               再生成
             </button>
             <button
               type="button"
-              onClick={() => setShowShoppingList(prev => !prev)}
-              disabled={!menu}
-              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-bg-card py-2.5 text-sm font-semibold transition-colors hover:bg-bg-card-hover disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setShowShoppingList(true)}
+              className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5"
             >
               <ShoppingCart className="h-4 w-4" />
               買い物リスト
             </button>
             <button
               type="button"
+              onClick={() => setShareOpen(true)}
+              className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5"
+            >
+              <Share2 className="h-4 w-4" />
+              共有
+            </button>
+            <button
+              type="button"
               onClick={handleRegisterCalendar}
-              disabled={!menu || registering}
-              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-accent py-2.5 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={registering}
+              className="ui-btn ui-btn-primary flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Calendar className="h-4 w-4" />
               {registering ? '登録中...' : providerToken ? 'カレンダー登録' : 'ログインして登録'}
             </button>
           </div>
-
-          {/* Shopping list — below the buttons, scrollable */}
-          {showShoppingList && stockItems && menu && (
-            <div
-              data-testid="weekly-shopping-list-panel"
-              className="max-h-[55vh] overflow-y-auto border-t border-border p-4"
-              style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-            >
-              <h4 className="mb-3 text-sm font-bold text-text-secondary">買い物リスト</h4>
-              <EditableShoppingList
-                weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
-                ingredients={aggregateIngredients(selectedRecipes, stockItems)}
-                storageKey={`shopping_checked_${weekStartStr}`}
-                includeSeasonings={includeSeasonings}
-                onToggleIncludeSeasonings={() => setIncludeSeasonings((v) => !v)}
-              />
-            </div>
-          )}
         </div>
+      )}
+
+      {showShoppingList && menu && (
+        <>
+          <div className="ui-bottom-sheet-scrim" onClick={() => setShowShoppingList(false)} />
+          <div
+            data-testid="weekly-shopping-list-panel"
+            className="ui-bottom-sheet"
+            style={{ WebkitOverflowScrolling: 'touch' } as CSSProperties}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="ui-section-kicker">Shopping</p>
+                <h4 className="mt-1 text-lg font-extrabold text-text-primary">買い物リスト</h4>
+                <p className="mt-1 text-sm text-text-secondary">不足材料 {missingCount}件</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShoppingList(false)}
+                className="rounded-xl border border-border-soft bg-bg-card-hover p-2 text-text-secondary transition-colors hover:text-text-primary"
+                aria-label="買い物リストを閉じる"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <EditableShoppingList
+              weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
+              ingredients={shoppingIngredients}
+              storageKey={`shopping_checked_${weekStartStr}`}
+              includeSeasonings={includeSeasonings}
+              onToggleIncludeSeasonings={() => setIncludeSeasonings((value) => !value)}
+            />
+          </div>
+        </>
       )}
     </div>
   )

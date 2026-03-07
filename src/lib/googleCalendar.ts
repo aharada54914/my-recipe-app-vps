@@ -4,6 +4,12 @@
  * Requires a Google OAuth access token.
  */
 
+import {
+  isQaGoogleToken,
+  readQaGoogleCalendarEvents,
+  writeQaGoogleCalendarEvents,
+} from './qaGoogleMode'
+
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3'
 
 // --- Types ---
@@ -38,6 +44,10 @@ export interface CalendarEvent {
   start: { dateTime?: string; date?: string }
   end: { dateTime?: string; date?: string }
   description?: string
+}
+
+interface QaCalendarEventRecord extends CalendarEvent {
+  calendarId: string
 }
 
 export class GoogleCalendarError extends Error {
@@ -76,12 +86,50 @@ async function gcalFetch<T>(
   return res.json() as Promise<T>
 }
 
+function getQaCalendars(): CalendarListEntry[] {
+  return [
+    {
+      id: 'primary',
+      summary: 'QA メインカレンダー',
+      primary: true,
+      backgroundColor: '#D97706',
+      accessRole: 'owner',
+    },
+    {
+      id: 'family',
+      summary: 'QA 家族カレンダー',
+      backgroundColor: '#5E8D62',
+      accessRole: 'writer',
+    },
+  ]
+}
+
+function readQaEvents(): QaCalendarEventRecord[] {
+  const raw = readQaGoogleCalendarEvents()
+  if (!raw) return []
+
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed as QaCalendarEventRecord[] : []
+  } catch {
+    return []
+  }
+}
+
+function writeQaEvents(events: QaCalendarEventRecord[]): void {
+  writeQaGoogleCalendarEvents(JSON.stringify(events))
+}
+
 // --- API Functions ---
 
 /**
  * List calendars the user has access to.
  */
 export async function listCalendars(token: string): Promise<CalendarListEntry[]> {
+  if (isQaGoogleToken(token)) {
+    return getQaCalendars()
+  }
+
   const data = await gcalFetch<{ items?: CalendarListEntry[] }>(
     token,
     '/users/me/calendarList',
@@ -98,6 +146,21 @@ export async function createCalendarEvent(
   event: CalendarEventInput,
   options?: { supportsAttachments?: boolean },
 ): Promise<CalendarEvent> {
+  if (isQaGoogleToken(token)) {
+    const created: QaCalendarEventRecord = {
+      id: `qa-calendar-event-${Date.now()}`,
+      calendarId,
+      summary: event.summary,
+      description: event.description,
+      start: { dateTime: event.start.dateTime },
+      end: { dateTime: event.end.dateTime },
+    }
+    const events = readQaEvents()
+    events.push(created)
+    writeQaEvents(events)
+    return created
+  }
+
   const params = options?.supportsAttachments ? '?supportsAttachments=true' : ''
   return gcalFetch<CalendarEvent>(
     token,
@@ -117,6 +180,12 @@ export async function deleteCalendarEvent(
   calendarId: string,
   eventId: string,
 ): Promise<void> {
+  if (isQaGoogleToken(token)) {
+    const events = readQaEvents().filter((event) => !(event.calendarId === calendarId && event.id === eventId))
+    writeQaEvents(events)
+    return
+  }
+
   await gcalFetch<void>(
     token,
     `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
@@ -133,6 +202,21 @@ export async function listEvents(
   timeMin: Date,
   timeMax: Date,
 ): Promise<CalendarEvent[]> {
+  if (isQaGoogleToken(token)) {
+    return readQaEvents()
+      .filter((event) => event.calendarId === calendarId)
+      .filter((event) => {
+        const start = event.start.dateTime ? new Date(event.start.dateTime) : null
+        if (!start) return false
+        return start >= timeMin && start <= timeMax
+      })
+      .sort((left, right) => {
+        const leftTs = left.start.dateTime ? new Date(left.start.dateTime).getTime() : 0
+        const rightTs = right.start.dateTime ? new Date(right.start.dateTime).getTime() : 0
+        return leftTs - rightTs
+      })
+  }
+
   const params = new URLSearchParams({
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),

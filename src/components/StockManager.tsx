@@ -1,13 +1,19 @@
-import { useState, useMemo, useRef } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronDown, Search, Trash2 } from 'lucide-react'
-import { db } from '../db/db'
+import { ChevronDown, Minus, Plus, Search, Trash2 } from 'lucide-react'
 import { useSearchInputController } from '../hooks/useSearchInputController'
 import { expandSynonyms } from '../data/synonyms'
 import { STOCK_MASTER } from '../data/stockMaster'
 import { SEASONING_MASTER, SEASONING_PRESETS } from '../data/seasoningPresets'
+import {
+  deleteStockItem,
+  getAllStockItems,
+  upsertStockBatch,
+  upsertStockItem,
+} from '../repositories/stockRepository'
 
-// Build the ingredient list from STOCK_MASTER, sorted 50音順
+const RECENT_STOCK_KEY = 'recent_stock_items_v1'
+
 const INGREDIENT_INDEX = Array.from(
   new Map(
     [...STOCK_MASTER, ...SEASONING_MASTER].map((item) => [item.name, { name: item.name, defaultUnit: item.unit }])
@@ -16,129 +22,204 @@ const INGREDIENT_INDEX = Array.from(
   .map((item) => ({ name: item.name, defaultUnit: item.defaultUnit }))
   .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
 
+function loadRecentStockNames(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_STOCK_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === 'string').slice(0, 8)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function persistRecentStockNames(names: string[]): void {
+  localStorage.setItem(RECENT_STOCK_KEY, JSON.stringify(names.slice(0, 8)))
+}
+
+function formatQuantity(quantity?: number): string {
+  return typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''
+}
+
 function StockRow({
   name,
   unit,
   quantity,
   onCommitQuantity,
+  onStep,
   onDelete,
-  allowZeroCommit = true,
 }: {
   name: string
   unit: string
-  quantity?: number
+  quantity: number
   onCommitQuantity: (quantity: number) => void
-  onDelete?: () => void
-  allowZeroCommit?: boolean
+  onStep: (delta: number) => void
+  onDelete: () => void
 }) {
-  const currentQuantityText = typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''
-  const [draft, setDraft] = useState(currentQuantityText)
+  const [draft, setDraft] = useState(formatQuantity(quantity))
   const [isEditing, setIsEditing] = useState(false)
-  const [offsetX, setOffsetX] = useState(0)
-  const dragStartX = useRef(0)
-  const isDragging = useRef(false)
-  const deleteWidth = 84
-  const inputValue = isEditing ? draft : currentQuantityText
+  const inputValue = isEditing ? draft : formatQuantity(quantity)
 
   const commit = () => {
     const normalized = draft.trim()
     if (!normalized) {
-      if (allowZeroCommit) {
-        onCommitQuantity(0)
-      } else {
-        setDraft(currentQuantityText)
-      }
+      setDraft(formatQuantity(quantity))
       return
     }
 
     const parsed = Number(normalized)
-    if (!Number.isFinite(parsed)) {
-      setDraft(currentQuantityText)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setDraft(formatQuantity(quantity))
       return
     }
-    if (!allowZeroCommit && parsed <= 0) {
-      setDraft(currentQuantityText)
-      return
-    }
-    onCommitQuantity(parsed >= 0 ? parsed : 0)
-  }
 
-  const clampOffset = (value: number) => Math.max(-deleteWidth, Math.min(0, value))
-
-  const handleDragStart = (clientX: number) => {
-    if (!onDelete) return
-    isDragging.current = true
-    dragStartX.current = clientX - offsetX
-  }
-
-  const handleDragMove = (clientX: number) => {
-    if (!onDelete || !isDragging.current) return
-    setOffsetX(clampOffset(clientX - dragStartX.current))
-  }
-
-  const handleDragEnd = () => {
-    if (!onDelete || !isDragging.current) return
-    isDragging.current = false
-    setOffsetX((prev) => (prev < -deleteWidth / 2 ? -deleteWidth : 0))
+    onCommitQuantity(Math.round(parsed))
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl" data-testid="stock-row" data-stock-name={name}>
-      {onDelete && (
-        <div className="absolute inset-y-0 right-0 flex w-[84px] items-center justify-center rounded-r-xl bg-red-500/80">
+    <div
+      className="ui-panel-muted px-3 py-3"
+      data-testid="stock-row"
+      data-stock-name={name}
+    >
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-text-primary">{name}</p>
+          <p className="mt-1 text-xs text-text-secondary">{unit}単位で管理</p>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onStep(-1)}
+            disabled={quantity <= 1}
+            className="ui-btn ui-btn-secondary flex min-w-[44px] items-center justify-center px-0 disabled:opacity-35"
+            aria-label={`${name}を1減らす`}
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+
+          <div className="flex items-center gap-2 rounded-xl border border-border-soft bg-bg-primary/40 px-2 py-1">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={inputValue}
+              onChange={(e) => {
+                const next = e.target.value
+                if (next === '' || /^\d+$/.test(next)) {
+                  setDraft(next)
+                }
+              }}
+              onFocus={() => {
+                setDraft(formatQuantity(quantity))
+                setIsEditing(true)
+              }}
+              onBlur={() => {
+                setIsEditing(false)
+                commit()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur()
+                }
+              }}
+              placeholder="1"
+              className="w-14 bg-transparent text-center text-base font-bold text-text-primary outline-none"
+            />
+            <span className="w-8 text-xs text-text-secondary">{unit}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onStep(1)}
+            className="ui-btn ui-btn-primary flex min-w-[44px] items-center justify-center px-0"
+            aria-label={`${name}を1増やす`}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+
           <button
             type="button"
             onClick={onDelete}
-            className="flex h-full w-full items-center justify-center gap-1 text-sm font-semibold text-white"
+            className="ui-btn flex min-w-[44px] items-center justify-center bg-[color:color-mix(in_srgb,var(--accent-error)_14%,transparent)] px-0 text-error"
             aria-label={`${name}を削除`}
           >
             <Trash2 className="h-4 w-4" />
-            削除
           </button>
         </div>
-      )}
-      <div
-        className="relative z-10 flex min-h-[52px] touch-pan-y items-center gap-2 rounded-xl bg-bg-card px-4 py-3 ring-1 ring-white/10 transition-transform"
-        style={{ transform: `translateX(${offsetX}px)` }}
-        onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
-        onTouchMove={(e) => handleDragMove(e.touches[0].clientX)}
-        onTouchEnd={handleDragEnd}
-        onMouseDown={(e) => handleDragStart(e.clientX)}
-        onMouseMove={(e) => handleDragMove(e.clientX)}
-        onMouseUp={handleDragEnd}
-        onMouseLeave={handleDragEnd}
-      >
-        <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
-          {name}
-        </span>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={inputValue}
-          onChange={(e) => {
-            const next = e.target.value
-            if (next === '' || /^\d*\.?\d*$/.test(next)) {
-              setDraft(next)
-            }
-          }}
-          onFocus={() => {
-            setDraft(currentQuantityText)
-            setIsEditing(true)
-            setOffsetX(0)
-          }}
-          onBlur={() => {
-            setIsEditing(false)
-            commit()
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.currentTarget.blur()
-            }
-          }}
-          placeholder="0"
-          className="w-16 rounded-lg bg-white/5 px-2 py-2 text-sm text-text-primary text-right outline-none"
-        />
-        <span className="w-10 text-sm font-medium text-text-secondary">{unit}</span>
+      </div>
+    </div>
+  )
+}
+
+function CandidateRow({
+  name,
+  unit,
+  onCommitQuantity,
+}: {
+  name: string
+  unit: string
+  onCommitQuantity: (quantity: number) => void
+}) {
+  const [draft, setDraft] = useState('1')
+
+  const commit = () => {
+    const parsed = Number(draft.trim())
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setDraft('1')
+      return
+    }
+    onCommitQuantity(Math.round(parsed))
+  }
+
+  return (
+    <div
+      className="ui-panel-muted flex items-center gap-3 px-3 py-3"
+      data-testid="stock-row"
+      data-stock-name={name}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-text-primary">{name}</p>
+        <p className="mt-1 text-xs text-text-secondary">{unit}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-xl border border-border-soft bg-bg-primary/40 px-2 py-1">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={draft}
+            onChange={(e) => {
+              const next = e.target.value
+              if (next === '' || /^\d+$/.test(next)) {
+                setDraft(next)
+              }
+            }}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur()
+              }
+            }}
+            className="w-12 bg-transparent text-center text-base font-bold text-text-primary outline-none"
+          />
+          <span className="w-8 text-xs text-text-secondary">{unit}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onCommitQuantity(1)}
+          className="ui-btn ui-btn-secondary flex min-w-[44px] items-center justify-center px-3"
+        >
+          +1
+        </button>
+        <button
+          type="button"
+          onClick={() => onCommitQuantity(3)}
+          className="ui-btn ui-btn-primary flex min-w-[44px] items-center justify-center px-3"
+        >
+          +3
+        </button>
       </div>
     </div>
   )
@@ -153,20 +234,20 @@ function CollapsibleCard({
   title: string
   description?: string
   defaultOpen?: boolean
-  children: React.ReactNode
+  children: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div className="rounded-2xl bg-bg-card p-4 ring-1 ring-white/10">
+    <div className="ui-panel">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-3 text-left"
+        className="flex min-h-[44px] w-full items-center justify-between gap-3 text-left"
       >
         <div>
           <h3 className="text-sm font-bold text-text-primary">{title}</h3>
-          {description && <p className="mt-1 text-xs text-text-secondary">{description}</p>}
+          {description && <p className="mt-1 text-xs leading-relaxed text-text-secondary">{description}</p>}
         </div>
         <ChevronDown
           className={`h-4 w-4 shrink-0 text-text-secondary transition-transform ${open ? 'rotate-180' : ''}`}
@@ -179,6 +260,7 @@ function CollapsibleCard({
 
 export function StockManager() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [recentStockNames, setRecentStockNames] = useState<string[]>(() => loadRecentStockNames())
   const {
     draftValue,
     setDraftValue,
@@ -190,81 +272,74 @@ export function StockManager() {
     delay: 300,
   })
 
-  const stockItems = useLiveQuery(() => db.stock.toArray())
+  const stockItems = useLiveQuery(() => getAllStockItems(), [])
 
-  const handleUpdateQuantity = async (name: string, unit: string, quantity: number) => {
-    const existing = await db.stock.where('name').equals(name).first()
-    if (existing) {
-      await db.stock.update(existing.id!, { quantity, unit, inStock: quantity > 0 })
-    } else {
-      await db.stock.add({ name, quantity, unit, inStock: quantity > 0 })
-    }
-  }
-
-  const handleRegisterSeasoningPreset = async (items: Array<{ name: string; unit: string }>) => {
-    const uniqueItems = Array.from(new Map(items.map((item) => [item.name, item])).values())
-
-    await db.transaction('rw', db.stock, async () => {
-      for (const item of uniqueItems) {
-        const existing = await db.stock.where('name').equals(item.name).first()
-        if (existing) {
-          const currentQty = typeof existing.quantity === 'number' ? existing.quantity : 0
-          await db.stock.update(existing.id!, {
-            unit: existing.unit || item.unit,
-            quantity: currentQty > 0 ? currentQty : 1,
-            inStock: true,
-          })
-        } else {
-          await db.stock.add({
-            name: item.name,
-            unit: item.unit,
-            quantity: 1,
-            inStock: true,
-          })
-        }
-      }
+  const rememberRecent = (name: string) => {
+    setRecentStockNames((prev) => {
+      const next = [name, ...prev.filter((entry) => entry !== name)].slice(0, 8)
+      persistRecentStockNames(next)
+      return next
     })
   }
 
-  const handleDeleteStock = async (name: string) => {
-    const existing = await db.stock.where('name').equals(name).first()
-    if (existing?.id != null) {
-      await db.stock.delete(existing.id)
-    }
-  }
+  const ingredientLookup = useMemo(
+    () => new Map(INGREDIENT_INDEX.map((item) => [item.name, item])),
+    []
+  )
 
-  // Build a map of current stock quantities
   const stockMap = useMemo(
-    () => new Map((stockItems ?? []).map((s) => [s.name, s])),
+    () => new Map((stockItems ?? []).map((item) => [item.name, item])),
     [stockItems]
   )
 
-  // Items with quantity > 0, sorted 50音順
+  const handleUpdateQuantity = async (name: string, unit: string, quantity: number) => {
+    await upsertStockItem(name, unit, quantity)
+    rememberRecent(name)
+  }
+
+  const handleQuickAdd = async (name: string, unit: string, quantity: number) => {
+    const current = stockMap.get(name)?.quantity ?? 0
+    const nextQuantity = current > 0 ? current + quantity : quantity
+    await upsertStockItem(name, unit, nextQuantity)
+    rememberRecent(name)
+  }
+
+  const handleRegisterSeasoningPreset = async (items: Array<{ name: string; unit: string }>) => {
+    await upsertStockBatch(items.map((item) => ({ ...item, quantity: 1 })))
+    setRecentStockNames((prev) => {
+      const next = Array.from(new Set([...items.map((item) => item.name), ...prev])).slice(0, 8)
+      persistRecentStockNames(next)
+      return next
+    })
+  }
+
+  const handleDelete = async (name: string) => {
+    await deleteStockItem(name)
+    rememberRecent(name)
+  }
+
   const inStockItems = useMemo(
     () =>
-      INGREDIENT_INDEX.filter((ing) => {
-        const s = stockMap.get(ing.name)
-        return s && s.quantity && s.quantity > 0
-      }).map((ing) => ({
-        ...ing,
-        quantity: stockMap.get(ing.name)!.quantity!,
+      INGREDIENT_INDEX.filter((ingredient) => {
+        const item = stockMap.get(ingredient.name)
+        return !!item && typeof item.quantity === 'number' && item.quantity > 0
+      }).map((ingredient) => ({
+        ...ingredient,
+        quantity: stockMap.get(ingredient.name)?.quantity ?? 0,
+        unit: stockMap.get(ingredient.name)?.unit || ingredient.defaultUnit,
       })),
     [stockMap]
   )
 
-  // Search results: filter by debounced query, exclude already-stocked items
-  const inStockNames = useMemo(() => new Set(inStockItems.map((i) => i.name)), [inStockItems])
+  const inStockNames = useMemo(() => new Set(inStockItems.map((item) => item.name)), [inStockItems])
 
   const presetAvailability = useMemo(
     () =>
       SEASONING_PRESETS.map((preset) => ({
         ...preset,
-        addableCount: preset.items.filter((item) => {
-          const existing = stockMap.get(item.name)
-          return !existing || !existing.quantity || existing.quantity <= 0
-        }).length,
+        addableCount: preset.items.filter((item) => !inStockNames.has(item.name)).length,
       })),
-    [stockMap]
+    [inStockNames]
   )
 
   const basicSeasoningPreset = useMemo(
@@ -279,46 +354,67 @@ export function StockManager() {
 
   const inStockBasicSeasonings = useMemo(
     () => inStockItems.filter((item) => basicSeasoningNames.has(item.name)),
-    [inStockItems, basicSeasoningNames]
+    [basicSeasoningNames, inStockItems]
   )
 
   const inStockOtherItems = useMemo(
     () => inStockItems.filter((item) => !basicSeasoningNames.has(item.name)),
-    [inStockItems, basicSeasoningNames]
+    [basicSeasoningNames, inStockItems]
   )
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return []
     const synonyms = expandSynonyms(searchQuery.trim())
-    return INGREDIENT_INDEX.filter((ing) => {
-      if (inStockNames.has(ing.name)) return false
-      const nameLower = ing.name.toLowerCase()
-      return synonyms.some(
-        (syn) =>
-          nameLower.includes(syn.toLowerCase()) ||
-          syn.toLowerCase().includes(nameLower)
-      )
-    })
-  }, [searchQuery, inStockNames])
+    return INGREDIENT_INDEX.filter((item) => {
+      if (inStockNames.has(item.name)) return false
+      const normalizedName = item.name.toLowerCase()
+      return synonyms.some((synonym) => {
+        const normalizedSynonym = synonym.toLowerCase()
+        return normalizedName.includes(normalizedSynonym) || normalizedSynonym.includes(normalizedName)
+      })
+    }).slice(0, 20)
+  }, [inStockNames, searchQuery])
+
+  const recentCandidates = useMemo(
+    () =>
+      recentStockNames
+        .map((name) => {
+          const item = ingredientLookup.get(name)
+          if (item) return item
+          const stockItem = stockMap.get(name)
+          return stockItem
+            ? { name, defaultUnit: stockItem.unit || '個' }
+            : null
+        })
+        .filter((item): item is { name: string; defaultUnit: string } => !!item)
+        .filter((item) => !inStockNames.has(item.name))
+        .slice(0, 6),
+    [ingredientLookup, inStockNames, recentStockNames, stockMap]
+  )
 
   if (!stockItems) return null
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-extrabold">在庫管理</h2>
+      <div className="mb-4">
+        <h2 className="text-xl font-extrabold text-text-primary">在庫管理</h2>
+        <p className="mt-1 text-sm leading-relaxed text-text-secondary">
+          候補から追加して、+1 / -1 と直接入力で素早く更新できます。
+        </p>
+      </div>
 
       <div className="mb-4">
         <CollapsibleCard
           title="調味料をまとめて登録"
-          description="日本の家庭で使う定番調味料を、在庫あり・数量1（本/袋/個）で一括登録できます。"
+          description="初回セットアップ用。定番調味料を在庫あり・数量1で一括登録します。"
         >
           <div className="grid gap-2">
             {presetAvailability.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
-                onClick={() => handleRegisterSeasoningPreset(preset.items)}
-                className="rounded-xl bg-white/5 px-3 py-3 text-left ring-1 ring-white/10 transition hover:bg-white/10"
+                onClick={() => void handleRegisterSeasoningPreset(preset.items)}
+                className="ui-panel-muted px-3 py-3 text-left transition-colors hover:bg-bg-card"
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold text-text-primary">{preset.label}</span>
@@ -326,16 +422,15 @@ export function StockManager() {
                     追加候補 {preset.addableCount}/{preset.items.length}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-text-secondary">{preset.description}</p>
+                <p className="mt-1 text-xs leading-relaxed text-text-secondary">{preset.description}</p>
               </button>
             ))}
           </div>
         </CollapsibleCard>
       </div>
 
-      {/* Search bar */}
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
         <input
           type="text"
           value={draftValue}
@@ -343,11 +438,31 @@ export function StockManager() {
           onCompositionStart={handleCompositionStart}
           onCompositionEnd={(e) => handleCompositionEnd(e.currentTarget.value)}
           placeholder="食材・調味料を検索..."
-          className="w-full rounded-xl bg-bg-card py-3 pl-10 pr-4 text-base text-text-primary placeholder:text-text-secondary outline-none ring-1 ring-white/10"
+          className="ui-input rounded-2xl py-3 pl-10 pr-4"
         />
       </div>
 
-      {/* In-stock section */}
+      {recentCandidates.length > 0 && !searchQuery.trim() && (
+        <div className="mb-6 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-text-secondary">最近使った食材から追加</h3>
+            <span className="text-xs text-text-secondary">最大6件</span>
+          </div>
+          <div className="space-y-2">
+            {recentCandidates.map((item) => (
+              <CandidateRow
+                key={item.name}
+                name={item.name}
+                unit={item.defaultUnit}
+                onCommitQuantity={(quantity) => {
+                  void handleQuickAdd(item.name, item.defaultUnit, quantity)
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {inStockItems.length > 0 && (
         <div className="mb-6 space-y-3" data-testid="stock-inventory">
           <h3 className="text-sm font-bold text-text-secondary">在庫あり ({inStockItems.length})</h3>
@@ -355,7 +470,7 @@ export function StockManager() {
           {inStockBasicSeasonings.length > 0 && (
             <CollapsibleCard
               title="基本的な調味料"
-              description={`在庫登録済み ${inStockBasicSeasonings.length} 品（初期状態は折りたたみ）`}
+              description={`登録済み ${inStockBasicSeasonings.length} 品。必要なときだけ開いて調整できます。`}
               defaultOpen={false}
             >
               <div className="space-y-2">
@@ -363,11 +478,17 @@ export function StockManager() {
                   <StockRow
                     key={item.name}
                     name={item.name}
-                    unit={item.defaultUnit}
+                    unit={item.unit}
                     quantity={item.quantity}
-                    onDelete={() => handleDeleteStock(item.name)}
-                    allowZeroCommit={false}
-                    onCommitQuantity={(q) => handleUpdateQuantity(item.name, item.defaultUnit, q)}
+                    onCommitQuantity={(quantity) => {
+                      void handleUpdateQuantity(item.name, item.unit, quantity)
+                    }}
+                    onStep={(delta) => {
+                      void handleUpdateQuantity(item.name, item.unit, Math.max(1, item.quantity + delta))
+                    }}
+                    onDelete={() => {
+                      void handleDelete(item.name)
+                    }}
                   />
                 ))}
               </div>
@@ -380,11 +501,17 @@ export function StockManager() {
                 <StockRow
                   key={item.name}
                   name={item.name}
-                  unit={item.defaultUnit}
+                  unit={item.unit}
                   quantity={item.quantity}
-                  onDelete={() => handleDeleteStock(item.name)}
-                  allowZeroCommit={false}
-                  onCommitQuantity={(q) => handleUpdateQuantity(item.name, item.defaultUnit, q)}
+                  onCommitQuantity={(quantity) => {
+                    void handleUpdateQuantity(item.name, item.unit, quantity)
+                  }}
+                  onStep={(delta) => {
+                    void handleUpdateQuantity(item.name, item.unit, Math.max(1, item.quantity + delta))
+                  }}
+                  onDelete={() => {
+                    void handleDelete(item.name)
+                  }}
                 />
               ))}
             </div>
@@ -392,35 +519,33 @@ export function StockManager() {
         </div>
       )}
 
-      {/* Search results section */}
       {searchResults.length > 0 && (
         <div data-testid="stock-search-results">
-          <h3 className="mb-2 text-sm font-bold text-text-secondary">検索結果 ({searchResults.length})</h3>
+          <h3 className="mb-2 text-sm font-bold text-text-secondary">候補から追加 ({searchResults.length})</h3>
           <div className="space-y-2">
-            {searchResults.map((ing) => (
-              <StockRow
-                key={ing.name}
-                name={ing.name}
-                unit={ing.defaultUnit}
-                quantity={0}
-                onCommitQuantity={(q) => handleUpdateQuantity(ing.name, ing.defaultUnit, q)}
+            {searchResults.map((item) => (
+              <CandidateRow
+                key={item.name}
+                name={item.name}
+                unit={item.defaultUnit}
+                onCommitQuantity={(quantity) => {
+                  void handleQuickAdd(item.name, item.defaultUnit, quantity)
+                }}
               />
             ))}
           </div>
         </div>
       )}
 
-      {/* Empty state */}
-      {inStockItems.length === 0 && !searchQuery.trim() && (
-        <p className="py-12 text-center text-sm text-text-secondary">
-          食材や調味料を検索して在庫を登録しましょう
+      {inStockItems.length === 0 && recentCandidates.length === 0 && !searchQuery.trim() && (
+        <p className="py-12 text-center text-sm leading-relaxed text-text-secondary">
+          まずは検索から食材を追加するか、調味料セットを登録してください。
         </p>
       )}
 
-      {/* No search results */}
-      {searchQuery.trim() && searchResults.length === 0 && inStockItems.length === 0 && (
-        <p className="py-8 text-center text-sm text-text-secondary">
-          「{searchQuery}」に一致する食材・調味料が見つかりません
+      {searchQuery.trim() && searchResults.length === 0 && (
+        <p className="py-8 text-center text-sm leading-relaxed text-text-secondary">
+          「{searchQuery}」に一致する候補が見つかりません。別の表記でも試してください。
         </p>
       )}
     </div>

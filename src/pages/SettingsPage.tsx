@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Settings, User, Calendar, UtensilsCrossed, Bell, Database, BookOpen, Info, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Settings, User, Calendar, UtensilsCrossed, Bell, Database, BookOpen, Info, ChevronRight, Palette } from 'lucide-react'
 import { CalendarSettings } from '../components/CalendarSettings'
 import { NotificationSettings } from '../components/NotificationSettings'
 import { BottomNav } from '../components/BottomNav'
 import { AccountTab } from '../components/settings/AccountTab'
+import { AppearanceTab } from '../components/settings/AppearanceTab'
 import { MenuTab } from '../components/settings/MenuTab'
 import { DataTab } from '../components/settings/DataTab'
 import { GuideTab } from '../components/settings/GuideTab'
@@ -14,10 +15,11 @@ interface SettingsPageProps {
   onBack: () => void
 }
 
-type TabId = 'account' | 'calendar' | 'menu' | 'notify' | 'data' | 'guide' | 'version'
+type TabId = 'account' | 'appearance' | 'calendar' | 'menu' | 'notify' | 'data' | 'guide' | 'version'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'account', label: 'アカウント', icon: <User className="h-4 w-4" /> },
+  { id: 'appearance', label: '表示', icon: <Palette className="h-4 w-4" /> },
   { id: 'calendar', label: 'カレンダー', icon: <Calendar className="h-4 w-4" /> },
   { id: 'menu', label: '献立', icon: <UtensilsCrossed className="h-4 w-4" /> },
   { id: 'notify', label: '通知', icon: <Bell className="h-4 w-4" /> },
@@ -53,7 +55,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
 
   return (
     <div className="min-h-dvh bg-bg-primary">
-      <header className="sticky top-0 z-50 bg-bg-primary/95 backdrop-blur-md pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]">
+      <header className="sticky top-0 z-50 border-b border-border-soft bg-bg-primary/98 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]">
         <div className="flex items-center gap-3 px-4 pb-4">
           <button
             onClick={handleHeaderBack}
@@ -68,7 +70,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         </div>
       </header>
 
-      <main className="space-y-4 px-4 py-4 pb-28">
+      <main className="space-y-4 px-4 py-4 pb-[calc(env(safe-area-inset-bottom,0px)+6.75rem)]">
         {/* タブ一覧メニュー */}
         {!isTabDetail && (
           <div className="rounded-2xl bg-bg-card p-4">
@@ -77,8 +79,9 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
+                  type="button"
                   onClick={() => navigate(`/settings/${tab.id}`)}
-                  className="flex min-h-[48px] w-full items-center justify-between rounded-xl bg-white/5 px-3 py-3 text-left text-base font-semibold text-text-primary transition-colors hover:bg-white/10"
+                  className="flex min-h-[52px] w-full items-center justify-between rounded-2xl border border-border-soft bg-bg-card px-3 py-3 text-left text-base font-semibold text-text-primary transition-colors hover:bg-bg-card-hover"
                 >
                   <span className="flex items-center gap-3">
                     {tab.icon}
@@ -92,6 +95,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         )}
 
         {activeTab === 'account'  && <AccountTab />}
+        {activeTab === 'appearance' && <AppearanceTab />}
         {activeTab === 'calendar' && <CalendarSettings />}
         {activeTab === 'menu'     && <MenuTab />}
         {activeTab === 'notify'   && <NotificationSettings />}
