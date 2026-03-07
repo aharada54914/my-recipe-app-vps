@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import { parse, format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { CalendarClock, X } from 'lucide-react'
 import type { Recipe, RecipeSchedule, ScheduleEntry } from '../../db/db'
 import type { DeviceConflict, MultiRecipeSchedule } from '../../utils/recipeUtils'
 import { calculateMultiRecipeSchedule } from '../../utils/recipeUtils'
+import { BottomSheetPortal } from '../ui/BottomSheetPortal'
 
 const LANE_COLORS = [
     { bg: 'rgba(249,115,22,0.25)', border: '#F97316', text: '#F97316' },
@@ -44,15 +44,12 @@ export function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, o
 
     const date = parse(item.date, 'yyyy-MM-dd', new Date())
 
-    return createPortal(
-        <div
-            className="fixed inset-0 z-[140] flex items-end justify-center bg-black/60"
-            onClick={onClose}
+    return (
+        <BottomSheetPortal
+            onClose={onClose}
+            testId="weekly-gantt-modal"
+            panelClassName="max-w-2xl p-4 pb-8"
         >
-            <div
-                className="flex max-h-[88dvh] w-full max-w-lg flex-col rounded-t-2xl bg-bg-primary p-4 pb-8"
-                onClick={e => e.stopPropagation()}
-            >
                 {/* Modal header */}
                 <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -88,7 +85,7 @@ export function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, o
                             )}
 
                             {/* Gantt lanes */}
-                            <div className="overflow-x-auto pb-1">
+                            <div data-testid="weekly-gantt-scroll" className="overflow-x-auto pb-1">
                                 <div className="min-w-[320px] space-y-3">
                                     {schedule.recipes.map((rs: RecipeSchedule) => {
                                         const color = LANE_COLORS[rs.colorIndex % LANE_COLORS.length]
@@ -142,8 +139,6 @@ export function GanttDayModal({ item, mainRecipe, sideRecipe, desiredMealTime, o
                         </p>
                     )}
                 </div>
-            </div>
-        </div >,
-        document.body
+        </BottomSheetPortal>
     )
 }

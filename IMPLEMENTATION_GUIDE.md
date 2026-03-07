@@ -1,6 +1,13 @@
 # Gemini API活用機能の実装ガイド
 
-このドキュメントは、Gemini APIを使った**レシピ提案機能**と**URL先からのレシピ作成・保存機能**の実装ガイドです。
+この文書は初期導入時の実装メモです。  
+現在の実装はすでに本ガイドの範囲を超えており、ここは履歴資料として扱ってください。
+
+現行の正:
+- [docs/FEATURES.md](/Users/jrmag/my-recipe-app/docs/FEATURES.md)
+- [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-app/docs/ARCHITECTURE.md)
+- [docs/SETUP.md](/Users/jrmag/my-recipe-app/docs/SETUP.md)
+- [docs/TESTING.md](/Users/jrmag/my-recipe-app/docs/TESTING.md)
 
 ## 📚 関連ドキュメント
 

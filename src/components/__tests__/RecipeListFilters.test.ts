@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Recipe } from '../../db/db'
-import { applyUiRecipeFilters } from '../../utils/recipeFilters'
+import { applyRecipeFacetFilters } from '../../utils/recipeFilters'
+import { createEmptyRecipeSearchFacets } from '../../utils/searchFacets'
 
 const RECIPES: Recipe[] = [
   {
@@ -41,45 +42,43 @@ const RECIPES: Recipe[] = [
   },
 ]
 
-describe('applyUiRecipeFilters', () => {
+describe('applyRecipeFacetFilters', () => {
   it('filters by a single selected category', () => {
-    const filtered = applyUiRecipeFilters(RECIPES, {
-      selectedCategories: ['スープ'],
-      quickFilter: false,
-      seasonalFilter: false,
+    const filtered = applyRecipeFacetFilters(RECIPES, {
+      ...createEmptyRecipeSearchFacets(),
+      categories: ['スープ'],
     })
 
-    expect(filtered.map((r) => r.title)).toEqual(['肉団子スープ'])
+    expect(filtered.map((recipe) => recipe.title)).toEqual(['肉団子スープ'])
   })
 
-  it('supports OR filtering with multiple selected categories', () => {
-    const filtered = applyUiRecipeFilters(RECIPES, {
-      selectedCategories: ['スープ', '副菜'],
-      quickFilter: false,
-      seasonalFilter: false,
+  it('supports OR filtering with multiple categories in the same facet', () => {
+    const filtered = applyRecipeFacetFilters(RECIPES, {
+      ...createEmptyRecipeSearchFacets(),
+      categories: ['スープ', '副菜'],
     })
 
-    expect(filtered.map((r) => r.title)).toEqual(['肉団子スープ', '肉じゃが副菜'])
+    expect(filtered.map((recipe) => recipe.title)).toEqual(['肉団子スープ', '肉じゃが副菜'])
   })
 
-
-  it('treats すべて as no category constraint', () => {
-    const filtered = applyUiRecipeFilters(RECIPES, {
-      selectedCategories: ['すべて'],
-      quickFilter: false,
-      seasonalFilter: false,
+  it('applies AND semantics across device, quick, and category facets', () => {
+    const filtered = applyRecipeFacetFilters(RECIPES, {
+      devices: ['hotcook'],
+      categories: ['副菜'],
+      quick: true,
+      seasonal: false,
     })
 
-    expect(filtered).toHaveLength(3)
+    expect(filtered.map((recipe) => recipe.title)).toEqual(['肉じゃが副菜'])
   })
 
-  it('returns all categories when no category is selected', () => {
-    const filtered = applyUiRecipeFilters(RECIPES, {
-      selectedCategories: [],
-      quickFilter: false,
-      seasonalFilter: false,
+  it('supports OR filtering with multiple devices inside the device facet', () => {
+    const filtered = applyRecipeFacetFilters(RECIPES, {
+      ...createEmptyRecipeSearchFacets(),
+      devices: ['hotcook', 'healsio'],
+      quick: true,
     })
 
-    expect(filtered).toHaveLength(3)
+    expect(filtered.map((recipe) => recipe.title)).toEqual(['肉団子スープ', '肉じゃが副菜'])
   })
 })

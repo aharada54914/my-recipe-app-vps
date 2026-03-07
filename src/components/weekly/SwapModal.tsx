@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import { Search, X, Star } from 'lucide-react'
 import type { Recipe } from '../../db/db'
 import { useSearchInputController } from '../../hooks/useSearchInputController'
 import { RecipeCard } from '../RecipeCard'
 import { calculateMatchRate } from '../../utils/recipeUtils'
 import { searchRecipesWithScores } from '../../utils/searchUtils'
+import { BottomSheetPortal } from '../ui/BottomSheetPortal'
 
 export interface SwapModalProps {
     swapType: 'main' | 'side'
@@ -46,13 +46,12 @@ export function SwapModal({
         [candidates]
     )
 
-    return createPortal(
-        <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60" onClick={onClose}>
-            <div
-                data-testid="swap-modal"
-                className="flex max-h-[75vh] w-full max-w-lg flex-col rounded-t-2xl bg-bg-primary"
-                onClick={e => e.stopPropagation()}
-            >
+    return (
+        <BottomSheetPortal
+            onClose={onClose}
+            testId="swap-modal"
+            panelClassName="flex max-h-[75vh] flex-col overflow-hidden"
+        >
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 pt-4 pb-3">
                     <h3 className="text-sm font-bold">
@@ -140,8 +139,6 @@ export function SwapModal({
                         </>
                     )}
                 </div>
-            </div>
-        </div>,
-        document.body
+        </BottomSheetPortal>
     )
 }

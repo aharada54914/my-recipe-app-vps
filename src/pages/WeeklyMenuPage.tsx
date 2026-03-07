@@ -5,7 +5,8 @@
  * into a dedicated controller hook.
  */
 
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
   Calendar,
@@ -19,16 +20,15 @@ import {
   ShoppingCart,
   Unlock,
   UtensilsCrossed,
-  X,
 } from 'lucide-react'
 import { format, parse } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { RecipeCard } from '../components/RecipeCard'
-import { EditableShoppingList } from '../components/EditableShoppingList'
 import { SwapModal } from '../components/weekly/SwapModal'
 import { GanttDayModal } from '../components/weekly/GanttDayModal'
 import { ShareMenuModal } from '../components/weekly/ShareMenuModal'
 import { ServingsStepper } from '../components/weekly/ServingsStepper'
+import { WeeklyShoppingListSheet } from '../components/weekly/WeeklyShoppingListSheet'
 import { WeatherIllustration } from '../components/weather/WeatherIllustration'
 import { WEATHER_TILE_TOKENS } from '../components/weather/weatherIllustrationTokens'
 import { calculateMatchRate } from '../utils/recipeUtils'
@@ -199,6 +199,7 @@ function WeeklyDayAccordionCard({
           <button
             type="button"
             onClick={onOpenTimeline}
+            data-testid="weekly-timeline-trigger"
             className="ui-panel-muted flex w-full items-center justify-between text-left"
           >
             <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
@@ -289,7 +290,6 @@ export function WeeklyMenuPage() {
     menu,
     nutritionInsights,
     providerToken,
-    recommendationReasons,
     recipes,
     refreshWeeklyWeather,
     registering,
@@ -334,7 +334,6 @@ export function WeeklyMenuPage() {
     [includeSeasonings, shoppingIngredients],
   )
   const missingCount = visibleShoppingIngredients.filter((ingredient) => !ingredient.inStock).length
-  const lockedCount = menu?.items.filter((item) => item.locked).length ?? 0
   const featuredIndex = useMemo(() => {
     if (!menu) return -1
     const today = format(new Date(), 'yyyy-MM-dd')
@@ -513,21 +512,6 @@ export function WeeklyMenuPage() {
                 </span>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="ui-stat-card">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">Days</p>
-                  <p className="mt-1 text-lg font-extrabold text-text-primary">{menu.items.length}</p>
-                </div>
-                <div className="ui-stat-card">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">Locked</p>
-                  <p className="mt-1 text-lg font-extrabold text-text-primary">{lockedCount}</p>
-                </div>
-                <div className="ui-stat-card">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">Missing</p>
-                  <p className="mt-1 text-lg font-extrabold text-text-primary">{missingCount}</p>
-                </div>
-              </div>
-
               <div className="mt-4 space-y-1.5 text-sm">
                 {nutritionInsights.gaps.map((gap) => (
                   <p key={gap} className="text-warning">・{gap}</p>
@@ -546,15 +530,6 @@ export function WeeklyMenuPage() {
                   </p>
                 )}
               </div>
-            </div>
-
-            <div className="ui-inline-note">
-              <p className="font-semibold text-text-primary">推薦理由（簡易）</p>
-              <ul className="mt-1 space-y-0.5">
-                {recommendationReasons.map((reason) => (
-                  <li key={reason}>・{reason}</li>
-                ))}
-              </ul>
             </div>
 
             {featuredItem && (
@@ -692,83 +667,64 @@ export function WeeklyMenuPage() {
         )}
       </div>
 
-      {!isOverlayOpen && menu && !showShoppingList && (
+      {!isOverlayOpen && menu && !showShoppingList && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed left-0 right-0 z-40 border-t border-border-soft bg-bg-primary/98 shadow-[0_-18px_32px_rgba(32,24,15,0.14)]"
+          data-testid="weekly-action-bar"
+          className="fixed inset-x-0 z-40 flex justify-center px-4"
           style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' }}
         >
-          <div className="grid grid-cols-2 gap-2 px-4 py-2">
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={generating}
-              className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5 disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
-              再生成
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowShoppingList(true)}
-              className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              買い物リスト
-            </button>
-            <button
-              type="button"
-              onClick={() => setShareOpen(true)}
-              className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5"
-            >
-              <Share2 className="h-4 w-4" />
-              共有
-            </button>
-            <button
-              type="button"
-              onClick={handleRegisterCalendar}
-              disabled={registering}
-              className="ui-btn ui-btn-primary flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Calendar className="h-4 w-4" />
-              {registering ? '登録中...' : providerToken ? 'カレンダー登録' : 'ログインして登録'}
-            </button>
+          <div className="w-full max-w-lg rounded-[1.25rem] border border-border-soft bg-bg-primary/98 shadow-[0_-18px_32px_rgba(32,24,15,0.14)]">
+            <div className="grid grid-cols-2 gap-2 px-4 py-2">
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={generating}
+                className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
+                再生成
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowShoppingList(true)}
+                className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                買い物リスト
+              </button>
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                className="ui-btn ui-btn-secondary flex items-center justify-center gap-1.5"
+              >
+                <Share2 className="h-4 w-4" />
+                共有
+              </button>
+              <button
+                type="button"
+                onClick={handleRegisterCalendar}
+                disabled={registering}
+                className="ui-btn ui-btn-primary flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Calendar className="h-4 w-4" />
+                {registering ? '登録中...' : providerToken ? 'カレンダー登録' : 'ログインして登録'}
+              </button>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {showShoppingList && menu && (
-        <>
-          <div className="ui-bottom-sheet-scrim" onClick={() => setShowShoppingList(false)} />
-          <div
-            data-testid="weekly-shopping-list-panel"
-            className="ui-bottom-sheet"
-            style={{ WebkitOverflowScrolling: 'touch' } as CSSProperties}
-          >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <p className="ui-section-kicker">Shopping</p>
-                <h4 className="mt-1 text-lg font-extrabold text-text-primary">買い物リスト</h4>
-                <p className="mt-1 text-sm text-text-secondary">不足材料 {missingCount}件</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowShoppingList(false)}
-                className="rounded-xl border border-border-soft bg-bg-card-hover p-2 text-text-secondary transition-colors hover:text-text-primary"
-                aria-label="買い物リストを閉じる"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <EditableShoppingList
-              weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
-              ingredients={shoppingIngredients}
-              storageKey={`shopping_checked_${weekStartStr}`}
-              includeSeasonings={includeSeasonings}
-              onToggleIncludeSeasonings={() => setIncludeSeasonings((value) => !value)}
-            />
-          </div>
-        </>
+        <WeeklyShoppingListSheet
+          weekLabel={`${weekStartDisplay}〜${weekEndStr}`}
+          missingCount={missingCount}
+          ingredients={shoppingIngredients}
+          storageKey={`shopping_checked_${weekStartStr}`}
+          includeSeasonings={includeSeasonings}
+          onToggleIncludeSeasonings={() => setIncludeSeasonings((value) => !value)}
+          onClose={() => setShowShoppingList(false)}
+        />
       )}
     </div>
   )

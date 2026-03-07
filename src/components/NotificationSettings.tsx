@@ -109,38 +109,6 @@ export function NotificationSettings() {
           </p>
         </div>
 
-        {/* Desired meal time */}
-        <div className={cookingDisabled ? 'opacity-40 pointer-events-none' : ''}>
-          <label className="mb-1 block text-sm font-medium text-text-secondary">
-            食事開始希望時刻
-          </label>
-          <div className="flex items-center gap-1">
-            <input
-              type="number"
-              min={0}
-              max={23}
-              value={preferences.desiredMealHour}
-              data-testid="desired-meal-hour"
-              onChange={(e) => updatePreference('desiredMealHour', Number(e.target.value))}
-              className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
-            />
-            <span className="text-text-secondary">:</span>
-            <input
-              type="number"
-              min={0}
-              max={59}
-              step={5}
-              value={String(preferences.desiredMealMinute).padStart(2, '0')}
-              data-testid="desired-meal-minute"
-              onChange={(e) => updatePreference('desiredMealMinute', Number(e.target.value))}
-              className="w-12 rounded-lg bg-white/5 px-2 py-2 text-center text-base text-text-primary outline-none sm:w-14"
-            />
-          </div>
-          <p className="mt-1 text-xs text-text-secondary">
-            逆算して調理開始時刻を計算します
-          </p>
-        </div>
-
         {/* Weekly menu notification */}
         <div className="flex items-center justify-between">
           <span className="text-sm text-text-primary">週間献立完了通知</span>
@@ -157,6 +125,12 @@ export function NotificationSettings() {
             enabled={preferences.notifyShoppingListDone}
             onChange={(v) => updatePreference('notifyShoppingListDone', v)}
           />
+        </div>
+
+        <div className="ui-inline-note">
+          <p className="text-xs leading-relaxed text-text-secondary">
+            食事開始希望時刻やカレンダー登録の時間帯は「設定 → 献立」に移動しました。
+          </p>
         </div>
       </div>
     </div>

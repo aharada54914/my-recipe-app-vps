@@ -299,7 +299,7 @@ export function HomePage() {
             </button>
             <button
               type="button"
-              onClick={() => navigate(geminiStatus.tone === 'success' ? '/gemini' : '/settings/menu')}
+              onClick={() => navigate(geminiStatus.tone === 'success' ? '/gemini' : '/settings/ai')}
               className="ui-btn ui-btn-secondary flex items-center justify-center gap-2"
             >
               <Sparkles className="h-4 w-4" />
@@ -366,6 +366,23 @@ export function HomePage() {
         </div>
       </section>
 
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="ui-section-kicker">Browse</p>
+            <h3 className="ui-section-title mt-1">カテゴリから探す</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/search')}
+            className="text-sm font-semibold text-accent"
+          >
+            すべての検索へ
+          </button>
+        </div>
+        <CategoryGrid />
+      </section>
+
       {/* Seasonal recipes — 2×2, placed directly below WeeklyMenuTimeline */}
       {seasonal.length > 0 && (
         <section ref={seasonalSectionRef}>
@@ -422,23 +439,6 @@ export function HomePage() {
           />
         </section>
       )}
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="ui-section-kicker">Browse</p>
-            <h3 className="ui-section-title mt-1">カテゴリから探す</h3>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/search')}
-            className="text-sm font-semibold text-accent"
-          >
-            すべての検索へ
-          </button>
-        </div>
-        <CategoryGrid />
-      </section>
     </div>
   )
 }

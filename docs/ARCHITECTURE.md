@@ -1,210 +1,230 @@
 # Architecture Reference
 
-最終改訂: 2026-03-05
+最終改訂: 2026-03-07  
 対象バージョン: v2.0.0
 
-Kitchen App の現行アーキテクチャ概要です。
+Kitchen App の現行アーキテクチャ概要です。Phase 5 / 6 の UI 再編、theme foundation、テスト再構成を反映しています。
 
 ---
 
-## 1. 構成概要
+## 1. 技術スタック
 
 - フロントエンド: React 19 + TypeScript + Vite 7
 - ルーティング: React Router 7
-- ローカルDB: Dexie (IndexedDB)
-- 認証/連携: Google OAuth
-- バックアップ: Google Drive AppData
-- AI: Gemini API
-- 通知: Notification API（ローカル通知）
+- ローカル DB: Dexie / IndexedDB
+- 状態管理:
+  - Context: 認証、設定
+  - Zustand: UI 通知などの横断 UI 状態
+- 外部連携:
+  - Google OAuth
+  - Google Drive API
+  - Google Calendar API
+  - Gemini API
+- テスト:
+  - Vitest
+  - Playwright
 
 ---
 
-## 2. 主要ディレクトリ
+## 2. ディレクトリ構成
 
-- `src/pages` 画面単位コンポーネント
-- `src/components` 再利用UI
-- `src/utils` アルゴリズム/純ロジック
-- `src/db` Dexieスキーマ
-- `src/hooks` 認証・設定・同期補助
-- `src/lib` 外部APIクライアント
-- `api` Vercel Serverless Functions（URL抽出など）
-- `docs` 仕様書
-
----
-
-## 3. データ層
-
-DB: `RecipeDB`（Dexie schema version 9）
-
-主なテーブル:
-- `recipes`
-- `stock`
-- `favorites`
-- `userNotes`
-- `viewHistory`
-- `calendarEvents`
-- `userPreferences`
-- `weeklyMenus`
-
-初回起動時にCSV由来JSONからレシピを投入。
-
----
-
-## 4. 画面遷移・UI基盤（v1.5.0）
-
-- `App.tsx` でルーティングを構成
-- `SplashScreen` 追加（起動アニメーション）
-- `route-enter` アニメーションで画面切替を滑らかに
-- `index.css` で Liquid Glass トーンを全体適用
-- `GeminiProcessingBanner` がチャット処理中の全画面バナー表示を担当
+- `src/pages`
+  - 画面単位のルートコンポーネント
+- `src/components`
+  - 再利用 UI
+  - `settings/`, `gemini/`, `weekly/` など用途別に分割
+- `src/hooks`
+  - 画面 / ユースケース単位の制御ロジック
+  - 例: `useWeeklyMenuController.ts`
+- `src/repositories`
+  - IndexedDB への永続化責務を集約
+  - `preferencesRepository.ts`
+  - `stockRepository.ts`
+  - `weeklyMenuRepository.ts`
+- `src/services`
+  - 起動時や複数レイヤをまたぐアプリケーションサービス
+  - `preferencesStartup.ts`
+- `src/db`
+  - Dexie スキーマとマイグレーション
+- `src/lib`
+  - 外部 API / theme / QA モードなどの境界レイヤ
+- `src/utils`
+  - 純ロジックとアルゴリズム
+- `tests/smoke`
+  - ルート / フロー単位の Playwright smoke
+- `tests/visual`
+  - Playwright visual regression
+- `tests/support`
+  - Playwright 共通 helper
+- `scripts`
+  - build 前処理、監査、運用スクリプト
 
 ---
 
-## 5. 週間献立フロー
+## 3. UI 基盤
 
-`WeeklyMenuPage`:
-1. `selectWeeklyMenu` で候補選定
-2. 主菜 + 副菜/スープを週次保存
-3. 買い物リストは主菜・副菜を合わせて集約
-4. 共有リンク/共有コードの生成・読込
-5. 日次タイルは時刻情報アイコンとガント導線を大きめ表示で統一
-6. Google Calendar登録は1日1イベントに主菜+副菜/スープを統合して作成
-7. 買い物リストイベントにQRコード画像（Drive経由）とインポートURLを添付
-8. `weeklyMenuQr.ts` のハイブリッドエンコードでQRデータをbase64url化
+### 3.1 Theme Foundation
 
----
+- semantic token は `src/index.css` に集約
+- `src/lib/theme.ts` が `system / light / dark` を解決
+- `PreferencesContext` が `appearanceMode` と `resolvedTheme` を配布
+- 初回ロード時は `index.html` の bootstrap で FOUC を抑制
 
-## 6. 通知フロー（v1.5.0）
+### 3.2 App Chrome
 
-- `NotificationSettings` で権限取得とON/OFF設定
-- `NotificationScheduler` が定期チェック
-- 通知イベント:
-  - 調理開始時刻
-  - 週間献立生成完了
-  - 買い物リスト表示時（不足あり）
+- `Header.tsx`
+  - sticky header
+  - `検索`, `複数レシピスケジュール`, `在庫管理`, `設定 / 接続` への導線
+- `BottomNav.tsx`
+  - ラベル付き 5 タブ
+  - `ホーム / 献立 / Gemini / お気に入り / 履歴`
+  - safe-area を考慮した固定ナビ
 
-重複通知は日付キーで防止。
+### 3.3 共通 UI パターン
 
----
-
-## 7. Google連携
-
-- OAuthで `providerToken` 取得。スコープ: `drive.appdata`, `drive.file`, `calendar.events`, `calendar.readonly`
-- Drive:
-  - `backupToGoogleDrive` / `restoreFromGoogleDrive`（appDataFolder）
-  - `uploadQrImageToDrive`（drive.fileスコープ、My Driveにイベント添付用QR画像を保存）
-- Calendar:
-  - 献立イベント（主菜+副菜/スープを1日1イベントに統合）
-  - 買い物イベント（QR画像添付 + `?import-menu=<base64>` のインポートURL）
-- QR受信: `?import-menu=<base64>` URLパラメータを `App.tsx` で検知 → `WeeklyMenuImportModal` で確認→インポート
+- `StatusNotice.tsx`
+  - Google / Gemini / Calendar などの接続状態表示を統一
+- `ui-*` class
+  - button, panel, action card, stat card などの semantic utility を利用
+- glass 系 class は app shell の必須前提から外している
 
 ---
 
-## 8. URLインポート・AI提案（v1.7.5）
+## 4. データ層
 
-- `api/recipe-extract.js`:
-  - 対応ドメインallowlist検証
-  - HTML/JSON-LD抽出
-- `src/utils/geminiParser.ts`:
-  - URL抽出結果を Zodスキーマ (`ParsedRecipeSchema`) に通して Recipe互換JSONへ正規化
-- `src/pages/AskGeminiPage.tsx`:
-  - 写真 -> 食材文字 -> 献立生成の2段階フロー
-  - 再生成時は文字データのみ送信
-  - `RecipeEditorModal` で編集後にDB保存
-- `src/lib/geminiClient.ts` + `src/lib/geminiSettings.ts`:
-  - 機能別モデル選択（Flash-Lite / Flash / 2.5 Flash）
-  - URL/画像解析の失敗時上位モデルリトライ
-  - 使用量（推定）カウント
-- `src/stores/geminiStore.ts`:
-  - Geminiチャット送信処理をストア側へ移し、タブ移動後も処理継続
-  - 履歴/下書きを localStorage に保持（履歴約3日）
+### 4.1 DB
 
----
-
-## 9. 検索ランク（v1.7.5）
-
-- `RecipeList` は Fuse一致だけでなく、好みシグナルを合成して並び替え
-- `preferenceSignals`:
-  - `viewHistory`
+- `RecipeDB` は Dexie schema version `18`
+- 主なテーブル:
+  - `recipes`
+  - `stock`
   - `favorites`
+  - `userNotes`
+  - `viewHistory`
+  - `calendarEvents`
+  - `userPreferences`
   - `weeklyMenus`
-  - `calendarEvents(meal)`
-- `preferenceRanker`:
-  - Kitchen App Preference Rank (KAPR) を計算
+
+### 4.2 Repository 境界
+
+- UI は直接 Dexie 更新を持たず、主要ユースケースから repository を経由する方針へ移行済み
+- 特に以下は repository 経由を優先
+  - 設定更新
+  - 在庫数量更新
+  - 週間献立保存
+
+### 4.3 Preferences / Theme
+
+- `appearanceMode` は `userPreferences` と localStorage の両方で管理
+- 起動時に `preferencesStartup.ts` が初期値補正を行う
 
 ---
 
-## 10. ホームページ天気レコメンド（v2.0.0）
+## 5. 主要フロー
 
-対象:
-- `src/pages/HomePage.tsx`
-- `src/utils/season-weather/weatherProvider.ts`
-- `src/utils/season-weather/weatherScoring.ts`
-- `src/utils/season-weather/recipeWeatherVectors.ts`
-- `src/utils/season-weather/tOptLearner.ts`
+### 5.1 ホーム
 
-`HomePage` 起動時に気象庁APIから東京7日間予報を取得（`getWeeklyWeatherForecast`）し、今日分の `DailyWeather` を `todayWeather` ステートに保存。
+- `HomePage.tsx` は `検索` と `AI 相談` を一次導線に置く
+- 二次導線として `今週の献立` サマリーを表示
+- 天気取得は `weatherProvider` を通じて実行
+- Gemini の接続状態は `getGeminiIntegrationStatus()` で要約表示
 
-`findTodayRecipes` が Phase2ベクトルスコア × T_opt個人化スコア × 旬スコアの複合値（§13）でレシピをランキングし、Softmax確率的サンプリングで4件を「今日食べたい料理」2×2タイルに表示。詳細は `docs/ALGORITHMS.md` §13〜15 参照。
+### 5.2 週間献立
 
-**season-weather モジュール構成:**
+- `WeeklyMenuPage.tsx` は表示責務を中心に保持
+- 生成 / 永続化 / 共有 / カレンダー登録まわりの制御は `useWeeklyMenuController.ts` へ分離
+- 画面構成:
+  - summary
+  - featured day
+  - rest of week
+  - shopping list / modal
 
-| ファイル | 役割 |
-|---|---|
-| `weatherProvider.ts` | 気象庁API取得 + 合成フォールバック（`buildSyntheticForecast`） |
-| `weatherScoring.ts` | Phase1: 3因子快適スコア / Phase3: T_opt個人化スコア |
-| `recipeWeatherVectors.ts` | Phase2: レシピ4Dベクトル算出 + ドット積スコアリング |
-| `tOptLearner.ts` | 履歴から T_opt（個人最適気温）を学習・推定 |
-| `weatherTagger.ts` | レシピへの天気タグ付与 |
-| `weekWeather.ts` | 週スコープ天気フィルタ |
-| `weatherIllustrationComposer.ts` | 湿度・降水量レイヤードイラスト合成 |
-| `weatherIllustrationTokens.ts` | イラストトークン定義 |
+### 5.3 Google / Gemini 連携
 
-**ヘッダー変更（v2.0.0）:**
-- `Header.tsx` に `onStock` プロップを追加し、Packageアイコンボタン（在庫管理へのナビゲーション）をアカウントアイコンと設定アイコンの間に配置
-- OAuth設定あり・未ログイン時にコンパクトな「ログイン」ボタンをヘッダーに表示
-
----
-
-## 11. 非採用/廃止
-
-- Supabase同期層は削除済み（v1.5.0以前の履歴を除く）
-- 現在のクラウド連携は Google Drive バックアップ中心
+- `AuthContext`
+  - OAuth user / token の保持
+  - QA Google mode との切替
+- `googleDrive.ts`
+  - backup / restore
+  - QA 時は localStorage ベースのモックへ切替
+- `googleCalendar.ts`
+  - calendar 一覧取得
+  - 献立 / 買い物イベント登録
+  - QA 時はモックイベント保存へ切替
+- `integrationStatus.ts`
+  - Gemini / Google / Calendar の状態を `actionId` と tone で統一管理
 
 ---
 
-## 12. ビルド・配布
+## 6. QA モード
+
+- `?qa-google=1` で connected flow を実アカウントなしに再現
+- モック対象:
+  - Google ログイン済み user
+  - Drive バックアップ / 復元
+  - Calendar 予定登録
+- 入口:
+  - `設定 > 詳細設定 > 接続フロー検証`
+  - 旧 URL の `/settings/data?qa-google=1` でも詳細設定へリダイレクト
+- 主用途:
+  - smoke test
+  - visual regression
+  - 手動 UI 監査
+
+---
+
+## 7. テスト戦略
+
+### 7.1 Unit / Component
+
+- 実行: `npm test`
+- 目的:
+  - 純ロジック
+  - settings / theme / status などの UI コンポーネント
+
+### 7.2 Smoke
+
+- 実行: `npm run test:smoke:ci`
+- 構成:
+  - `navigation.spec.ts`
+  - `home-priority.spec.ts`
+  - `gemini-entry.spec.ts`
+  - `weekly-menu-core.spec.ts`
+  - `weekly-menu-editing.spec.ts`
+  - `connected-google.spec.ts`
+  - `connected-gemini.spec.ts`
+
+### 7.3 Visual Regression
+
+- 実行: `npm run test:visual`
+- snapshot 更新: `npm run test:visual:update`
+- 対象:
+  - home
+  - search
+  - gemini
+  - weekly menu
+  - settings connected states
+
+### 7.4 UI Class Audit
+
+- 実行: `npm run ui:class-audit`
+- `scripts/ui-class-audit.mjs` が glass 系 class の残存数を監査
+
+---
+
+## 8. Build / Deploy
 
 - `npm run build`
-  - `scripts/prebuild-recipes.mjs`（CSV→JSON）
+  - `scripts/prebuild-recipes.mjs`
   - `tsc -b`
   - `vite build`
 - PWA: `vite-plugin-pwa`
-- `vercel.json` でSPAリライト
+- 配布: Vercel
+- `vercel.json` で SPA rewrite を処理
 
 ---
 
-## 13. コストシステム（v2.0.0）
+## 9. 補足
 
-対象: `src/utils/cost/`
-
-食材の平均価格データ（`src/data/ingredientAveragePrices.ts`）をもとにレシピのコストを推定する。
-
-| ファイル | 役割 |
-|---|---|
-| `costEstimator.ts` | レシピ1件のコスト合計を計算するエントリポイント |
-| `priceResolver.ts` | 食材名と単位から価格を解決（完全一致→類似一致の順） |
-| `similarIngredientResolver.ts` | 食材名の表記ゆれを吸収し類似食材の価格を流用 |
-| `luxuryExperience.ts` | 高額食材（松茸・カニ・和牛等）を検出しラグジュアリーフラグを付与 |
-| `priceSync.ts` | 価格データの同期処理（将来的な外部API連携を想定） |
-| `startupPriceSync.ts` | `initDb()` から呼び出す起動時価格同期 |
-
-`UserPreferences.weeklyMenuCostMode` で挙動を制御（`'ignore'` / `'budget'` / `'luxury'`）。詳細は `docs/ALGORITHMS.md` §16 参照。
-
----
-
-## 14. レシピ特徴行列（v2.0.0）
-
-対象: `src/utils/recipeFeatureMatrix.ts`
-
-`ensureRecipeFeatureMatrix(recipes)` が週間献立選択時にレシピの特徴ベクトルを一括生成・キャッシュする。`selectWeeklyMenu` がスコアリングのために参照する中間データ層。天気ベクトル（§14）とコスト推定（§16）の入力としても使用される。
+- 古い実装計画書やレビュー記録は `docs/plans/` と `docs/reports/` に残している
+- 現行の正は本書、[FEATURES.md](/Users/jrmag/my-recipe-app/docs/FEATURES.md)、[SETUP.md](/Users/jrmag/my-recipe-app/docs/SETUP.md)、[TESTING.md](/Users/jrmag/my-recipe-app/docs/TESTING.md)

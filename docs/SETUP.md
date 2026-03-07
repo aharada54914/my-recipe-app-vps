@@ -1,17 +1,19 @@
 # Setup & Deployment Guide
 
-最終改訂: 2026-03-04
+最終改訂: 2026-03-07
 
-このドキュメントは、v2.0.0 時点のセットアップ手順です。
+このドキュメントは、現行の Kitchen App をローカル開発し、検証し、配布するための基準手順です。
 
 ---
 
 ## 1. Prerequisites
 
-- Node.js 22.12+
-- npm 10+
-- Google Cloud プロジェクト（OAuth / Calendar / Drive を使う場合）
-- Gemini APIキー（AI機能を使う場合）
+- Node.js `22.12+`
+- npm `10+`
+- Google Cloud プロジェクト
+  - Google OAuth / Drive / Calendar を使う場合
+- Gemini API キー
+  - AI 機能を実運用する場合
 
 ---
 
@@ -21,51 +23,72 @@
 git clone https://github.com/aharada54914/my-recipe-app.git
 cd my-recipe-app
 npm install
-cp .env.example .env
 npm run dev
 ```
 
----
-
-## 3. Env Variables
+必要に応じて、ルートに `.env` を作成します。
 
 ```env
 VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
 VITE_GEMINI_API_KEY=your-gemini-api-key
 ```
 
-- Google Client ID がない場合: OAuth機能のみ無効
-- Geminiキーは設定画面入力でも可（`.env`優先）
-- v1.9.6 以降は設定画面で機能別モデル選択・AI推定使用量の確認が可能
+補足:
+- `VITE_GOOGLE_CLIENT_ID` が未設定でもアプリは起動する
+- `VITE_GEMINI_API_KEY` は設定画面保存値より優先される
+
+---
+
+## 3. 推奨確認コマンド
+
+```bash
+npm run lint
+npm test
+npm run build
+npm run test:smoke:ci
+npm run test:visual
+npm run ui:class-audit
+```
+
+スナップショット更新が必要な場合:
+
+```bash
+npm run test:visual:update
+```
 
 ---
 
 ## 4. Google OAuth Setup
 
-1. Google Cloud Console でプロジェクト作成
-2. APIs を有効化
-   - Google Calendar API
+1. Google Cloud Console でプロジェクトを作成
+2. 以下の API を有効化
    - Google Drive API
-3. OAuth同意画面を作成（External）
-4. OAuth Client ID（Web）を作成
-5. Authorized JavaScript origins に以下を登録
+   - Google Calendar API
+3. OAuth 同意画面を作成
+4. OAuth Client ID を `Web application` で作成
+5. Authorized JavaScript origins に登録
    - `http://localhost:5173`
-   - 本番URL（例: `https://your-app.vercel.app`）
-6. `VITE_GOOGLE_CLIENT_ID` を設定
+   - 本番 URL
+6. `.env` またはホスティング先環境変数に `VITE_GOOGLE_CLIENT_ID` を設定
 
 ---
 
-## 5. Notification Setup (PWA)
+## 5. QA Google モード
 
-v1.5.0 以降、通知機能は実動作します。
+実アカウントを使わず connected flow を検証したい場合は QA モードを使います。
 
-1. 設定 > 通知 を開く
-2. 「通知を許可」をタップ
-3. 調理開始通知 / 献立完了通知 / 買い物リスト通知を必要に応じてON
+- URL: `/settings/advanced?qa-google=1`
+- 入口: `設定 > 詳細設定 > 接続フロー検証`
+- 旧 URL の `/settings/data?qa-google=1` でも自動的に詳細設定へ移動します
+- モック対象:
+  - Google ログイン状態
+  - Drive バックアップ / 復元
+  - Calendar 登録
 
-注意:
-- iOSはホーム画面追加したPWA + 通知許可が必要
-- ローカル通知のため、完全バックグラウンドPushではありません
+用途:
+- smoke test
+- visual regression
+- 手動 UI 監査
 
 ---
 
@@ -75,67 +98,45 @@ v1.5.0 以降、通知機能は実動作します。
 npm run build
 ```
 
-- `dist/` を静的ホスティングに配置
-- `vercel.json` により SPA リライト対応済み
+ビルド内容:
+- `scripts/prebuild-recipes.mjs`
+- `tsc -b`
+- `vite build`
 
-Vercel環境変数:
+デプロイ:
+- `dist/` を静的配布
+- Vercel では `vercel.json` により SPA rewrite 対応済み
+
+本番環境変数:
 - `VITE_GOOGLE_CLIENT_ID`
-- `VITE_GEMINI_API_KEY`（任意）
+- `VITE_GEMINI_API_KEY` 任意
 
 ---
 
-## 7. PWA Installation
+## 7. PWA Install
 
-- iOS: Safari -> 共有 -> ホーム画面に追加
-- Android: Chrome -> Install app
+- iOS
+  - Safari -> 共有 -> ホーム画面に追加
+- Android
+  - Chrome -> Install app
 
 ---
 
-## 8. Data Update
+## 8. Data / Recipe Assets
 
-CSVからJSON再生成:
+レシピ JSON を再生成したい場合:
 
 ```bash
-node scripts/prebuild-recipes.mjs
+tsx scripts/prebuild-recipes.mjs
 ```
 
-`npm run build` 時に自動実行されます。
+`npm run dev` と `npm run build` の前には自動で走ります。
 
 ---
 
-## 9. Gemini 2段階フロー（在庫提案）
+## 9. 関連ドキュメント
 
-`/gemini -> 在庫から提案` では以下の2段階で処理します。
-
-1. 写真複数枚を送信前に縮小して1枚に結合し、食材文字リストを抽出  
-2. 食材文字リストから献立JSON（DB互換）を生成
-
-再生成ボタンは 2. のみ実行するため、2回目以降は文字データのみ送信されます。  
-生成レシピは `baseServings` を含むため、アプリ内の人数変更UIと互換です。
-生成結果やURL取り込み結果は、保存前に大型編集ウィンドウで材料・分量・手順を修正できます。
-
-### Gemini設定（v1.9.6）
-
-- `設定 > 献立` で、機能ごとにモデルを選択可能
-  - 軽量（節約向け）
-  - 標準（バランス）
-  - 高精度（消費増）
-- URL解析/画像解析は、失敗時に上位モデルで再試行する設定をON/OFF可能
-- AI推定使用量はアプリ内の目安値であり、公式の無料枠残量を直接取得するものではありません
-
----
-
-## 10. URLインポート対応サイト
-
-以下のURLドメインのみサポートしています（アプリ内にも表示）。
-
-- https://www.kyounoryouri.jp/
-- https://oceans-nadia.com/
-- https://recipe.rakuten.co.jp/
-- https://macaro-ni.jp/
-- https://erecipe.woman.excite.co.jp/
-- https://www.kikkoman.co.jp/homecook/
-- https://park.ajinomoto.co.jp/
-- https://foodistnote.recipe-blog.jp/
-- https://bazurecipe.com/
-- https://cookien.com/
+- [README.md](/Users/jrmag/my-recipe-app/README.md)
+- [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-app/docs/ARCHITECTURE.md)
+- [docs/TESTING.md](/Users/jrmag/my-recipe-app/docs/TESTING.md)
+- [docs/SETTINGS_GUIDE.md](/Users/jrmag/my-recipe-app/docs/SETTINGS_GUIDE.md)

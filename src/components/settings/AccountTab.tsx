@@ -1,10 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
-  Eye, EyeOff, Lock, Unlock,
-  LogIn, LogOut, User, HardDriveUpload, RefreshCw, Cloud,
-  Package, Star, FileText, Clock, CalendarDays, CalendarClock,
+  LogIn,
+  LogOut,
+  User,
+  HardDriveUpload,
+  RefreshCw,
+  Cloud,
+  Package,
+  Star,
+  FileText,
+  Clock,
+  CalendarDays,
+  CalendarClock,
 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useGoogleDriveSync } from '../../hooks/useGoogleDriveSync'
 import { db } from '../../db/db'
@@ -24,6 +34,7 @@ function formatTimeAgo(date: Date): string {
 }
 
 export function AccountTab() {
+  const navigate = useNavigate()
   const {
     user,
     loading: authLoading,
@@ -44,59 +55,39 @@ export function AccountTab() {
       db.weeklyMenus.count(),
       db.calendarEvents.count(),
     ])
-    return { stock, favorites, userNotes, viewHistory: Math.min(viewHistory, 200), weeklyMenus, calendarEvents }
+
+    return {
+      stock,
+      favorites,
+      userNotes,
+      viewHistory: Math.min(viewHistory, 200),
+      weeklyMenus,
+      calendarEvents,
+    }
   }, [])
 
-  const [googleClientId, setGoogleClientId] = useState(
-    () => localStorage.getItem(GOOGLE_CLIENT_ID_KEY) ?? ''
+  const hasLocalGoogleClientId = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    return Boolean(localStorage.getItem(GOOGLE_CLIENT_ID_KEY)?.trim())
+  }, [])
+
+  const googleStatus = useMemo(
+    () => getGoogleIntegrationStatus({
+      isOAuthAvailable,
+      userPresent: !!user,
+      providerTokenPresent: !!providerToken,
+      isQaMode: isQaGoogleMode,
+      backupError,
+      isBackingUp,
+      isRestoring,
+    }),
+    [backupError, isBackingUp, isOAuthAvailable, isQaGoogleMode, isRestoring, providerToken, user]
   )
-  const [isGoogleIdLocked, setIsGoogleIdLocked] = useState(true)
-  const [showGoogleId, setShowGoogleId] = useState(false)
-  const [confirmGoogleSave, setConfirmGoogleSave] = useState(false)
-
-  const maskedGoogleId = googleClientId
-    ? `${googleClientId.slice(0, 6)}${'•'.repeat(Math.max(0, googleClientId.length - 10))}${googleClientId.slice(-4)}`
-    : ''
-
-  const handleGoogleUnlock = () => {
-    setIsGoogleIdLocked(false)
-    setShowGoogleId(true)
-  }
-
-  const handleGoogleSave = () => {
-    if (!confirmGoogleSave) {
-      setConfirmGoogleSave(true)
-      return
-    }
-    localStorage.setItem(GOOGLE_CLIENT_ID_KEY, googleClientId.trim())
-    window.dispatchEvent(new Event('storage'))
-    setIsGoogleIdLocked(true)
-    setShowGoogleId(false)
-    setConfirmGoogleSave(false)
-  }
-
-  const handleGoogleCancel = () => {
-    const stored = localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || ''
-    setGoogleClientId(stored)
-    setIsGoogleIdLocked(true)
-    setShowGoogleId(false)
-    setConfirmGoogleSave(false)
-  }
-
-  const googleStatus = useMemo(() => getGoogleIntegrationStatus({
-    isOAuthAvailable,
-    userPresent: !!user,
-    providerTokenPresent: !!providerToken,
-    isQaMode: isQaGoogleMode,
-    backupError,
-    isBackingUp,
-    isRestoring,
-  }), [backupError, isBackingUp, isOAuthAvailable, isQaGoogleMode, isRestoring, providerToken, user])
 
   const handleGoogleStatusAction = () => {
     switch (googleStatus.actionId) {
       case 'configure-google-client':
-        handleGoogleUnlock()
+        navigate('/settings/advanced')
         return
       case 'backup-now':
       case 'qa-backup':
@@ -108,7 +99,7 @@ export function AccountTab() {
         return
       default:
         if (!isOAuthAvailable) {
-          handleGoogleUnlock()
+          navigate('/settings/advanced')
         }
     }
   }
@@ -117,7 +108,7 @@ export function AccountTab() {
     <div className="ui-panel">
       <div className="mb-3 flex items-center gap-2">
         <User className="h-4 w-4 text-accent" />
-        <h4 className="text-sm font-bold text-text-secondary">アカウントとデータのバックアップ</h4>
+        <h4 className="text-sm font-bold text-text-secondary">Google ログインとバックアップ</h4>
       </div>
 
       <StatusNotice
@@ -147,11 +138,11 @@ export function AccountTab() {
               <p className="truncate text-sm font-medium text-text-primary">{user.name}</p>
               <p className="truncate text-xs text-text-secondary">{user.email}</p>
             </div>
-            {isQaGoogleMode && (
+            {isQaGoogleMode ? (
               <span className="rounded-full bg-[color:color-mix(in_srgb,var(--accent-fresh)_18%,transparent)] px-2.5 py-1 text-[11px] font-bold text-accent-fresh">
                 QA モード
               </span>
-            )}
+            ) : null}
           </div>
 
           <div className="ui-panel-muted flex items-center gap-3">
@@ -166,9 +157,7 @@ export function AccountTab() {
                       ? `最終バックアップ: ${formatTimeAgo(lastBackupAt)}`
                       : 'バックアップはまだ作成されていません'}
               </p>
-              {backupError && (
-                <p className="mt-0.5 text-xs text-error">{backupError}</p>
-              )}
+              {backupError ? <p className="mt-0.5 text-xs text-error">{backupError}</p> : null}
             </div>
           </div>
 
@@ -185,10 +174,10 @@ export function AccountTab() {
               ].map(({ icon: Icon, label, count, suffix }) => (
                 <div key={label} className="flex items-center gap-2 rounded-xl bg-bg-primary/40 px-2.5 py-2">
                   <Icon className="h-3.5 w-3.5 shrink-0 text-text-secondary" />
-                  <span className="text-xs text-text-secondary truncate">{label}</span>
-                  <span className="ml-auto text-xs font-bold text-text-primary tabular-nums">
+                  <span className="truncate text-xs text-text-secondary">{label}</span>
+                  <span className="ml-auto text-xs font-bold tabular-nums text-text-primary">
                     {count === undefined ? '…' : count}
-                    <span className="text-text-secondary font-normal">
+                    <span className="font-normal text-text-secondary">
                       {count !== undefined && (suffix ?? '件')}
                     </span>
                   </span>
@@ -214,7 +203,7 @@ export function AccountTab() {
             {isQaGoogleMode ? 'QA モードを終了' : 'ログアウト'}
           </button>
         </div>
-      ) : isOAuthAvailable || googleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+      ) : isOAuthAvailable || hasLocalGoogleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
         <div className="space-y-3">
           {isOAuthAvailable ? (
             <button
@@ -226,102 +215,32 @@ export function AccountTab() {
             </button>
           ) : (
             <div className="status-notice status-notice--warning text-sm">
-              Google Client ID は設定されていますが、GoogleOAuthProviderのロードが完了していないか、再読み込みが必要です。ページをリロードしてください。
+              Google Client ID は設定されていますが、GoogleOAuthProvider の読み込みが完了していないか、再読み込みが必要です。ページをリロードしてください。
             </div>
           )}
-          <p className="text-xs text-text-secondary leading-relaxed">
-            ログインするとデータ（在庫・お気に入り・メモ・履歴・献立などのユーザーデータ）があなたのGoogle Driveのアプリ専用領域に自動バックアップされます。レシピを含む全データの控えが必要な場合は、設定→データのエクスポートもご利用ください。
+
+          <p className="text-xs leading-relaxed text-text-secondary">
+            ログインすると、在庫・お気に入り・メモ・履歴・献立などの個人データが Google Drive のアプリ専用領域にバックアップされます。レシピを含む完全控えが必要な場合は、設定の「データ」から JSON エクスポートも利用できます。
           </p>
-          <p className="text-xs text-text-secondary leading-relaxed">
-            ※ Google Client ID は環境依存のログイン設定のため、Google Drive バックアップ対象外です（端末/デプロイ環境ごとに設定）。
+          <p className="text-xs leading-relaxed text-text-secondary">
+            Google Client ID は配布環境ごとの設定なので、Drive バックアップには含まれません。必要な場合は「詳細設定」で確認してください。
           </p>
         </div>
       ) : (
         <div className="ui-panel-muted space-y-3">
-          <p className="text-sm text-text-primary">Googleアカウントでログインするには、環境変数の設定が必要です。</p>
+          <p className="text-sm text-text-primary">Googleアカウントでログインするには、Google Client ID の設定が必要です。</p>
           <p className="text-xs text-text-secondary">
-            `VITE_GOOGLE_CLIENT_ID` を設定した上で再デプロイしていただくと、こちらにログインボタンが表示されます。
+            `VITE_GOOGLE_CLIENT_ID` を設定して再デプロイするか、「詳細設定」で Client ID を保存するとログイン導線が有効になります。
           </p>
-          <a
-            href="https://accounts.google.com/"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex rounded-lg bg-bg-card px-3 py-2 text-xs font-medium text-text-secondary hover:text-accent"
-          >
-            Googleログインの設定ページを開く
-          </a>
-        </div>
-      )}
-
-      <div className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h4 className="text-sm font-bold text-text-secondary">Google Client ID（ログイン設定用）</h4>
           <button
-            onClick={isGoogleIdLocked ? handleGoogleUnlock : () => setIsGoogleIdLocked(true)}
-            className="ui-btn ui-btn-secondary flex min-h-[38px] items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium"
+            type="button"
+            onClick={() => navigate('/settings/advanced')}
+            className="ui-btn ui-btn-secondary inline-flex text-xs"
           >
-            {isGoogleIdLocked ? (
-              <>
-                <Lock className="h-3.5 w-3.5" />
-                ロック中
-              </>
-            ) : (
-              <>
-                <Unlock className="h-3.5 w-3.5 text-accent" />
-                編集中
-              </>
-            )}
+            詳細設定で Google Client ID を確認する
           </button>
         </div>
-
-        {isGoogleIdLocked ? (
-          <div className="ui-panel-muted flex items-center gap-2">
-            <span className="flex-1 text-sm text-text-secondary font-mono">
-              {googleClientId ? maskedGoogleId : '未設定'}
-            </span>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="relative">
-              <input
-                type={showGoogleId ? 'text' : 'password'}
-                value={googleClientId}
-                onChange={(e) => { setGoogleClientId(e.target.value); setConfirmGoogleSave(false) }}
-                placeholder="Google Client ID を入力..."
-                className="ui-input w-full pr-10 font-mono"
-              />
-              <button
-                onClick={() => setShowGoogleId(!showGoogleId)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-accent"
-              >
-                {showGoogleId ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleGoogleCancel}
-                className="ui-btn ui-btn-secondary flex-1"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleGoogleSave}
-                className={`ui-btn flex-1 text-white ${confirmGoogleSave ? 'bg-error' : 'ui-btn-primary'}`}
-              >
-                {confirmGoogleSave ? '本当に保存しますか？' : '保存'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="ui-inline-note mt-3">
-          <p className="text-xs text-text-secondary leading-relaxed">
-            クライアントIDはお客様のブラウザ内（手元の端末）にのみ保存され、Google Drive バックアップには含まれません。.envファイルで設定されている場合はそちらが優先されることがあります。<br />
-            設定後、サインイン機能（バックアップ等）を利用するには、念のため一度ページを再読み込み（リロード）してください。
-          </p>
-        </div>
-      </div>
+      )}
     </div>
   )
 }

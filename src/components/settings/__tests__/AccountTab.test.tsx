@@ -8,6 +8,11 @@ import { AccountTab } from '../AccountTab'
 
 const signInWithGoogle = vi.fn()
 const backupNow = vi.fn(async () => {})
+const navigate = vi.fn()
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigate,
+}))
 
 vi.mock('../../../hooks/useAuth', () => ({
   useAuth: () => ({
@@ -51,6 +56,7 @@ beforeEach(() => {
   document.body.appendChild(container)
   signInWithGoogle.mockReset()
   backupNow.mockReset()
+  navigate.mockReset()
 })
 
 afterEach(() => {

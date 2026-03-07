@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Eye, EyeOff, Lock, Unlock, Wifi, WifiOff, Gauge, RotateCcw, Sparkles } from 'lucide-react'
-import { MealPlanSettings } from '../MealPlanSettings'
 import { generateGeminiText } from '../../lib/geminiClient'
 import { usePreferences } from '../../hooks/usePreferences'
 import { StatusNotice } from '../StatusNotice'
@@ -241,8 +240,6 @@ export function MenuTab() {
 
   return (
     <>
-      <MealPlanSettings />
-
       <StatusNotice
         tone={geminiStatus.tone}
         title={geminiStatus.title}

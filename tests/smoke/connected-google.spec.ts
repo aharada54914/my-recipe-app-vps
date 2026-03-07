@@ -7,7 +7,7 @@ test('qa google mode exercises connected account and calendar flows', async ({ p
   await expect(page.getByTestId('qa-google-backup')).toBeVisible()
   await page.getByTestId('qa-google-backup').click()
 
-  await waitForRouteReady(page, '/settings/account', page.getByText('アカウントとデータのバックアップ'))
+  await waitForRouteReady(page, '/settings/account', page.getByText('Google ログインとバックアップ'))
   await expect(page.getByText('QA Google')).toBeVisible()
   await expect(page.getByTestId('account-google-status')).toContainText('QA 用の Google 連携を使用中です')
 

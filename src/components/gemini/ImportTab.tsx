@@ -75,9 +75,9 @@ export function ImportTab() {
     ? {
       tone: 'warning' as const,
       title: 'Gemini APIキーが必要です',
-      message: 'URL解析とテキスト解析を使うには、設定の献立タブで Gemini API キーを登録してください。',
+      message: 'URL解析とテキスト解析を使うには、設定の AI で Gemini API キーを登録してください。',
       actionLabel: 'Gemini設定を開く',
-      onAction: () => navigate('/settings/menu'),
+      onAction: () => navigate('/settings/ai'),
     }
     : error
       ? {

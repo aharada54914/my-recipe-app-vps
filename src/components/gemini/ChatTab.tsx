@@ -11,7 +11,7 @@ function getApiKey(): string {
 function GeminiApiKeyHint() {
   return (
     <p className="ui-inline-note">
-      Gemini APIキーが未設定です。設定 → 献立タブから登録してください。
+      Gemini APIキーが未設定です。設定 → AI から登録してください。
     </p>
   )
 }

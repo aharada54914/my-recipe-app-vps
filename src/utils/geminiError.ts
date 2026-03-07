@@ -27,7 +27,7 @@ export function toUserFriendlyGeminiError(error: unknown): string {
       ? `約${retryAfterSeconds}秒待って再実行してください。`
       : '少し時間をおいて再実行してください。'
 
-    return `Gemini APIの利用上限に達しました（429）。${waitMessage} 続く場合は「設定 → 献立タブ」でAPIキー・プラン・モデル（2.0 Flash Lite推奨）を確認してください。`
+    return `Gemini APIの利用上限に達しました（429）。${waitMessage} 続く場合は「設定 → AI」でAPIキー・プラン・モデル（2.0 Flash Lite推奨）を確認してください。`
   }
 
   if (normalized.includes('api key') && normalized.includes('not')) {
@@ -36,4 +36,3 @@ export function toUserFriendlyGeminiError(error: unknown): string {
 
   return rawMessage
 }
-

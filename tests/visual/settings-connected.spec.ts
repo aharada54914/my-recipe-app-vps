@@ -6,7 +6,7 @@ test('connected settings matches the QA Google dark baseline', async ({ page }) 
   await applyDeterministicRandom(page)
   await applyTheme(page, 'dark')
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await waitForRouteReady(page, '/settings/account?qa-google=1', page.getByText('アカウントとデータのバックアップ'))
+  await waitForRouteReady(page, '/settings/account?qa-google=1', page.getByText('Google ログインとバックアップ'))
 
   await expect(page).toHaveScreenshot('settings-account-qa-dark.png', {
     fullPage: true,

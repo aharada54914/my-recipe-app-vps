@@ -25,6 +25,7 @@ import { buildDisplayForecastForWeek, filterForecastForWeek, isCompleteForecastF
 import { learnTOptFromHistory } from '../utils/season-weather/tOptLearner'
 import { logWeeklyMenuSwap } from '../utils/weeklyMenuSelectionLogging'
 import { WEEKLY_MENU_IMPORT_PARAM } from '../utils/weeklyMenuQr'
+import { getWeeklyMenuGenerationErrorMessage } from '../utils/weeklyMenuGenerationError'
 import {
   getWeeklyMenuByWeekStart,
   saveWeeklyMenuDraft,
@@ -173,7 +174,7 @@ export function useWeeklyMenuController() {
       console.error('献立の生成に失敗しました', error)
       addToast({
         type: 'error',
-        message: `献立生成に失敗しました: ${getErrorMessage(error, '不明なエラー')}`,
+        message: `献立生成に失敗しました: ${getWeeklyMenuGenerationErrorMessage(error)}`,
         durationMs: 4500,
       })
     } finally {
@@ -268,22 +269,6 @@ export function useWeeklyMenuController() {
   }, [menu, recipes])
 
   const nutritionInsights = useMemo(() => analyzeWeeklyMenuNutrition(selectedRecipes), [selectedRecipes])
-
-  const recommendationReasons = useMemo(() => {
-    const modeLabel = preferences.weeklyMenuCostMode === 'saving'
-      ? '価格モード: 節約重視'
-      : preferences.weeklyMenuCostMode === 'luxury'
-        ? `価格モード: 贅沢重視（ご褒美枠 ${preferences.weeklyMenuLuxuryRewardDays}日）`
-        : '価格モード: 価格を気にしない'
-    const weatherLabel = latestWeather
-      ? `気象補正: 気温${Math.round(latestWeather.temperatureC)}℃・湿度${Math.round(latestWeather.humidityPercent)}%`
-      : '気象補正: キャッシュなし（季節スコアのみ）'
-    const userAddedCount = selectedRecipes.filter((recipe) => recipe.isUserAdded).length
-    const confidenceLabel = userAddedCount > 0
-      ? `特徴量行列: 公式CSV/Geminiを同一基準で評価（Gemini ${userAddedCount}件は低信頼下限20%適用）`
-      : '特徴量行列: 公式CSV/登録済みレシピを同一基準で評価'
-    return [modeLabel, weatherLabel, confidenceLabel]
-  }, [latestWeather, preferences.weeklyMenuCostMode, preferences.weeklyMenuLuxuryRewardDays, selectedRecipes])
 
   const lowConfidenceNutritionCount = useMemo(
     () => selectedRecipes.filter((recipe) => recipe.nutritionMeta?.source === 'estimated' && recipe.nutritionMeta?.lowConfidence).length,
@@ -601,7 +586,6 @@ export function useWeeklyMenuController() {
     nutritionInsights,
     preferences,
     providerToken,
-    recommendationReasons,
     recipes,
     refreshWeeklyWeather,
     registering,

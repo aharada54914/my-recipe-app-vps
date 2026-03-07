@@ -44,21 +44,59 @@ export function buildRecipeFeatureRecord(recipe: Recipe): IngredientFeatureRecor
   }
 }
 
-export async function ensureRecipeFeatureMatrix(recipes: Recipe[]): Promise<Map<number, IngredientFeatureRecord>> {
-  const ids = recipes.map(r => r.id).filter((id): id is number => id != null)
-  const existing = await db.recipeFeatureMatrix.bulkGet(ids)
-  const existingMap = new Map(
-    (existing.filter(Boolean) as IngredientFeatureRecord[]).map(r => [r.recipeId, r])
-  )
+function getUniqueRecipesById(recipes: Recipe[]): Recipe[] {
+  const seen = new Set<number>()
+  const unique: Recipe[] = []
 
-  const newRecords = recipes
-    .filter(r => r.id != null && !existingMap.has(r.id))
+  for (const recipe of recipes) {
+    if (recipe.id == null || seen.has(recipe.id)) continue
+    seen.add(recipe.id)
+    unique.push(recipe)
+  }
+
+  return unique
+}
+
+async function loadRecipeFeatureRecordsByRecipeId(recipeIds: number[]): Promise<Map<number, IngredientFeatureRecord>> {
+  if (recipeIds.length === 0) return new Map()
+
+  const records = await db.recipeFeatureMatrix
+    .where('recipeId')
+    .anyOf(recipeIds)
+    .toArray()
+
+  return new Map(records.map((record) => [record.recipeId, record]))
+}
+
+async function persistRecipeFeatureRecords(records: IngredientFeatureRecord[]): Promise<void> {
+  if (records.length === 0) return
+
+  try {
+    await db.recipeFeatureMatrix.bulkPut(records)
+  } catch (error) {
+    // The feature matrix is a derived cache. Weekly menu generation should continue
+    // even if the cache cannot be persisted for this run.
+    console.error('Failed to persist recipe feature matrix cache', error)
+  }
+}
+
+export async function ensureRecipeFeatureMatrix(recipes: Recipe[]): Promise<Map<number, IngredientFeatureRecord>> {
+  const uniqueRecipes = getUniqueRecipesById(recipes)
+  const ids = uniqueRecipes.map((recipe) => recipe.id!)
+
+  let existingMap = new Map<number, IngredientFeatureRecord>()
+  try {
+    existingMap = await loadRecipeFeatureRecordsByRecipeId(ids)
+  } catch (error) {
+    console.error('Failed to load recipe feature matrix cache; rebuilding in memory', error)
+  }
+
+  const newRecords = uniqueRecipes
+    .filter((recipe) => !existingMap.has(recipe.id!))
     .map(buildRecipeFeatureRecord)
     .filter((record): record is IngredientFeatureRecord => record != null)
 
-  if (newRecords.length > 0) {
-    await db.recipeFeatureMatrix.bulkPut(newRecords)
-  }
+  await persistRecipeFeatureRecords(newRecords)
 
   for (const record of newRecords) {
     existingMap.set(record.recipeId, record)

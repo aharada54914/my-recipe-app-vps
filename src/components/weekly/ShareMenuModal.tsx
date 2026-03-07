@@ -1,6 +1,6 @@
-import { createPortal } from 'react-dom'
 import { X, Share2, Download, ImagePlus } from 'lucide-react'
 import { useRef } from 'react'
+import { BottomSheetPortal } from '../ui/BottomSheetPortal'
 
 export interface ShareMenuModalProps {
     weekLabel: string
@@ -24,12 +24,8 @@ export function ShareMenuModal({
     onClose,
 }: ShareMenuModalProps) {
     const fileInputRef = useRef<HTMLInputElement>(null)
-    return createPortal(
-        <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/60" onClick={onClose}>
-            <div
-                className="w-full max-w-lg rounded-t-2xl bg-bg-primary p-4 pb-8"
-                onClick={(e) => e.stopPropagation()}
-            >
+    return (
+        <BottomSheetPortal onClose={onClose} panelClassName="p-4 pb-8">
                 <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-sm font-bold">週間献立を共有</h3>
                     <button onClick={onClose} className="rounded-lg p-1.5 text-text-secondary hover:text-accent cursor-pointer">
@@ -92,8 +88,6 @@ export function ShareMenuModal({
                     <ImagePlus className="h-4 w-4" />
                     QR画像から読み込む
                 </button>
-            </div>
-        </div>,
-        document.body
+        </BottomSheetPortal>
     )
 }

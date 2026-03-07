@@ -1,41 +1,41 @@
-import type { Recipe, RecipeCategory } from '../db/db'
+import type { Recipe } from '../db/db'
 import { getCurrentSeasonalIngredients } from '../data/seasonalIngredients'
+import type { RecipeSearchFacetState } from './searchFacets'
 import { isHelsioDeli } from './recipeUtils'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
-export function applyUiRecipeFilters(
+export function applyRecipeFacetFilters(
   recipes: Recipe[],
-  options: {
-    selectedCategories: RecipeCategory[]
-    quickFilter: boolean
-    seasonalFilter: boolean
-  }
+  facets: RecipeSearchFacetState,
 ) {
-  const { selectedCategories, quickFilter, seasonalFilter } = options
   let filtered = recipes
 
-  const activeCategories = selectedCategories.filter(
-    (category): category is Exclude<RecipeCategory, 'すべて'> => category !== 'すべて'
-  )
-
-  if (activeCategories.length > 0) {
-    const categorySet = new Set(activeCategories)
-    filtered = filtered.filter((r) => r.category !== 'すべて' && categorySet.has(r.category))
+  if (facets.devices.length > 0) {
+    const deviceSet = new Set(facets.devices)
+    filtered = filtered.filter((recipe) => deviceSet.has(recipe.device))
   }
 
-  if (quickFilter) {
-    filtered = filtered.filter((r) => r.totalTimeMinutes <= 30)
+  if (facets.categories.length > 0) {
+    const categorySet = new Set(facets.categories)
+    filtered = filtered.filter((recipe) => categorySet.has(recipe.category))
   }
-  if (seasonalFilter) {
+
+  if (facets.quick) {
+    filtered = filtered.filter((recipe) => recipe.totalTimeMinutes <= 30)
+  }
+
+  if (facets.seasonal) {
     filtered = filtered.filter(
-      (r) =>
-        !isHelsioDeli(r) &&
-        r.ingredients.some((ing) =>
-          seasonalIngredients.some((s) => ing.name.includes(s))
-        )
+      (recipe) =>
+        !isHelsioDeli(recipe) &&
+        recipe.ingredients.some((ingredient) =>
+          seasonalIngredients.some((seasonalIngredient) => ingredient.name.includes(seasonalIngredient)),
+        ),
     )
   }
 
   return filtered
 }
+
+export const applyUiRecipeFilters = applyRecipeFacetFilters

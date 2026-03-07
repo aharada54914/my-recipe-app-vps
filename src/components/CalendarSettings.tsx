@@ -56,7 +56,7 @@ export function CalendarSettings() {
   const handleStatusAction = () => {
     switch (calendarStatus.actionId) {
       case 'configure-google-client':
-        window.location.assign('/settings/account')
+        window.location.assign('/settings/advanced')
         return
       case 'sign-in-google':
         signInWithGoogle()
@@ -149,51 +149,10 @@ export function CalendarSettings() {
             </p>
           </div>
 
-          <div>
-            <label className="ui-field-label">献立の時間帯</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={preferences.mealStartHour}
-                  onChange={(e) => updatePreference('mealStartHour', Number(e.target.value))}
-                  className="ui-input w-14 px-2 py-2 text-center sm:w-14"
-                />
-                <span className="text-text-secondary">:</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={59}
-                  step={5}
-                  value={String(preferences.mealStartMinute).padStart(2, '0')}
-                  onChange={(e) => updatePreference('mealStartMinute', Number(e.target.value))}
-                  className="ui-input w-14 px-2 py-2 text-center sm:w-14"
-                />
-              </div>
-              <span className="text-text-secondary">〜</span>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={preferences.mealEndHour}
-                  onChange={(e) => updatePreference('mealEndHour', Number(e.target.value))}
-                  className="ui-input w-14 px-2 py-2 text-center sm:w-14"
-                />
-                <span className="text-text-secondary">:</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={59}
-                  step={5}
-                  value={String(preferences.mealEndMinute).padStart(2, '0')}
-                  onChange={(e) => updatePreference('mealEndMinute', Number(e.target.value))}
-                  className="ui-input w-14 px-2 py-2 text-center sm:w-14"
-                />
-              </div>
-            </div>
+          <div className="ui-inline-note">
+            <p className="text-xs leading-relaxed text-text-secondary">
+              献立登録の時間帯や食事希望時刻は「設定 → 献立」にまとめています。
+            </p>
           </div>
         </div>
       )}

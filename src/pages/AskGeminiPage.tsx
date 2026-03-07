@@ -63,7 +63,7 @@ export function AskGeminiPage() {
         title={geminiStatus.title}
         message={geminiStatus.message}
         actionLabel="Gemini設定を開く"
-        onAction={() => navigate('/settings/menu')}
+        onAction={() => navigate('/settings/ai')}
         icon={<Sparkles className="h-4 w-4" />}
         className="mb-0"
       />

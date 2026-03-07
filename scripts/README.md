@@ -5,6 +5,8 @@
   ビルド前に CSV から `src/data/recipes-*.json` を生成する。
 - `nutrition-audit.ts`  
   栄養データ監査のための検証スクリプト。
+- `ui-class-audit.mjs`
+  glass 系 class と token migration の残存数を監査する。
 - `resize-category-images.cjs`  
   カテゴリ画像を 400x400 の `.webp` に変換する。`--input` / `--output` を受け付ける。
 - `resize-category-images.js`  
