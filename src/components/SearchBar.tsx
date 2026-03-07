@@ -8,6 +8,7 @@ interface SearchBarProps {
   onChange: (value: string) => void
   history?: string[]
   onSubmit?: (value: string) => void
+  onBlurCommit?: (value: string) => void
   onSelectHistory?: (value: string) => void
   searching?: boolean
 }
@@ -17,12 +18,14 @@ export function SearchBar({
   onChange,
   history = [],
   onSubmit,
+  onBlurCommit,
   onSelectHistory,
   searching = false,
 }: SearchBarProps) {
   const [focused, setFocused] = useState(false)
   const {
     draftValue,
+    isComposing,
     setDraftValue,
     commitDraft,
     handleCompositionStart,
@@ -34,8 +37,11 @@ export function SearchBar({
   })
 
   const suggestions = useMemo(() => {
-    return getRecentSearchSuggestions(history, focused)
-  }, [focused, history])
+    return getRecentSearchSuggestions(
+      history,
+      focused && !isComposing && draftValue.trim().length === 0,
+    )
+  }, [draftValue, focused, history, isComposing])
 
   return (
     <div className="mb-6 relative">
@@ -57,12 +63,25 @@ export function SearchBar({
         <input
           type="text"
           value={draftValue}
-          onChange={(e) => setDraftValue(e.target.value)}
+          onChange={(e) => setDraftValue(
+            e.target.value,
+            Boolean((e.nativeEvent as InputEvent).isComposing),
+          )}
           onCompositionStart={handleCompositionStart}
           onCompositionEnd={(e) => handleCompositionEnd(e.currentTarget.value)}
           onFocus={() => setFocused(true)}
-          onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+          onBlur={(e) => {
+            const nextValue = e.currentTarget.value
+            commitDraft(nextValue)
+            onBlurCommit?.(nextValue)
+            window.setTimeout(() => setFocused(false), 120)
+          }}
           placeholder="レシピを検索..."
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          enterKeyHint="search"
           className="w-full bg-transparent text-base text-text-primary placeholder:text-text-secondary outline-none"
         />
       </form>
@@ -72,6 +91,7 @@ export function SearchBar({
           {suggestions.map((entry) => (
             <button
               key={entry}
+              type="button"
               onClick={() => {
                 commitDraft(entry)
                 onSelectHistory?.(entry)

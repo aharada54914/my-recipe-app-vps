@@ -12,7 +12,10 @@ interface CategoryTagsProps {
 
 export function CategoryTags({ selectedCategories, onToggle, counts }: CategoryTagsProps) {
   return (
-    <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+    <div
+      data-testid="search-category-grid"
+      className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3"
+    >
       {categories.map((cat) => {
         const isSelected = cat === 'すべて'
           ? selectedCategories.length === 0
@@ -21,8 +24,10 @@ export function CategoryTags({ selectedCategories, onToggle, counts }: CategoryT
         return (
           <button
             key={cat}
+            type="button"
             onClick={() => onToggle(cat)}
-            className={`category-tag-button shrink-0 rounded-xl px-4 py-2 text-sm ${isSelected
+            aria-pressed={isSelected}
+            className={`category-tag-button min-h-[44px] w-full rounded-xl px-4 py-2 text-sm ${isSelected
               ? 'category-tag-selected'
               : 'bg-bg-card text-text-secondary hover:bg-accent hover:text-white'
               }`}

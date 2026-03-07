@@ -18,16 +18,28 @@ export function useSearchInputController({
   const lastCommittedValueRef = useRef(value)
 
   useEffect(() => {
-    if (isComposing || debouncedDraft === value) return
+    if (isComposing || debouncedDraft === lastCommittedValueRef.current) return
     lastCommittedValueRef.current = debouncedDraft
     onCommit(debouncedDraft)
-  }, [debouncedDraft, isComposing, onCommit, value])
+  }, [debouncedDraft, isComposing, onCommit])
+
+  useEffect(() => {
+    if (isComposing || value === lastCommittedValueRef.current) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- keep the local draft in sync when the parent value changes outside active composition.
+    setDraftValue(value)
+  }, [isComposing, value])
 
   const commitDraft = useCallback((nextValue = draftValue) => {
     setDraftValue(nextValue)
+    if (nextValue === lastCommittedValueRef.current) return
     lastCommittedValueRef.current = nextValue
     onCommit(nextValue)
   }, [draftValue, onCommit])
+
+  const handleDraftChange = useCallback((nextValue: string, composing = false) => {
+    if (composing) setIsComposing(true)
+    setDraftValue(nextValue)
+  }, [])
 
   const handleCompositionStart = useCallback(() => {
     setIsComposing(true)
@@ -40,8 +52,8 @@ export function useSearchInputController({
 
   return {
     draftValue,
-    setDraftValue,
     isComposing,
+    setDraftValue: handleDraftChange,
     commitDraft,
     handleCompositionStart,
     handleCompositionEnd,

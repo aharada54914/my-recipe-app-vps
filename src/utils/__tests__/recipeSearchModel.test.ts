@@ -7,8 +7,12 @@ import type {
   WeeklyMenu,
 } from '../../db/db'
 import {
+  buildFacetAwareCategoryCounts,
+  buildFacetAwareCategoryCountsFromContext,
   buildRecipeCategoryCounts,
   buildRecipeSearchResults,
+  buildRecipeSearchResultsFromContext,
+  createRecipeSearchStaticContext,
   createEmptySearchModelInput,
   getRecipeSearchResultIds,
 } from '../recipeSearchModel'
@@ -122,8 +126,8 @@ describe('buildRecipeSearchResults', () => {
     expect(top.stockScore).toBeCloseTo(1.4, 3)
     expect(top.baseScore).toBeGreaterThan(8.22)
     expect(top.baseScore).toBeLessThan(8.25)
-    expect(top.finalScore).toBeGreaterThan(10.33)
-    expect(top.finalScore).toBeLessThan(10.35)
+    expect(top.finalScore).toBeGreaterThan(10.328)
+    expect(top.finalScore).toBeLessThan(10.33)
   })
 })
 
@@ -134,5 +138,76 @@ describe('buildRecipeCategoryCounts', () => {
       '主菜': 2,
       'スープ': 2,
     })
+  })
+
+  it('keeps category counts facet-aware while ignoring the active category facet itself', () => {
+    expect(buildFacetAwareCategoryCounts(createEmptySearchModelInput({
+      recipes: RECIPES,
+      stockItems: [],
+      searchQuery: '鶏',
+      viewHistory: VIEW_HISTORY,
+      favorites: FAVORITES,
+      weeklyMenus: WEEKLY_MENUS,
+      calendarEvents: CALENDAR_EVENTS,
+      facets: {
+        devices: ['healsio'],
+        categories: ['スープ'],
+        quick: true,
+        seasonal: false,
+      },
+    }))).toEqual({
+      'すべて': 1,
+      'スープ': 1,
+    })
+  })
+})
+
+describe('recipe search static context helpers', () => {
+  it('produces the same ranked results as the legacy one-shot builder', () => {
+    const input = createEmptySearchModelInput({
+      recipes: RECIPES,
+      stockItems: [{ name: '鶏もも肉' }],
+      searchQuery: '鶏',
+      viewHistory: VIEW_HISTORY,
+      favorites: FAVORITES,
+      weeklyMenus: WEEKLY_MENUS,
+      calendarEvents: CALENDAR_EVENTS,
+      facets: {
+        devices: ['hotcook'],
+        categories: ['主菜'],
+        quick: true,
+        seasonal: false,
+      },
+    })
+
+    const context = createRecipeSearchStaticContext(input)
+    const legacyResults = buildRecipeSearchResults(input)
+    const splitResults = buildRecipeSearchResultsFromContext(context, input.searchQuery, input.facets)
+
+    expect(splitResults).toEqual(legacyResults)
+  })
+
+  it('keeps category counts identical when reusing the static context', () => {
+    const input = createEmptySearchModelInput({
+      recipes: RECIPES,
+      stockItems: [],
+      searchQuery: '鶏',
+      viewHistory: VIEW_HISTORY,
+      favorites: FAVORITES,
+      weeklyMenus: WEEKLY_MENUS,
+      calendarEvents: CALENDAR_EVENTS,
+      facets: {
+        devices: ['healsio'],
+        categories: ['スープ'],
+        quick: true,
+        seasonal: false,
+      },
+    })
+
+    const context = createRecipeSearchStaticContext(input)
+
+    expect(
+      buildFacetAwareCategoryCountsFromContext(context, input.searchQuery, input.facets),
+    ).toEqual(buildFacetAwareCategoryCounts(input))
   })
 })

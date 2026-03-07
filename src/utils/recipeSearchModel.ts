@@ -6,11 +6,13 @@ import type {
   ViewHistory,
   WeeklyMenu,
 } from '../db/db'
+import type { RecipeSearchFacetState } from './searchFacets'
+import { createEmptyRecipeSearchFacets } from './searchFacets'
 import { calculateMatchRate, isHelsioDeli } from './recipeUtils'
 import { searchRecipesWithScores } from './searchUtils'
 import { buildPreferenceProfile } from './preferenceSignals'
 import { computeKitchenAppPreferenceScore } from './preferenceRanker'
-import { applyUiRecipeFilters } from './recipeFilters'
+import { applyRecipeFacetFilters } from './recipeFilters'
 
 export const QUERY_SCORE_WEIGHT = 4.2
 
@@ -41,9 +43,22 @@ export interface RecipeSearchModelInput {
   weeklyMenus: WeeklyMenu[]
   calendarEvents: CalendarEventRecord[]
   searchQuery: string
-  selectedCategories: RecipeCategory[]
-  quickFilter: boolean
-  seasonalFilter: boolean
+  facets: RecipeSearchFacetState
+}
+
+export interface RecipeSearchStaticInput {
+  recipes: Recipe[]
+  stockItems: Array<{ name: string }>
+  viewHistory: ViewHistory[]
+  favorites: Favorite[]
+  weeklyMenus: WeeklyMenu[]
+  calendarEvents: CalendarEventRecord[]
+}
+
+export interface RecipeSearchStaticContext extends RecipeSearchStaticInput {
+  stockNames: Set<string>
+  preferenceProfile: ReturnType<typeof buildPreferenceProfile>
+  baseScoreByRecipeId: Map<number, BaseRecipeScore>
 }
 
 export function computeBaseRecipeScore(recipe: Recipe, stockNames: Set<string>, preferenceScore: number): BaseRecipeScore {
@@ -61,7 +76,7 @@ export function computeBaseRecipeScore(recipe: Recipe, stockNames: Set<string>, 
   }
 }
 
-export function buildRecipeSearchResults(input: RecipeSearchModelInput): RecipeSearchResult[] {
+export function createRecipeSearchStaticContext(input: RecipeSearchStaticInput): RecipeSearchStaticContext {
   const {
     recipes,
     stockItems,
@@ -69,10 +84,6 @@ export function buildRecipeSearchResults(input: RecipeSearchModelInput): RecipeS
     favorites,
     weeklyMenus,
     calendarEvents,
-    searchQuery,
-    selectedCategories,
-    quickFilter,
-    seasonalFilter,
   } = input
 
   const stockNames = new Set(stockItems.map((item) => item.name))
@@ -91,13 +102,38 @@ export function buildRecipeSearchResults(input: RecipeSearchModelInput): RecipeS
     baseScoreByRecipeId.set(recipe.id, computeBaseRecipeScore(recipe, stockNames, preferenceScore))
   }
 
+  return {
+    recipes,
+    stockItems,
+    viewHistory,
+    favorites,
+    weeklyMenus,
+    calendarEvents,
+    stockNames,
+    preferenceProfile,
+    baseScoreByRecipeId,
+  }
+}
+
+export function buildRecipeSearchResultsFromContext(
+  context: RecipeSearchStaticContext,
+  searchQuery: string,
+  facets: RecipeSearchFacetState,
+): RecipeSearchResult[] {
+  const {
+    recipes,
+    stockNames,
+    preferenceProfile,
+    baseScoreByRecipeId,
+  } = context
+
   const scored = searchQuery
     ? searchRecipesWithScores(recipes, searchQuery)
     : recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
 
-  const filtered = applyUiRecipeFilters(
+  const filtered = applyRecipeFacetFilters(
     scored.map((entry) => entry.recipe),
-    { selectedCategories, quickFilter, seasonalFilter },
+    facets,
   )
   const queryScoreById = new Map(scored.map((entry) => [entry.recipe.id!, entry.queryScore]))
 
@@ -131,6 +167,11 @@ export function buildRecipeSearchResults(input: RecipeSearchModelInput): RecipeS
     })
 }
 
+export function buildRecipeSearchResults(input: RecipeSearchModelInput): RecipeSearchResult[] {
+  const context = createRecipeSearchStaticContext(input)
+  return buildRecipeSearchResultsFromContext(context, input.searchQuery, input.facets)
+}
+
 export function buildRecipeCategoryCounts(recipes: Recipe[]): Partial<Record<RecipeCategory, number>> {
   const counts: Partial<Record<RecipeCategory, number>> = { 'すべて': recipes.length }
   for (const recipe of recipes) {
@@ -139,8 +180,30 @@ export function buildRecipeCategoryCounts(recipes: Recipe[]): Partial<Record<Rec
   return counts
 }
 
-export function getRecipeSearchResultIds(results: RecipeSearchResult[]): number[] {
-  return results.map((entry) => entry.recipe.id!).filter((id): id is number => id != null)
+export function buildFacetAwareCategoryCountsFromContext(
+  context: RecipeSearchStaticContext,
+  searchQuery: string,
+  facets: RecipeSearchFacetState,
+): Partial<Record<RecipeCategory, number>> {
+  const results = buildRecipeSearchResultsFromContext(
+    context,
+    searchQuery,
+    {
+      ...facets,
+      categories: [],
+    },
+  )
+
+  return buildRecipeCategoryCounts(results.map((entry) => entry.recipe))
+}
+
+export function buildFacetAwareCategoryCounts(input: RecipeSearchModelInput): Partial<Record<RecipeCategory, number>> {
+  const context = createRecipeSearchStaticContext(input)
+  return buildFacetAwareCategoryCountsFromContext(
+    context,
+    input.searchQuery,
+    input.facets,
+  )
 }
 
 export function createEmptySearchModelInput(overrides: Partial<RecipeSearchModelInput> = {}): RecipeSearchModelInput {
@@ -152,9 +215,23 @@ export function createEmptySearchModelInput(overrides: Partial<RecipeSearchModel
     weeklyMenus: [],
     calendarEvents: [],
     searchQuery: '',
-    selectedCategories: [],
-    quickFilter: false,
-    seasonalFilter: false,
+    facets: createEmptyRecipeSearchFacets(),
     ...overrides,
   }
+}
+
+export function createEmptySearchStaticInput(overrides: Partial<RecipeSearchStaticInput> = {}): RecipeSearchStaticInput {
+  return {
+    recipes: [],
+    stockItems: [],
+    viewHistory: [],
+    favorites: [],
+    weeklyMenus: [],
+    calendarEvents: [],
+    ...overrides,
+  }
+}
+
+export function getRecipeSearchResultIds(results: RecipeSearchResult[]): number[] {
+  return results.map((entry) => entry.recipe.id!).filter((id): id is number => id != null)
 }

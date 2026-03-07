@@ -3,114 +3,108 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams } from 'react-router-dom'
 import { db } from '../db/db'
-import type { Recipe, RecipeCategory, DeviceType } from '../db/db'
-import { Clock3, Flame, Leaf, Loader2 } from 'lucide-react'
+import type { RecipeCategory, DeviceType } from '../db/db'
+import { Flame, Leaf, Loader2, X } from 'lucide-react'
 import { SearchBar } from './SearchBar'
 import { CategoryTags } from './CategoryTags'
 import { RecipeCard } from './RecipeCard'
 import { useRecipeSearchModel } from '../hooks/useRecipeSearchModel'
+import {
+  buildRecipeSearchFacetChips,
+  clearRecipeSearchFacets,
+  countActiveRecipeSearchFacets,
+  createRecipeSearchParams,
+  hasActiveRecipeSearchFacets,
+  parseRecipeSearchFacetsFromParams,
+  toggleRecipeSearchCategory,
+  toggleRecipeSearchDevice,
+  toggleRecipeSearchFlag,
+  type RecipeSearchFacetState,
+} from '../utils/searchFacets'
 
-const RECIPE_CATEGORIES: RecipeCategory[] = ['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ']
 const SEARCH_HISTORY_KEY = 'recipe_search_history'
 
-function formatViewedAtLabel(date: Date): string {
-  const diffMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
-  if (diffMinutes < 60) return `${diffMinutes || 1}分前`
-  const diffHours = Math.floor(diffMinutes / 60)
-  if (diffHours < 24) return `${diffHours}時間前`
-  return `${Math.floor(diffHours / 24)}日前`
+const DEVICE_BUTTONS: Array<{ key: DeviceType; label: string }> = [
+  { key: 'hotcook', label: 'ホットクック' },
+  { key: 'healsio', label: 'ヘルシオ' },
+]
+
+function areFacetStatesEqual(left: RecipeSearchFacetState, right: RecipeSearchFacetState) {
+  return (
+    left.quick === right.quick
+    && left.seasonal === right.seasonal
+    && left.devices.join(',') === right.devices.join(',')
+    && left.categories.join(',') === right.categories.join(',')
+  )
 }
 
 interface RecipeListProps {
   onSelectRecipe: (id: number) => void
 }
 
+type FacetStateUpdater =
+  | RecipeSearchFacetState
+  | ((current: RecipeSearchFacetState) => RecipeSearchFacetState)
+
 export function RecipeList({ onSelectRecipe }: RecipeListProps) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategories, setSelectedCategories] = useState<RecipeCategory[]>([])
-  const [deviceFilter, setDeviceFilter] = useState<DeviceType | null>(null)
-  const [quickFilter, setQuickFilter] = useState(false)
-  const [seasonalFilter, setSeasonalFilter] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const searchParamKey = searchParams.toString()
+
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '')
+  const [facets, setFacets] = useState<RecipeSearchFacetState>(() => parseRecipeSearchFacetsFromParams(searchParams))
+  const searchQueryRef = useRef(searchQuery)
+  const facetsRef = useRef(facets)
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     const stored = localStorage.getItem(SEARCH_HISTORY_KEY)
     if (!stored) return []
     try {
       const parsed = JSON.parse(stored)
-      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string').slice(0, 5) : []
+      return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string').slice(0, 5) : []
     } catch {
       return []
     }
   })
 
-  // T-22: useDeferredValue defers re-renders during rapid input
   const deferredSearch = useDeferredValue(searchQuery)
   const parentRef = useRef<HTMLDivElement>(null)
   const [isFiltering, setIsFiltering] = useState(false)
 
-  // Read URL ?filter= param and initialize state
-  const [searchParams] = useSearchParams()
-  const filterParam = searchParams.get('filter') ?? ''
+  useEffect(() => {
+    searchQueryRef.current = searchQuery
+  }, [searchQuery])
 
   useEffect(() => {
-    if (filterParam.startsWith('device:')) {
-      const device = filterParam.replace('device:', '') as DeviceType
-      setDeviceFilter(device)
-      setSelectedCategories([])
-      setQuickFilter(false)
-      setSeasonalFilter(false)
-    } else if (filterParam === 'quick') {
-      setQuickFilter(true)
-      setSelectedCategories([])
-      setDeviceFilter(null)
-      setSeasonalFilter(false)
-    } else if (filterParam === 'seasonal') {
-      setSeasonalFilter(true)
-      setSelectedCategories([])
-      setDeviceFilter(null)
-      setQuickFilter(false)
-    } else if (filterParam && (RECIPE_CATEGORIES as string[]).includes(filterParam)) {
-      const parsedCategory = filterParam as RecipeCategory
-      setSelectedCategories(parsedCategory === 'すべて' ? [] : [parsedCategory])
-      setDeviceFilter(null)
-      setQuickFilter(false)
-      setSeasonalFilter(false)
-    }
-  }, [filterParam])
+    facetsRef.current = facets
+  }, [facets])
 
-  // T-03: DB-side filtering with combined query (T-09)
+  useEffect(() => {
+    const nextQuery = searchParams.get('q') ?? ''
+    const nextFacets = parseRecipeSearchFacetsFromParams(searchParams)
+
+    setSearchQuery((current) => (current === nextQuery ? current : nextQuery))
+    setFacets((current) => (areFacetStatesEqual(current, nextFacets) ? current : nextFacets))
+  }, [searchParamKey, searchParams])
+
   const data = useLiveQuery(
     async () => {
-      let fetchedRecipes: Recipe[] = []
-      if (deviceFilter) {
-        fetchedRecipes = await db.recipes.where('device').equals(deviceFilter).toArray()
-      } else if (selectedCategories.length > 0) {
-        fetchedRecipes = await db.recipes.where('category').anyOf(selectedCategories).toArray()
-      } else {
-        fetchedRecipes = await db.recipes.toArray()
-      }
-
-      const [recipes, stockItems] = await Promise.all([
-        Promise.resolve(fetchedRecipes),
-        db.stock.filter(item => item.inStock).toArray(),
-      ])
-
-      recipes.sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
-
-      const [viewHistory, favorites, weeklyMenus, calendarEvents] = await Promise.all([
+      const [recipes, stockItems, viewHistory, favorites, weeklyMenus, calendarEvents] = await Promise.all([
+        db.recipes.toArray(),
+        db.stock.filter((item) => item.inStock).toArray(),
         db.viewHistory.orderBy('viewedAt').reverse().limit(200).toArray(),
         db.favorites.orderBy('addedAt').reverse().limit(200).toArray(),
         db.weeklyMenus.orderBy('weekStartDate').reverse().limit(12).toArray(),
         db.calendarEvents.toArray().then((events) =>
           events
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .slice(0, 200)
+            .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+            .slice(0, 200),
         ),
       ])
 
+      recipes.sort((left, right) => (right.id ?? 0) - (left.id ?? 0))
       return { recipes, stockItems, viewHistory, favorites, weeklyMenus, calendarEvents }
     },
-    [selectedCategories, deviceFilter],
-    { recipes: [], stockItems: [], viewHistory: [], favorites: [], weeklyMenus: [], calendarEvents: [] }
+    [],
+    { recipes: [], stockItems: [], viewHistory: [], favorites: [], weeklyMenus: [], calendarEvents: [] },
   )
 
   const searchModelInput = useMemo(() => ({
@@ -121,49 +115,29 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     weeklyMenus: data.weeklyMenus,
     calendarEvents: data.calendarEvents,
     searchQuery: deferredSearch,
-    selectedCategories,
-    quickFilter,
-    seasonalFilter,
+    facets,
   }), [
+    data.calendarEvents,
+    data.favorites,
     data.recipes,
     data.stockItems,
     data.viewHistory,
-    data.favorites,
     data.weeklyMenus,
-    data.calendarEvents,
     deferredSearch,
-    selectedCategories,
-    quickFilter,
-    seasonalFilter,
+    facets,
   ])
 
   const { results: withRates, categoryCounts } = useRecipeSearchModel(searchModelInput)
-
-  const recipeById = useMemo(
-    () => new Map(data.recipes.filter((recipe): recipe is Recipe & { id: number } => recipe.id != null).map((recipe) => [recipe.id, recipe])),
-    [data.recipes]
-  )
-
-  const recentViewedRecipes = useMemo(() => {
-    const seen = new Set<number>()
-    return data.viewHistory
-      .map((entry) => {
-        const recipe = recipeById.get(entry.recipeId)
-        if (!recipe || seen.has(recipe.id!)) return null
-        seen.add(recipe.id!)
-        return { recipe, viewedAt: entry.viewedAt }
-      })
-      .filter((entry): entry is { recipe: Recipe; viewedAt: Date } => !!entry)
-      .slice(0, 4)
-  }, [data.viewHistory, recipeById])
+  const activeFacetChips = useMemo(() => buildRecipeSearchFacetChips(facets), [facets])
+  const activeFacetCount = countActiveRecipeSearchFacets(facets)
+  const hasActiveFilters = hasActiveRecipeSearchFacets(facets)
 
   useEffect(() => {
     setIsFiltering(true)
     const timer = window.setTimeout(() => setIsFiltering(false), 100)
     return () => window.clearTimeout(timer)
-  }, [deferredSearch, selectedCategories, quickFilter, seasonalFilter, deviceFilter])
+  }, [deferredSearch, facets])
 
-  // T-04: Virtual scrolling
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: withRates.length,
@@ -172,44 +146,40 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
     overscan: 5,
   })
 
-  const handleSelectRecipe = useCallback(
-    (id: number) => onSelectRecipe(id),
-    [onSelectRecipe]
-  )
+  const handleSelectRecipe = useCallback((id: number) => onSelectRecipe(id), [onSelectRecipe])
 
-  // When user picks a category tag, clear device/quick/seasonal filters
-  const handleCategoryToggle = useCallback((cat: RecipeCategory) => {
-    setSelectedCategories((prev) => {
-      if (cat === 'すべて') return []
-      if (prev.includes(cat)) return prev.filter((value) => value !== cat)
-      return [...prev, cat]
-    })
-    setDeviceFilter(null)
-    setQuickFilter(false)
-    setSeasonalFilter(false)
-  }, [])
+  const syncSearchParams = useCallback((nextQuery: string, nextFacets: RecipeSearchFacetState) => {
+    const nextParams = createRecipeSearchParams(nextQuery, nextFacets)
+    const nextParamKey = nextParams.toString()
+    if (nextParamKey === searchParamKey) return
+    setSearchParams(nextParams, { replace: true })
+  }, [searchParamKey, setSearchParams])
 
-  // Active filter label for display
-  const activeFilterLabel = deviceFilter
-    ? deviceFilter === 'hotcook' ? 'ホットクック' : 'ヘルシオ'
-    : quickFilter ? '時短 (30分以内)'
-      : seasonalFilter ? '旬のレシピ'
-        : null
+  const updateFacets = useCallback((updater: FacetStateUpdater) => {
+    const current = facetsRef.current
+    const next = typeof updater === 'function'
+      ? updater(current)
+      : updater
 
-  const hasActiveFilters = !!activeFilterLabel || selectedCategories.length > 0
+    if (areFacetStatesEqual(current, next)) return
+    facetsRef.current = next
+    setFacets(next)
+    syncSearchParams(searchQueryRef.current, next)
+  }, [syncSearchParams])
 
   const saveSearchHistory = useCallback((keyword: string) => {
     const normalized = keyword.trim()
     if (!normalized) return
 
-    setSearchHistory((prev) => {
-      const next = [normalized, ...prev.filter((entry) => entry !== normalized)].slice(0, 5)
+    setSearchHistory((previous) => {
+      const next = [normalized, ...previous.filter((entry) => entry !== normalized)].slice(0, 5)
       localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next))
       return next
     })
   }, [])
 
   const commitSearchQuery = useCallback((value: string) => {
+    searchQueryRef.current = value
     startTransition(() => {
       setSearchQuery(value)
     })
@@ -217,64 +187,36 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
 
   const handleSubmitSearch = useCallback((value: string) => {
     commitSearchQuery(value)
+    syncSearchParams(value, facetsRef.current)
     saveSearchHistory(value)
-  }, [commitSearchQuery, saveSearchHistory])
+  }, [commitSearchQuery, saveSearchHistory, syncSearchParams])
+
+  const handleBlurCommit = useCallback((value: string) => {
+    commitSearchQuery(value)
+    syncSearchParams(value, facetsRef.current)
+  }, [commitSearchQuery, syncSearchParams])
 
   const handleSelectHistory = useCallback((value: string) => {
     commitSearchQuery(value)
+    syncSearchParams(value, facetsRef.current)
     saveSearchHistory(value)
-  }, [commitSearchQuery, saveSearchHistory])
+  }, [commitSearchQuery, saveSearchHistory, syncSearchParams])
 
-  const quickFilterButtons = [
-    {
-      key: 'device:hotcook',
-      label: 'ホットクック',
-      icon: null,
-      active: deviceFilter === 'hotcook',
-      onClick: () => {
-        setDeviceFilter(deviceFilter === 'hotcook' ? null : 'hotcook')
-        setSelectedCategories([])
-        setQuickFilter(false)
-        setSeasonalFilter(false)
-      },
-    },
-    {
-      key: 'device:healsio',
-      label: 'ヘルシオ',
-      icon: null,
-      active: deviceFilter === 'healsio',
-      onClick: () => {
-        setDeviceFilter(deviceFilter === 'healsio' ? null : 'healsio')
-        setSelectedCategories([])
-        setQuickFilter(false)
-        setSeasonalFilter(false)
-      },
-    },
-    {
-      key: 'quick',
-      label: '時短 30分以内',
-      icon: <Flame className="h-3.5 w-3.5" />,
-      active: quickFilter,
-      onClick: () => {
-        setQuickFilter((prev) => !prev)
-        setSelectedCategories([])
-        setDeviceFilter(null)
-        setSeasonalFilter(false)
-      },
-    },
-    {
-      key: 'seasonal',
-      label: '旬を優先',
-      icon: <Leaf className="h-3.5 w-3.5" />,
-      active: seasonalFilter,
-      onClick: () => {
-        setSeasonalFilter((prev) => !prev)
-        setSelectedCategories([])
-        setDeviceFilter(null)
-        setQuickFilter(false)
-      },
-    },
-  ]
+  const handleRemoveFacetChip = useCallback((chipKey: string) => {
+    updateFacets((current) => {
+      if (chipKey === 'quick') return toggleRecipeSearchFlag(current, 'quick')
+      if (chipKey === 'seasonal') return toggleRecipeSearchFlag(current, 'seasonal')
+      if (chipKey.startsWith('device:')) return toggleRecipeSearchDevice(current, chipKey.replace('device:', '') as DeviceType)
+      if (chipKey.startsWith('category:')) return toggleRecipeSearchCategory(current, chipKey.replace('category:', '') as RecipeCategory)
+      return current
+    })
+  }, [updateFacets])
+
+  const clearOneFacet = useCallback(() => {
+    const lastChip = activeFacetChips[activeFacetChips.length - 1]
+    if (!lastChip) return
+    handleRemoveFacetChip(lastChip.key)
+  }, [activeFacetChips, handleRemoveFacetChip])
 
   return (
     <>
@@ -283,13 +225,13 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         <div className="mt-1 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-extrabold text-text-primary">レシピ検索</h2>
-            <p className="mt-1 text-sm text-text-secondary">料理名、食材、カテゴリからすぐ探せます。</p>
+            <p className="mt-1 text-sm text-text-secondary">料理名、食材、カテゴリを重ねて絞り込めます。</p>
           </div>
-          {hasActiveFilters && (
+          {hasActiveFilters ? (
             <span className="ui-chip-muted text-xs">
-              絞り込み中
+              {activeFacetCount}条件で絞り込み中
             </span>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -298,33 +240,113 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         onChange={commitSearchQuery}
         history={searchHistory}
         onSubmit={handleSubmitSearch}
+        onBlurCommit={handleBlurCommit}
         onSelectHistory={handleSelectHistory}
         searching={isFiltering}
       />
 
-      <div data-testid="search-quick-filters" className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        {quickFilterButtons.map((filter) => (
+      <section data-testid="search-device-filters" className="mb-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-text-tertiary">機種</p>
+          <span className="text-[11px] text-text-secondary">同時選択可</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {DEVICE_BUTTONS.map((device) => {
+            const active = facets.devices.includes(device.key)
+            return (
+              <button
+                key={device.key}
+                type="button"
+                onClick={() => updateFacets((current) => toggleRecipeSearchDevice(current, device.key))}
+                className={`ui-btn min-h-[44px] px-4 py-2 text-sm transition-colors ${
+                  active
+                    ? 'bg-accent text-white'
+                    : 'ui-btn-secondary text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                {device.label}
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+      <section data-testid="search-condition-filters" className="mb-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-text-tertiary">条件</p>
+          <span className="text-[11px] text-text-secondary">別条件とは AND</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <button
-            key={filter.key}
             type="button"
-            onClick={filter.onClick}
-            className={`ui-btn flex min-h-[44px] shrink-0 items-center gap-1.5 px-4 py-2 text-sm transition-colors ${
-              filter.active
+            onClick={() => updateFacets((current) => toggleRecipeSearchFlag(current, 'quick'))}
+            className={`ui-btn flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-sm transition-colors ${
+              facets.quick
                 ? 'bg-accent text-white'
                 : 'ui-btn-secondary text-text-secondary hover:text-text-primary'
             }`}
           >
-            {filter.icon}
-            <span>{filter.label}</span>
+            <Flame className="h-3.5 w-3.5" />
+            時短 30分以内
           </button>
-        ))}
-      </div>
+          <button
+            type="button"
+            onClick={() => updateFacets((current) => toggleRecipeSearchFlag(current, 'seasonal'))}
+            className={`ui-btn flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-sm transition-colors ${
+              facets.seasonal
+                ? 'bg-accent text-white'
+                : 'ui-btn-secondary text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <Leaf className="h-3.5 w-3.5" />
+            旬を優先
+          </button>
+        </div>
+      </section>
 
-      <CategoryTags
-        selectedCategories={selectedCategories}
-        onToggle={handleCategoryToggle}
-        counts={categoryCounts}
-      />
+      <section className="mb-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-text-tertiary">カテゴリ</p>
+          <span className="text-[11px] text-text-secondary">同時選択可</span>
+        </div>
+        <CategoryTags
+          selectedCategories={facets.categories}
+          onToggle={(category) => updateFacets((current) => toggleRecipeSearchCategory(current, category))}
+          counts={categoryCounts}
+        />
+      </section>
+
+      {hasActiveFilters ? (
+        <section data-testid="search-active-facets" className="ui-panel mb-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-text-primary">有効な条件</h3>
+              <p className="mt-1 text-xs text-text-secondary">タップで個別解除できます</p>
+            </div>
+            <button
+              type="button"
+              data-testid="search-clear-facets"
+              onClick={() => updateFacets(clearRecipeSearchFacets())}
+              className="text-xs font-semibold text-accent"
+            >
+              すべて解除
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {activeFacetChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => handleRemoveFacetChip(chip.key)}
+                className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent"
+              >
+                {chip.label}
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {!searchQuery.trim() && searchHistory.length > 0 && !hasActiveFilters && (
         <section data-testid="search-recent-searches" className="ui-panel mb-4">
@@ -347,76 +369,35 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
         </section>
       )}
 
-      {!searchQuery.trim() && recentViewedRecipes.length > 0 && !hasActiveFilters && (
-        <section data-testid="search-recent-viewed" className="ui-panel mb-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-bold text-text-primary">最近見たレシピ</h3>
-              <p className="mt-1 text-xs text-text-secondary">前回の続きから見返せます</p>
-            </div>
-            <Clock3 className="h-4 w-4 text-text-secondary" />
-          </div>
-          <div className="space-y-2">
-            {recentViewedRecipes.map(({ recipe, viewedAt }) => (
-              <button
-                key={`${recipe.id}-${viewedAt.toISOString()}`}
-                type="button"
-                onClick={() => handleSelectRecipe(recipe.id!)}
-                className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-xl border border-border-soft bg-bg-card-hover px-3 py-3 text-left transition-colors hover:bg-bg-card"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-text-primary">{recipe.title}</p>
-                  <p className="mt-1 text-xs text-text-secondary">
-                    {recipe.device === 'hotcook' ? 'ホットクック' : recipe.device === 'healsio' ? 'ヘルシオ' : '手動調理'}
-                    {' · '}
-                    {recipe.totalTimeMinutes}分
-                  </p>
-                </div>
-                <span className="shrink-0 text-xs font-medium text-text-secondary">
-                  {formatViewedAtLabel(viewedAt)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Active special filter badge */}
-      {activeFilterLabel && (
-        <div className="mb-4 flex items-center gap-2">
-          <span className="ui-chip-muted border-accent/30 bg-accent/12 px-3 py-1 text-sm font-medium text-accent">
-            {activeFilterLabel}
-          </span>
-          <button
-            onClick={() => {
-              setDeviceFilter(null)
-              setQuickFilter(false)
-              setSeasonalFilter(false)
-            }}
-            className="text-xs text-text-secondary hover:text-accent"
-          >
-            ✕ 解除
-          </button>
-        </div>
-      )}
-
-      {isFiltering && (
+      {isFiltering ? (
         <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-border-soft bg-bg-card px-3 py-1.5 text-xs text-text-secondary">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           絞り込み中...
         </div>
-      )}
+      ) : null}
 
       {withRates.length === 0 ? (
-        <p className="py-12 text-center text-sm text-text-secondary">
-          レシピが見つかりません
-        </p>
+        <div className="py-12 text-center">
+          <p className="text-sm text-text-secondary">レシピが見つかりません</p>
+          {hasActiveFilters ? (
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <button type="button" onClick={clearOneFacet} className="ui-btn ui-btn-secondary px-4 text-sm">
+                条件を1つ外す
+              </button>
+              <button type="button" onClick={() => updateFacets(clearRecipeSearchFacets())} className="text-sm font-semibold text-accent">
+                すべて解除
+              </button>
+            </div>
+          ) : null}
+        </div>
       ) : (
         <div
           ref={parentRef}
           className="overflow-auto"
           style={{
-            height: 'calc(100dvh - 18.5rem)',
+            height: hasActiveFilters
+              ? 'max(18rem, calc(100dvh - 34rem))'
+              : 'max(20rem, calc(100dvh - 30rem))',
             opacity: isFiltering ? 0.7 : 1,
             transition: 'opacity 150ms',
           }}

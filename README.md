@@ -1,73 +1,109 @@
 # Kitchen App — Smart Recipe Manager PWA
 
-最終改訂: 2026-03-05
+最終改訂: 2026-03-07
 
-ホットクック / ヘルシオ向けのレシピ管理PWAです。  
-オフライン優先で動作し、Google Driveバックアップ、Gemini連携、週間献立自動生成に対応しています。
+ホットクック / ヘルシオ向けのレシピ管理 PWA です。  
+スマホ利用を前提に、`レシピ検索` と `AI 相談` を主導線に置きつつ、週間献立、在庫管理、Google 連携までを 1 つのアプリで扱います。
 
 ---
 
 ## 主な機能
 
-- レシピ検索（約1,700件、あいまい検索対応）
-- 在庫管理と在庫一致率表示（ヘッダーから直接アクセス可能）
-- **今日食べたい料理**（Phase2ベクトルスコア × T_opt個人化 × 旬スコアの複合スコアでSoftmaxサンプリング、4件をホームにレコメンド）
-- **T_opt個人最適気温学習**（閲覧・献立採用履歴から個人の熱的快適温度帯を推定し天気レコメンドを個人化）
-- **食材コスト推定**（食材平均価格データ + 表記ゆれ解決で1レシピあたりのコストを推定）
-- 旬のおすすめ（WeeklyMenuTimeline直下、日替わりローテーション）
-- 週間献立の自動生成（主菜+副菜/スープ、天気考慮スコアリング対応）
-- 週間献立の7日間天気パネル（気象庁API、湿度レイヤードイラスト付き）
-- 週間献立のQRコード共有（Googleカレンダーイベントへ画像添付 + インポートURL埋め込み）
-- 買い物リスト自動生成 + 追加編集UI
-- Google Calendar登録
-- Google Drive自動バックアップ / 復元
-- 通知機能（権限設定 + ローカル通知スケジューラ）
-- 在庫QR共有（カメラスキャン対応、1枚QRに集約）
-- Gemini 3 FlashによるAIレシピ解析
-- 写真複数枚から食材抽出 -> 献立生成（再生成は文字データのみ送信）
-- URL取り込み/献立生成の結果を大型編集ウィンドウで修正してから保存
-- 検索結果を好みデータで補正する Kitchen App Preference Rank
-- iOS向けPWA最適化 + Liquid Glass UI
+- レシピ検索
+  - 約 1,700 件のレシピをあいまい検索
+  - 最近の検索、カテゴリ / 機器 / 時短 / 旬フィルタ
+  - 別グループは AND、同一グループ内は OR の複合絞り込み
+  - カテゴリは横スクロール不要の grid 表示
+  - iPhone Safari の日本語入力で文字順が崩れにくい IME-safe 入力制御
+  - 在庫一致率と好みシグナルによる並び替え
+- AI 相談
+  - URL 取り込み
+  - 写真から食材抽出
+  - 在庫から提案
+  - Gemini チャット履歴保持と再試行導線
+- 週間献立
+  - 7 日分の献立生成
+  - 天気考慮スコアリング
+  - 買い物リスト自動生成 / 編集
+  - QR 共有、共有コード取り込み、Google Calendar 登録
+- 在庫管理
+  - 明示的な `+1 / -1 / 数量入力 / 削除`
+  - 最近使った食材からの即時追加
+  - 在庫 QR 共有 / 受信
+- Google 連携
+  - Google ログイン
+  - Google Drive バックアップ / 復元
+  - Google Calendar 連携
+- テーマ / UI
+  - `Warm Tactile Kitchen` ベースの light / dark / system 対応
+  - ラベル付き BottomNav
+  - safe-area 対応の sticky header / bottom nav
+- ヘルプ
+  - `まずはここから / よく使う操作 / 共有・移行 / 困ったとき`
+  - 記事ごとの CTA と状態チップ
+- 品質基盤
+  - Vitest による unit / component test
+  - Playwright による smoke test / visual regression
+  - `ui:class-audit` による glass class 残滓監査
 
 ---
 
 ## クイックスタート
 
-Node.js `22.12.0+` 推奨（`.nvmrc` 参照）
+Node.js `22.12.0+` 推奨です。
 
 ```bash
 npm install
 npm run dev
 ```
 
-ビルド:
-
-```bash
-npm run build
-npm run preview
-```
-
----
-
-## 環境変数
-
-`.env.example` をコピーして `.env` を作成:
-
-```bash
-cp .env.example .env
-```
+Google OAuth や Gemini を使う場合のみ、ルートに `.env` を作成してください。
 
 ```env
-# Google OAuth（Googleログイン/Drive/Calendar）
 VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
-
-# Gemini API（任意。設定画面入力でも可）
 VITE_GEMINI_API_KEY=your-gemini-api-key
 ```
 
 補足:
-- `VITE_GOOGLE_CLIENT_ID` 未設定時はOAuth機能のみ無効化（アプリ自体は起動）
-- `VITE_GEMINI_API_KEY` は `.env` 値が設定画面保存値より優先
+- `VITE_GOOGLE_CLIENT_ID` がない場合でもアプリ自体は起動します
+- `VITE_GEMINI_API_KEY` は設定画面保存値より `.env` が優先されます
+
+---
+
+## 主要コマンド
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm test
+npm run test:smoke:ci
+npm run test:visual
+npm run ui:class-audit
+```
+
+スナップショット更新:
+
+```bash
+npm run test:visual:update
+```
+
+---
+
+## QA モード
+
+Google 実アカウントなしで接続済みフローを検証できます。
+
+- 有効化: `/settings/advanced?qa-google=1`
+- 対象:
+  - Google ログイン済み状態
+  - Google Drive バックアップ / 復元
+  - Google Calendar 予定登録
+- 入口:
+  - `設定 > 詳細設定 > 接続フロー検証`
+  - 旧 URL の `/settings/data?qa-google=1` でも自動で詳細設定へ移動します
+
+詳細は [docs/TESTING.md](/Users/jrmag/my-recipe-app/docs/TESTING.md) を参照してください。
 
 ---
 
@@ -79,43 +115,47 @@ VITE_GEMINI_API_KEY=your-gemini-api-key
 - `/weekly-menu` 週間献立
 - `/favorites` お気に入り
 - `/history` 履歴
-- `/gemini` AI提案
-- `/settings/:tab` 設定タブ画面
+- `/gemini` AI 提案
+- `/settings/:tab` 設定
+
+設定タブ:
+- `account`
+- `planning`
+- `ai`
+- `notifications`
+- `appearance`
+- `data`
+- `help`
+- `about`
+- `advanced`
+- `guide`
+- `version`
 
 ---
 
 ## ドキュメント
 
-- `docs/FEATURES.md` 機能詳細
-- `docs/PWA_REQUIREMENTS.md` 0から作る場合の要件定義書
-- `docs/PWA_SPECIFICATION.md` 0から作る場合の仕様書
-- `docs/SETUP.md` セットアップ・デプロイ
-- `docs/ALGORITHMS.md` アルゴリズム仕様
-- `docs/ARCHITECTURE.md` アーキテクチャ仕様
-- `docs/SETTINGS_GUIDE.md` 個人向けやさしい設定ガイド (アプリ内から閲覧可能)
-- `SETUP_GUIDE_OKAZAKI.md` 個人向け（岡崎弁）設定ガイド
+- [docs/FEATURES.md](/Users/jrmag/my-recipe-app/docs/FEATURES.md) 現行機能の要約
+- [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-app/docs/ARCHITECTURE.md) 現行アーキテクチャ
+- [docs/SETUP.md](/Users/jrmag/my-recipe-app/docs/SETUP.md) 開発 / 配布セットアップ
+- [docs/TESTING.md](/Users/jrmag/my-recipe-app/docs/TESTING.md) テスト構成と QA モード
+- [docs/SETTINGS_GUIDE.md](/Users/jrmag/my-recipe-app/docs/SETTINGS_GUIDE.md) 詳細な設定ガイド
+- [SETUP_GUIDE.md](/Users/jrmag/my-recipe-app/SETUP_GUIDE.md) かんたん初期設定ガイド
+- [SETUP_GUIDE_OKAZAKI.md](/Users/jrmag/my-recipe-app/SETUP_GUIDE_OKAZAKI.md) 岡崎弁ガイド
+- [docs/ALGORITHMS.md](/Users/jrmag/my-recipe-app/docs/ALGORITHMS.md) レコメンド / スコアリング仕様
+- [docs/PWA_SPECIFICATION.md](/Users/jrmag/my-recipe-app/docs/PWA_SPECIFICATION.md) PWA の設計仕様
 
 ---
 
-## URLインポート対応サイト
+## URL インポート対応サイト
 
-`/gemini -> インポート` タブ内にも同じ一覧を表示しています。
-
-- みんなのきょうの料理: `https://www.kyounoryouri.jp/`
-- Nadia（ナディア）: `https://oceans-nadia.com/`
-- 楽天レシピ: `https://recipe.rakuten.co.jp/`
-- macaroni（マカロニ）: `https://macaro-ni.jp/`
-- E・レシピ: `https://erecipe.woman.excite.co.jp/`
-- キッコーマン ホームクッキング: `https://www.kikkoman.co.jp/homecook/`
-- 味の素パーク: `https://park.ajinomoto.co.jp/`
-- フーディストノート: `https://foodistnote.recipe-blog.jp/`
-- リュウジのバズレシピ.com: `https://bazurecipe.com/`
-- つくおき: `https://cookien.com/`
-
----
-
-## バージョン
-
-現在: **v2.0.0**
-
-`設定 > バージョン情報` で、これまでの変更要約（v2.0.0 のホームページ全面再設計・天気×旬レコメンド・バグ修正を含む）を確認できます。
+- `https://www.kyounoryouri.jp/`
+- `https://oceans-nadia.com/`
+- `https://recipe.rakuten.co.jp/`
+- `https://macaro-ni.jp/`
+- `https://erecipe.woman.excite.co.jp/`
+- `https://www.kikkoman.co.jp/homecook/`
+- `https://park.ajinomoto.co.jp/`
+- `https://foodistnote.recipe-blog.jp/`
+- `https://bazurecipe.com/`
+- `https://cookien.com/`

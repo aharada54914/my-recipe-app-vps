@@ -76,4 +76,64 @@ describe('SearchBar IME-safe behavior', () => {
       root.unmount()
     })
   })
+
+  it('hides recent suggestions while the user has a non-empty draft', () => {
+    const root = createRoot(container)
+
+    act(() => {
+      root.render(createElement(SearchBar, {
+        value: 'て',
+        onChange: vi.fn(),
+        history: ['カレー', 'ハンバーグ'],
+      }))
+    })
+
+    const input = container.querySelector('input')
+    expect(input).not.toBeNull()
+
+    act(() => {
+      input!.focus()
+    })
+
+    expect(container.textContent).not.toContain('カレー')
+    expect(container.textContent).not.toContain('ハンバーグ')
+
+    act(() => {
+      root.unmount()
+    })
+  })
+
+  it('commits the final draft on blur for URL-safe sync flows', () => {
+    const handleChange = vi.fn()
+    const handleBlurCommit = vi.fn()
+    const root = createRoot(container)
+
+    act(() => {
+      root.render(createElement(SearchBar, {
+        value: '',
+        onChange: handleChange,
+        onBlurCommit: handleBlurCommit,
+      }))
+    })
+
+    const input = container.querySelector('input')
+    expect(input).not.toBeNull()
+
+    act(() => {
+      input!.focus()
+      input!.value = 'てばもと'
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+      input!.dispatchEvent(new Event('change', { bubbles: true }))
+      vi.advanceTimersByTime(200)
+      input!.blur()
+      vi.advanceTimersByTime(150)
+    })
+
+    expect(handleChange).toHaveBeenCalledWith('てばもと')
+    expect(handleBlurCommit).toHaveBeenCalledWith('てばもと')
+
+    act(() => {
+      root.unmount()
+    })
+  })
 })
