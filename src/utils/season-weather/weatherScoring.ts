@@ -1,7 +1,10 @@
 import type { Recipe } from '../../db/db'
 import type { DailyWeather } from './weatherProvider'
 import type { RecipeWeatherVec } from './recipeWeatherVectors'
+import { computeRecipeWeatherVec, dotProduct } from './recipeWeatherVectors'
 import { WARM_TITLE_RE, COLD_TITLE_RE } from './recipeKeywords'
+
+export const WEATHER_MODEL_VERSION = 'unified-v1'
 
 // ── Phase 1 helpers ─────────────────────────────────────────────────────────
 
@@ -84,6 +87,10 @@ function shoppingBurdenFit(recipe: Recipe, weather: DailyWeather): number {
   return mainCount <= 5 ? 1 : 0.6
 }
 
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
 /**
  * 水分欲求適合度
  * 不快指数（DI）をシグモイド関数に通してスコア化する。
@@ -156,6 +163,88 @@ export function computeWeatherDemandVec(
   const w_carb = Math.max(0, Math.min(1, (1 - solar) * 0.6 + 0.2 + B_carb))
 
   return [w_temp, w_water, w_spice, w_carb]
+}
+
+export interface WeatherAlignmentBreakdown {
+  demandVec: RecipeWeatherVec
+  recipeVec: RecipeWeatherVec
+  rawDotProduct: number
+  normalizedScore: number
+}
+
+export interface WeatherOperationalBreakdown {
+  cookingLoadFit: number
+  shoppingBurdenFit: number
+  normalizedScore: number
+}
+
+export interface UnifiedWeatherScoreBreakdown {
+  alignment: WeatherAlignmentBreakdown
+  operational: WeatherOperationalBreakdown
+  totalScore: number
+}
+
+function inferDayOfYearFromWeather(weather: DailyWeather): number | undefined {
+  if (!weather.date) return undefined
+  const parsed = new Date(`${weather.date}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return undefined
+  const start = new Date(parsed.getFullYear(), 0, 0)
+  return Math.floor((parsed.getTime() - start.getTime()) / 86_400_000)
+}
+
+export function computeWeatherAlignmentBreakdown(
+  recipe: Recipe,
+  weather: DailyWeather,
+  tOpt = 22,
+  dayOfYear = inferDayOfYearFromWeather(weather),
+): WeatherAlignmentBreakdown {
+  const demandVec = computeWeatherDemandVec(weather, tOpt, dayOfYear)
+  const recipeVec = computeRecipeWeatherVec(recipe)
+  const rawDotProduct = dotProduct(demandVec, recipeVec)
+  return {
+    demandVec,
+    recipeVec,
+    rawDotProduct,
+    normalizedScore: clamp01(rawDotProduct / 4),
+  }
+}
+
+export function computeWeatherOperationalBreakdown(
+  recipe: Recipe,
+  weather: DailyWeather,
+): WeatherOperationalBreakdown {
+  const cooking = cookingLoadFit(recipe, weather)
+  const shopping = shoppingBurdenFit(recipe, weather)
+  return {
+    cookingLoadFit: cooking,
+    shoppingBurdenFit: shopping,
+    normalizedScore: Math.round((0.55 * cooking + 0.45 * shopping) * 100) / 100,
+  }
+}
+
+export function computeUnifiedWeatherScoreBreakdown(
+  recipe: Recipe,
+  weather: DailyWeather,
+  tOpt = 22,
+  dayOfYear = inferDayOfYearFromWeather(weather),
+): UnifiedWeatherScoreBreakdown {
+  const alignment = computeWeatherAlignmentBreakdown(recipe, weather, tOpt, dayOfYear)
+  const operational = computeWeatherOperationalBreakdown(recipe, weather)
+  const totalScore = Math.round((0.7 * alignment.normalizedScore + 0.3 * operational.normalizedScore) * 100) / 100
+  return {
+    alignment,
+    operational,
+    totalScore,
+  }
+}
+
+export function computeUnifiedWeatherScore(
+  recipe: Recipe,
+  weather: DailyWeather,
+  tOpt = 22,
+  dayOfYear = inferDayOfYearFromWeather(weather),
+): number {
+  return computeUnifiedWeatherScoreBreakdown(recipe, weather, tOpt, dayOfYear).totalScore
 }
 
 // ── Phase 3: 個人化・季節補正 ─────────────────────────────────────────────────

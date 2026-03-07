@@ -19,9 +19,14 @@ import type { BalanceTierDecision } from './mealBalanceTier'
 import { estimateRecipeCost } from './cost/costEstimator'
 import { computeLuxuryExperienceScore } from './cost/luxuryExperience'
 import { getWeeklyWeatherForecast, type DailyWeather } from './season-weather/weatherProvider'
-import { computeWeatherComfortScore } from './season-weather/weatherScoring'
+import { computeUnifiedWeatherScore } from './season-weather/weatherScoring'
 import { filterForecastForWeek, isCompleteForecastForWeek } from './season-weather/weekWeather'
 import { ensureRecipeFeatureMatrix } from './recipeFeatureMatrix'
+import {
+  DEFAULT_WEEKLY_MENU_COMPONENT_WEIGHTS,
+  type WeeklyMenuComponentWeights,
+} from './weeklyMenuWeightProfile'
+import { logWeeklyMenuGeneration } from './weeklyMenuSelectionLogging'
 
 export interface MenuSelectionConfig {
   seasonalPriority: SeasonalPriority
@@ -37,6 +42,27 @@ export interface MenuSelectionConfig {
 interface ScoredRecipe {
   recipe: Recipe
   baseScore: number
+}
+
+interface MainCandidateScoreBreakdown {
+  recipe: Recipe
+  totalScore: number
+  baseScore: number
+  balanceAdjustment: number
+  weatherAdjustment: number
+  costAdjustment: number
+  luxuryAdjustment: number
+}
+
+interface BeamState {
+  items: WeeklyMenuItem[]
+  usedRecipeIds: Set<number>
+  selectedCategories: string[]
+  selectedDevices: DeviceType[]
+  selectedMainInferences: MealBalanceInference[]
+  selectedMainRecipes: Recipe[]
+  selectedLuxuryCount: number
+  totalScore: number
 }
 
 function getLuxurySelectionAdjustment(
@@ -258,6 +284,183 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
   return { scoredMains, scoredSides, mainEligible, byRecipeId, byInferenceId, balanceTier, recipeCostMap, luxuryScoreMap, weatherByDate, costMode: mode, featureMatrixByRecipeId }
 }
 
+function scoreMainCandidate(
+  recipe: Recipe,
+  baseScore: number,
+  dateStr: string,
+  state: BeamState,
+  context: SelectionContext,
+  mainDeviceTargets: Record<DeviceType, number>,
+  targetLuxuryDays: number,
+  weights: WeeklyMenuComponentWeights = DEFAULT_WEEKLY_MENU_COMPONENT_WEIGHTS,
+): MainCandidateScoreBreakdown | null {
+  const candidateInference = context.byInferenceId.get(recipe.id!)
+  if (!candidateInference) return null
+
+  const mainScore = computeMainScore({
+    recipe,
+    baseScore,
+    selectedCategories: state.selectedCategories,
+    selectedDevices: state.selectedDevices,
+    mainDeviceTargets,
+    candidateInference,
+    selectedMainInferences: state.selectedMainInferences,
+    selectedMainRecipes: state.selectedMainRecipes,
+    balanceTier: context.balanceTier.tier,
+  })
+
+  const balanceAdjustment = mainScore - baseScore
+
+  const weather = context.weatherByDate.get(dateStr)
+  const weatherAdjustment = weather
+    ? computeUnifiedWeatherScore(recipe, weather) * weights.weatherMultiplier
+    : 0
+
+  const recipeCost = context.recipeCostMap.get(recipe.id!) ?? 0
+  const costAdjustment = context.costMode === 'saving'
+    ? -(recipeCost * weights.savingCostPenaltyPerYen)
+    : 0
+
+  let luxuryAdjustment = 0
+  if (context.costMode === 'luxury') {
+    luxuryAdjustment += (context.luxuryScoreMap.get(recipe.id!) ?? 0) * weights.luxuryExperienceMultiplier
+    luxuryAdjustment += getLuxurySelectionAdjustment(
+      recipe,
+      state.selectedLuxuryCount,
+      targetLuxuryDays,
+      state.selectedMainRecipes.length,
+    ) * weights.luxurySelectionMultiplier
+  }
+
+  const totalScore =
+    baseScore * weights.baseMultiplier +
+    balanceAdjustment * weights.balanceMultiplier +
+    weatherAdjustment +
+    costAdjustment +
+    luxuryAdjustment
+
+  return {
+    recipe,
+    totalScore,
+    baseScore,
+    balanceAdjustment,
+    weatherAdjustment,
+    costAdjustment,
+    luxuryAdjustment,
+  }
+}
+
+function appendMainRecipeToState(
+  state: BeamState,
+  recipe: Recipe,
+  dateStr: string,
+  scoreToAdd: number,
+  locked: boolean,
+  context: SelectionContext,
+): BeamState {
+  const nextUsedRecipeIds = new Set(state.usedRecipeIds)
+  nextUsedRecipeIds.add(recipe.id!)
+  const nextSelectedCategories = [...state.selectedCategories, recipe.category]
+  const nextSelectedDevices = [...state.selectedDevices, recipe.device]
+  const nextSelectedMainInferences = [...state.selectedMainInferences]
+  const inference = context.byInferenceId.get(recipe.id!)
+  if (inference) nextSelectedMainInferences.push(inference)
+  const nextSelectedMainRecipes = [...state.selectedMainRecipes, recipe]
+  const nextSelectedLuxuryCount = state.selectedLuxuryCount +
+    (context.costMode === 'luxury' && /牛|和牛|ステーキ|うなぎ|鰻|いくら|かに|蟹|えび|海老|帆立|ホタテ|ローストビーフ/.test(recipe.title) ? 1 : 0)
+
+  return {
+    items: [...state.items, { recipeId: recipe.id!, date: dateStr, mealType: 'dinner', locked }],
+    usedRecipeIds: nextUsedRecipeIds,
+    selectedCategories: nextSelectedCategories,
+    selectedDevices: nextSelectedDevices,
+    selectedMainInferences: nextSelectedMainInferences,
+    selectedMainRecipes: nextSelectedMainRecipes,
+    selectedLuxuryCount: nextSelectedLuxuryCount,
+    totalScore: state.totalScore + scoreToAdd,
+  }
+}
+
+function compareCandidateScores(a: MainCandidateScoreBreakdown, b: MainCandidateScoreBreakdown): number {
+  if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore
+  return a.recipe.id! - b.recipe.id!
+}
+
+async function logGenerationCandidates(
+  weekStartDate: Date,
+  context: SelectionContext,
+  finalState: BeamState,
+  lockedMap: Map<string, number>,
+  mainDeviceTargets: Record<DeviceType, number>,
+  targetLuxuryDays: number,
+  weights: WeeklyMenuComponentWeights,
+): Promise<void> {
+  let replayState: BeamState = {
+    items: [],
+    usedRecipeIds: new Set<number>(),
+    selectedCategories: [],
+    selectedDevices: [],
+    selectedMainInferences: [],
+    selectedMainRecipes: [],
+    selectedLuxuryCount: 0,
+    totalScore: 0,
+  }
+
+  const dailyCandidates = finalState.items.map((item, dayIndex) => {
+    const dateStr = item.date
+    const lockedRecipeId = lockedMap.get(dateStr)
+    const selectedRecipe = context.byRecipeId.get(item.recipeId)!
+    const scoredCandidates = lockedRecipeId != null
+      ? [{
+          recipeId: selectedRecipe.id!,
+          totalScore: 0,
+          baseScore: 0,
+          balanceAdjustment: 0,
+          weatherAdjustment: 0,
+          costAdjustment: 0,
+          luxuryAdjustment: 0,
+        }]
+      : context.scoredMains
+          .filter(({ recipe }) => !replayState.usedRecipeIds.has(recipe.id!))
+          .map(({ recipe, baseScore }) => scoreMainCandidate(recipe, baseScore, dateStr, replayState, context, mainDeviceTargets, targetLuxuryDays, weights))
+          .filter((candidate): candidate is MainCandidateScoreBreakdown => candidate != null)
+          .sort(compareCandidateScores)
+          .slice(0, 5)
+          .map((candidate) => ({
+            recipeId: candidate.recipe.id!,
+            totalScore: candidate.totalScore,
+            baseScore: candidate.baseScore,
+            balanceAdjustment: candidate.balanceAdjustment,
+            weatherAdjustment: candidate.weatherAdjustment,
+            costAdjustment: candidate.costAdjustment,
+            luxuryAdjustment: candidate.luxuryAdjustment,
+          }))
+
+    replayState = appendMainRecipeToState(
+      replayState,
+      selectedRecipe,
+      dateStr,
+      0,
+      lockedRecipeId != null,
+      context,
+    )
+
+    return {
+      dayIndex,
+      date: dateStr,
+      selectedRecipeId: item.recipeId,
+      candidates: scoredCandidates,
+    }
+  })
+
+  await logWeeklyMenuGeneration({
+    weekStartDate: format(weekStartDate, 'yyyy-MM-dd'),
+    costMode: context.costMode,
+    lockedCount: lockedMap.size,
+    dailyCandidates,
+  })
+}
+
 /**
  * Select 7 recipes for a week starting from weekStartDate.
  * Uses greedy selection with scoring to balance variety and stock usage.
@@ -287,89 +490,86 @@ export async function selectWeeklyMenu(
 
   const mainDeviceTargets = buildMainDeviceTargets(context.mainEligible, lockedDevices)
 
-  const result: WeeklyMenuItem[] = []
-  const usedRecipeIds = new Set<number>()
-  const selectedCategories: string[] = []
-  const selectedDevices: DeviceType[] = []
-  const selectedMainInferences: MealBalanceInference[] = []
-  const selectedMainRecipes: Recipe[] = []
-  let selectedLuxuryCount = 0
+  const beamWidth = 5
+  const candidateWidth = 8
+  const weights = DEFAULT_WEEKLY_MENU_COMPONENT_WEIGHTS
+
+  let beamStates: BeamState[] = [{
+    items: [],
+    usedRecipeIds: new Set<number>(),
+    selectedCategories: [],
+    selectedDevices: [],
+    selectedMainInferences: [],
+    selectedMainRecipes: [],
+    selectedLuxuryCount: 0,
+    totalScore: 0,
+  }]
 
   for (let day = 0; day < TARGET_DAYS; day++) {
     const dateStr = format(addDays(weekStartDate, day), 'yyyy-MM-dd')
-
     const lockedRecipeId = lockedMap.get(dateStr)
-    if (lockedRecipeId != null) {
-      const lockedRecipe = context.mainEligible.find(r => r.id === lockedRecipeId)
-      if (lockedRecipe) {
-        usedRecipeIds.add(lockedRecipeId)
-        selectedCategories.push(lockedRecipe.category)
-        selectedDevices.push(lockedRecipe.device)
-        const lockedInference = context.byInferenceId.get(lockedRecipeId)
-        if (lockedInference) selectedMainInferences.push(lockedInference)
-        selectedMainRecipes.push(lockedRecipe)
-        if (costMode === 'luxury' && /牛|和牛|ステーキ|うなぎ|鰻|いくら|かに|蟹|えび|海老|帆立|ホタテ|ローストビーフ/.test(lockedRecipe.title)) {
-          selectedLuxuryCount += 1
-        }
-        result.push({ recipeId: lockedRecipeId, date: dateStr, mealType: 'dinner', locked: true })
+
+    const nextStates: BeamState[] = []
+    for (const state of beamStates) {
+      if (lockedRecipeId != null) {
+        const lockedRecipe = context.mainEligible.find((r) => r.id === lockedRecipeId)
+        if (!lockedRecipe || state.usedRecipeIds.has(lockedRecipeId)) continue
+        nextStates.push(appendMainRecipeToState(state, lockedRecipe, dateStr, 0, true, context))
         continue
       }
-    }
 
-    let bestRecipe: Recipe | null = null
-    let bestScore = -Infinity
+      const dayCandidates = context.scoredMains
+        .filter(({ recipe }) => !state.usedRecipeIds.has(recipe.id!))
+        .map(({ recipe, baseScore }) =>
+          scoreMainCandidate(
+            recipe,
+            baseScore,
+            dateStr,
+            state,
+            context,
+            mainDeviceTargets,
+            targetLuxuryDays,
+            weights,
+          ))
+        .filter((candidate): candidate is MainCandidateScoreBreakdown => candidate != null)
+        .sort(compareCandidateScores)
+        .slice(0, candidateWidth)
 
-    for (const { recipe, baseScore } of context.scoredMains) {
-      if (usedRecipeIds.has(recipe.id!)) continue
-      const candidateInference = context.byInferenceId.get(recipe.id!)
-      if (!candidateInference) continue
-
-      let score = computeMainScore({
-        recipe,
-        baseScore,
-        selectedCategories,
-        selectedDevices,
-        mainDeviceTargets,
-        candidateInference,
-        selectedMainInferences,
-        selectedMainRecipes,
-        balanceTier: context.balanceTier.tier,
-      })
-
-      const weather = context.weatherByDate.get(dateStr)
-      if (weather) score += computeWeatherComfortScore(recipe, weather) * 5
-
-      const recipeCost = context.recipeCostMap.get(recipe.id!) ?? 0
-      if (context.costMode === 'saving') score -= recipeCost / 80
-      if (context.costMode === 'luxury') {
-        score += (context.luxuryScoreMap.get(recipe.id!) ?? 0) * 8
-        score += getLuxurySelectionAdjustment(recipe, selectedLuxuryCount, targetLuxuryDays, selectedMainRecipes.length)
-      }
-
-      if (score > bestScore) {
-        bestScore = score
-        bestRecipe = recipe
+      for (const candidate of dayCandidates) {
+        nextStates.push(
+          appendMainRecipeToState(
+            state,
+            candidate.recipe,
+            dateStr,
+            candidate.totalScore,
+            false,
+            context,
+          ),
+        )
       }
     }
 
-    if (!bestRecipe) continue
+    beamStates = nextStates
+      .sort((a, b) => b.totalScore - a.totalScore)
+      .slice(0, beamWidth)
 
-    usedRecipeIds.add(bestRecipe.id!)
-    selectedCategories.push(bestRecipe.category)
-    selectedDevices.push(bestRecipe.device)
-    const selectedInference = context.byInferenceId.get(bestRecipe.id!)
-    if (selectedInference) selectedMainInferences.push(selectedInference)
-    selectedMainRecipes.push(bestRecipe)
-    if (costMode === 'luxury' && /牛|和牛|ステーキ|うなぎ|鰻|いくら|かに|蟹|えび|海老|帆立|ホタテ|ローストビーフ/.test(bestRecipe.title)) {
-      selectedLuxuryCount += 1
-    }
-    result.push({
-      recipeId: bestRecipe.id!,
-      date: dateStr,
-      mealType: 'dinner',
-      locked: false,
-    })
+    if (beamStates.length === 0) break
   }
+
+  const finalState = beamStates[0]
+  if (!finalState) return []
+
+  const result = [...finalState.items]
+
+  await logGenerationCandidates(
+    weekStartDate,
+    context,
+    finalState,
+    lockedMap,
+    mainDeviceTargets,
+    targetLuxuryDays,
+    weights,
+  )
 
   if (context.scoredSides.length > 0) {
     const usedSideIds = new Set<number>()

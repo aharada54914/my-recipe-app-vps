@@ -18,7 +18,8 @@
     "test:smoke": "npm run build && playwright test",
     "test:smoke:ci": "playwright test",
     "test:smoke:live": "playwright test",
-    "nutrition:audit": "tsx scripts/nutrition-audit.ts"
+    "nutrition:audit": "tsx scripts/nutrition-audit.ts",
+    "weights:tune": "tsx scripts/tune-weekly-menu-weights.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

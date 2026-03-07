@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { computeWeatherComfortScore } from '../season-weather/weatherScoring'
+import {
+  computeUnifiedWeatherScore,
+  computeUnifiedWeatherScoreBreakdown,
+  computeWeatherComfortScore,
+} from '../season-weather/weatherScoring'
 import type { Recipe } from '../../db/db'
 
 const baseRecipe: Recipe = {
@@ -20,5 +24,18 @@ describe('computeWeatherComfortScore', () => {
     const hot = { date: '2026-08-01', maxTempC: 33, minTempC: 27, precipitationMm: 0 }
     const cool = { date: '2026-01-01', maxTempC: 8, minTempC: 2, precipitationMm: 0 }
     expect(computeWeatherComfortScore(baseRecipe, hot)).toBeGreaterThan(computeWeatherComfortScore(baseRecipe, cool))
+  })
+})
+
+describe('computeUnifiedWeatherScore', () => {
+  it('keeps score within 0..1 and exposes breakdowns', () => {
+    const weather = { date: '2026-08-01', maxTempC: 33, minTempC: 27, precipitationMm: 6, humidityPercent: 75 }
+    const breakdown = computeUnifiedWeatherScoreBreakdown(baseRecipe, weather, 22, 213)
+
+    expect(breakdown.alignment.normalizedScore).toBeGreaterThanOrEqual(0)
+    expect(breakdown.alignment.normalizedScore).toBeLessThanOrEqual(1)
+    expect(breakdown.operational.normalizedScore).toBeGreaterThanOrEqual(0)
+    expect(breakdown.operational.normalizedScore).toBeLessThanOrEqual(1)
+    expect(breakdown.totalScore).toBe(computeUnifiedWeatherScore(baseRecipe, weather, 22, 213))
   })
 })

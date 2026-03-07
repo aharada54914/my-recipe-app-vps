@@ -41,6 +41,7 @@ import { getWeeklyWeatherForecast, type DailyWeather } from '../utils/season-wea
 import { filterForecastForWeek, isCompleteForecastForWeek } from '../utils/season-weather/weekWeather'
 import { WeatherIllustration } from '../components/weather/WeatherIllustration'
 import { learnTOptFromHistory } from '../utils/season-weather/tOptLearner'
+import { logWeeklyMenuSwap } from '../utils/weeklyMenuSelectionLogging'
 
 const BALANCE_TIER_LABEL: Record<'heuristic-3' | 'nutrition-5' | 'nutrition-7', string> = {
   'heuristic-3': '3段階推定',
@@ -226,6 +227,9 @@ export function WeeklyMenuPage() {
       return
     }
     const newItems = [...menu.items]
+    const previousRecipeId = swapType === 'main'
+      ? newItems[swapDayIndex].recipeId
+      : newItems[swapDayIndex].sideRecipeId
     if (swapType === 'main') {
       newItems[swapDayIndex] = { ...newItems[swapDayIndex], recipeId: recipe.id!, mainServings: undefined }
     } else {
@@ -238,7 +242,16 @@ export function WeeklyMenuPage() {
     if (menu.id != null) {
       db.weeklyMenus.update(menu.id, { items: newItems, updatedAt: new Date() })
     }
-  }, [menu, swapDayIndex, swapType])
+    if (previousRecipeId != null) {
+      void logWeeklyMenuSwap({
+        weekStartDate: weekStartStr,
+        dayIndex: swapDayIndex,
+        role: swapType,
+        replacedRecipeId: previousRecipeId,
+        selectedRecipeId: recipe.id!,
+      })
+    }
+  }, [menu, swapDayIndex, swapType, weekStartStr])
 
   const selectedRecipes = useMemo(() => {
     if (!menu) return [] as Recipe[]

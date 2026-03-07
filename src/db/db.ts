@@ -214,6 +214,40 @@ export interface IngredientFeatureRecord {
   priceSignalScore?: number
 }
 
+export interface WeeklyMenuCandidateScoreLog {
+  recipeId: number
+  totalScore: number
+  baseScore: number
+  balanceAdjustment: number
+  weatherAdjustment: number
+  costAdjustment: number
+  luxuryAdjustment: number
+}
+
+export interface WeeklyMenuDailyCandidateLog {
+  dayIndex: number
+  date: string
+  selectedRecipeId: number
+  candidates: WeeklyMenuCandidateScoreLog[]
+}
+
+export interface WeeklyMenuSelectionLog {
+  id?: number
+  eventType: 'generation' | 'swap'
+  weekStartDate: string
+  strategy: string
+  weatherModelVersion: string
+  weightProfileVersion: string
+  createdAt: Date
+  costMode?: WeeklyMenuCostMode
+  lockedCount?: number
+  selectedRecipeId?: number
+  replacedRecipeId?: number
+  dayIndex?: number
+  role?: 'main' | 'side'
+  dailyCandidates?: WeeklyMenuDailyCandidateLog[]
+}
+
 export interface UserPreferences {
   id?: number
   // Calendar settings
@@ -328,6 +362,7 @@ class RecipeDB extends Dexie {
   ingredientSimilarityCache!: Table<IngredientSimilarityCache, number>
   weatherCache!: Table<WeatherCacheItem, number>
   recipeFeatureMatrix!: Table<IngredientFeatureRecord, number>
+  weeklyMenuSelectionLogs!: Table<WeeklyMenuSelectionLog, number>
 
   constructor() {
     super('RecipeDB')
@@ -712,6 +747,23 @@ class RecipeDB extends Dexie {
       ingredientSimilarityCache: '++id, name, candidateName, score',
       weatherCache: '++id, &date, fetchedAt, updatedAt',
       recipeFeatureMatrix: '++id, &recipeId, confidence, source',
+    })
+
+    this.version(17).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+      ingredientPrices: '++id, &normalizedName, updatedAt',
+      ingredientPriceSyncLogs: '++id, startedAt, status',
+      ingredientSimilarityCache: '++id, name, candidateName, score',
+      weatherCache: '++id, &date, fetchedAt, updatedAt',
+      recipeFeatureMatrix: '++id, &recipeId, confidence, source',
+      weeklyMenuSelectionLogs: '++id, eventType, weekStartDate, createdAt, selectedRecipeId, replacedRecipeId',
     })
   }
 }

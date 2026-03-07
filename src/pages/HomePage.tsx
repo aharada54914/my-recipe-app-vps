@@ -13,10 +13,8 @@ import { CategoryGrid } from '../components/CategoryGrid'
 import { getWeeklyWeatherForecast } from '../utils/season-weather/weatherProvider'
 import type { DailyWeather } from '../utils/season-weather/weatherProvider'
 import {
-  computeWeatherComfortScoreWithTopt,
-  computeWeatherDemandVec,
+  computeUnifiedWeatherScore,
 } from '../utils/season-weather/weatherScoring'
-import { computeRecipeWeatherVec, dotProduct } from '../utils/season-weather/recipeWeatherVectors'
 
 const seasonalIngredients = getCurrentSeasonalIngredients()
 
@@ -98,25 +96,15 @@ function findTodayRecipes(
 
   const today = new Date()
   const dayOfYear = getDayOfYear(today)
-  // circannual B_carb も込みで需要ベクトルを算出
-  const demandVec = computeWeatherDemandVec(todayWeather, tOpt, dayOfYear)
-
   const scored = candidates.map((r) => {
-    // Phase 2: ベクトルドット積スコア [0, 1]
-    const recipeVec = computeRecipeWeatherVec(r)
-    const vecScore = dotProduct(demandVec, recipeVec)
-
-    // Phase 3: T_opt個人補正天気スコア [0, 1]
-    const personalWeatherScore = computeWeatherComfortScoreWithTopt(r, todayWeather, tOpt)
-
-    // 旬食材ボーナス [0, 1]
+    const unifiedWeatherScore = computeUnifiedWeatherScore(r, todayWeather, tOpt, dayOfYear)
     const seasonalScore = r.ingredients.some((ing) =>
       seasonalIngredients.some((s) => ing.name.includes(s))
     ) ? 1 : 0
 
     return {
       item: r,
-      score: 0.40 * vecScore + 0.35 * personalWeatherScore + 0.25 * seasonalScore,
+      score: 0.75 * unifiedWeatherScore + 0.25 * seasonalScore,
     }
   })
 

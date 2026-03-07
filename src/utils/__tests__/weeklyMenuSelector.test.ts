@@ -22,6 +22,9 @@ vi.mock('../../db/db', () => ({
       bulkGet: vi.fn(async (ids: number[]) => ids.map(() => undefined)),
       bulkPut: vi.fn(() => Promise.resolve()),
     },
+    weeklyMenuSelectionLogs: {
+      add: vi.fn(() => Promise.resolve()),
+    },
   },
 }))
 
