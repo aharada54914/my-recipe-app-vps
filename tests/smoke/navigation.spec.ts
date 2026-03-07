@@ -120,15 +120,19 @@ test('settings persist desired meal time after reload', async ({ page }) => {
   const updatedAtBefore = await planningSettings.getAttribute('data-preferences-updated-at')
   const desiredMealHour = page.getByTestId('desired-meal-hour')
   const desiredMealMinute = page.getByTestId('desired-meal-minute')
+  const initialHour = await desiredMealHour.inputValue()
+  const initialMinute = await desiredMealMinute.inputValue()
+  const nextHour = initialHour === '19' ? '20' : '19'
+  const nextMinute = initialMinute === '15' ? '20' : '15'
 
-  await desiredMealHour.fill('19')
+  await desiredMealHour.fill(nextHour)
   await desiredMealHour.blur()
-  await desiredMealMinute.fill('15')
+  await desiredMealMinute.fill(nextMinute)
   await desiredMealMinute.blur()
   await expect(planningSettings).not.toHaveAttribute('data-preferences-updated-at', updatedAtBefore ?? '')
 
   await page.reload()
   await expect(page.getByTestId('planning-schedule-settings')).toBeVisible()
-  await expect(page.getByTestId('desired-meal-hour')).toHaveValue('19')
-  await expect(page.getByTestId('desired-meal-minute')).toHaveValue('15')
+  await expect(page.getByTestId('desired-meal-hour')).toHaveValue(nextHour)
+  await expect(page.getByTestId('desired-meal-minute')).toHaveValue(nextMinute)
 })
