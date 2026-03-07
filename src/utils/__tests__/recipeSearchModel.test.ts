@@ -125,10 +125,10 @@ describe('buildRecipeSearchResults', () => {
     }).toEqual({
       id: 3,
       queryScore: 0.5,
-      preferenceScore: 6.848,
+      preferenceScore: 6.841,
       stockScore: 1.4,
-      baseScore: 8.248,
-      finalScore: 10.348,
+      baseScore: 8.241,
+      finalScore: 10.341,
     })
   })
 })
