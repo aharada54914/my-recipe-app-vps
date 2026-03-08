@@ -37,6 +37,9 @@ export interface MenuSelectionConfig {
   weeklyBudgetYen?: number
   preloadedWeather?: DailyWeather[]
   weeklyMenuLuxuryRewardDays?: number
+  generationMode?: 'initial' | 'regenerate'
+  minimumChangedUnlockedDays?: number
+  regenerateSeed?: number
 }
 
 interface ScoredRecipe {
@@ -52,6 +55,7 @@ interface MainCandidateScoreBreakdown {
   weatherAdjustment: number
   costAdjustment: number
   luxuryAdjustment: number
+  noveltyAdjustment: number
 }
 
 interface BeamState {
@@ -63,7 +67,10 @@ interface BeamState {
   selectedMainRecipes: Recipe[]
   selectedLuxuryCount: number
   totalScore: number
+  changedUnlockedDays: number
 }
+
+type RandomFn = () => number
 
 function getLuxurySelectionAdjustment(
   recipe: Recipe,
@@ -102,13 +109,33 @@ const SEASONAL_WEIGHTS: Record<SeasonalPriority, number> = {
 }
 
 const TARGET_DAYS = 7
+const REGENERATE_SAME_MAIN_PENALTY = 18
+const REGENERATE_DIFFERENT_MAIN_BONUS = 10
+const FINAL_STATE_POOL_SCORE_DELTA = 6
 
 const DEVICE_TYPES: DeviceType[] = ['hotcook', 'healsio', 'manual']
 
-function shuffleRecipes<T>(items: T[]): T[] {
+function hashStringToSeed(input: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
+function createSeededRandom(seed: number): RandomFn {
+  let current = seed >>> 0
+  return () => {
+    current = Math.imul(current, 1664525) + 1013904223
+    return (current >>> 0) / 0x100000000
+  }
+}
+
+function shuffleRecipes<T>(items: T[], random: RandomFn = Math.random): T[] {
   const out = [...items]
   for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
+    const j = Math.floor(random() * (i + 1))
     const tmp = out[i]
     out[i] = out[j]
     out[j] = tmp
@@ -217,7 +244,11 @@ async function buildSelectionContext(weekStartDate: Date, config: MenuSelectionC
 
   const recentViewIds = new Set(recentHistory.map(vh => vh.recipeId))
 
-  const eligible = shuffleRecipes(recipes)
+  const selectionSeed = config.regenerateSeed
+    ?? hashStringToSeed(`${format(weekStartDate, 'yyyy-MM-dd')}:${config.generationMode ?? 'initial'}`)
+  const random = createSeededRandom(selectionSeed)
+
+  const eligible = shuffleRecipes(recipes, random)
     .filter(r => !isHelsioDeli(r) && r.id != null)
 
   const mainEligible = filterRecipesByRole(eligible, 'main')
@@ -347,6 +378,7 @@ function scoreMainCandidate(
     weatherAdjustment,
     costAdjustment,
     luxuryAdjustment,
+    noveltyAdjustment: 0,
   }
 }
 
@@ -357,6 +389,7 @@ function appendMainRecipeToState(
   scoreToAdd: number,
   locked: boolean,
   context: SelectionContext,
+  changedUnlockedDay: boolean,
 ): BeamState {
   const nextUsedRecipeIds = new Set(state.usedRecipeIds)
   nextUsedRecipeIds.add(recipe.id!)
@@ -378,12 +411,30 @@ function appendMainRecipeToState(
     selectedMainRecipes: nextSelectedMainRecipes,
     selectedLuxuryCount: nextSelectedLuxuryCount,
     totalScore: state.totalScore + scoreToAdd,
+    changedUnlockedDays: state.changedUnlockedDays + (changedUnlockedDay ? 1 : 0),
   }
 }
 
 function compareCandidateScores(a: MainCandidateScoreBreakdown, b: MainCandidateScoreBreakdown): number {
   if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore
   return a.recipe.id! - b.recipe.id!
+}
+
+function takeSeededCandidateWindow(
+  candidates: MainCandidateScoreBreakdown[],
+  limit: number,
+  random: RandomFn,
+): MainCandidateScoreBreakdown[] {
+  const sorted = [...candidates].sort(compareCandidateScores)
+  if (sorted.length <= limit) return sorted
+
+  const topScore = sorted[0]?.totalScore ?? 0
+  const candidatePool = sorted.filter((candidate) => topScore - candidate.totalScore <= FINAL_STATE_POOL_SCORE_DELTA)
+  if (candidatePool.length <= limit) return sorted.slice(0, limit)
+
+  return shuffleRecipes(candidatePool, random)
+    .slice(0, limit)
+    .sort(compareCandidateScores)
 }
 
 async function logGenerationCandidates(
@@ -404,6 +455,7 @@ async function logGenerationCandidates(
     selectedMainRecipes: [],
     selectedLuxuryCount: 0,
     totalScore: 0,
+    changedUnlockedDays: 0,
   }
 
   const dailyCandidates = finalState.items.map((item, dayIndex) => {
@@ -443,6 +495,7 @@ async function logGenerationCandidates(
       0,
       lockedRecipeId != null,
       context,
+      false,
     )
 
     return {
@@ -468,13 +521,15 @@ async function logGenerationCandidates(
 export async function selectWeeklyMenu(
   weekStartDate: Date,
   config: MenuSelectionConfig,
-  lockedItems?: WeeklyMenuItem[]
+  lockedItems?: WeeklyMenuItem[],
+  currentWeekItems?: WeeklyMenuItem[],
 ): Promise<WeeklyMenuItem[]> {
   const context = await buildSelectionContext(weekStartDate, config)
 
   if (context.mainEligible.length === 0) return []
 
   const targetLuxuryDays = Math.min(7, Math.max(1, config.weeklyMenuLuxuryRewardDays ?? 2))
+  const generationMode = config.generationMode ?? 'initial'
 
   const lockedMap = new Map<string, number>()
   const lockedDevices: DeviceType[] = []
@@ -487,11 +542,43 @@ export async function selectWeeklyMenu(
     }
   }
 
+  const currentUnlockedMap = new Map<string, number>()
+  if (currentWeekItems) {
+    for (const item of currentWeekItems) {
+      if (item.locked) continue
+      currentUnlockedMap.set(item.date, item.recipeId)
+    }
+  }
+
+  const unlockedDatesByDay = Array.from({ length: TARGET_DAYS }, (_, day) => {
+    const dateStr = format(addDays(weekStartDate, day), 'yyyy-MM-dd')
+    return currentUnlockedMap.has(dateStr)
+  })
+  const remainingUnlockedDaysAfterIndex = Array.from({ length: TARGET_DAYS }, () => 0)
+  let futureUnlockedDays = 0
+  for (let day = TARGET_DAYS - 1; day >= 0; day -= 1) {
+    remainingUnlockedDaysAfterIndex[day] = futureUnlockedDays
+    if (unlockedDatesByDay[day]) futureUnlockedDays += 1
+  }
+
+  const fallbackMinimumChangedUnlockedDays = futureUnlockedDays > 0
+    ? Math.min(futureUnlockedDays, Math.max(4, Math.ceil(futureUnlockedDays * 0.6)))
+    : 0
+  const minimumChangedUnlockedDays = generationMode === 'regenerate'
+    ? Math.min(
+        futureUnlockedDays,
+        Math.max(0, config.minimumChangedUnlockedDays ?? fallbackMinimumChangedUnlockedDays),
+      )
+    : 0
+
   const mainDeviceTargets = buildMainDeviceTargets(context.mainEligible, lockedDevices)
 
   const beamWidth = 5
   const candidateWidth = 8
   const weights = DEFAULT_WEEKLY_MENU_COMPONENT_WEIGHTS
+  const random = createSeededRandom(
+    (config.regenerateSeed ?? hashStringToSeed(`${format(weekStartDate, 'yyyy-MM-dd')}:${generationMode}`)) ^ 0x9e3779b9,
+  )
 
   let beamStates: BeamState[] = [{
     items: [],
@@ -502,7 +589,16 @@ export async function selectWeeklyMenu(
     selectedMainRecipes: [],
     selectedLuxuryCount: 0,
     totalScore: 0,
+    changedUnlockedDays: 0,
   }]
+
+  const compareBeamStates = (left: BeamState, right: BeamState) => {
+    const leftProgress = Math.min(left.changedUnlockedDays, minimumChangedUnlockedDays)
+    const rightProgress = Math.min(right.changedUnlockedDays, minimumChangedUnlockedDays)
+    if (rightProgress !== leftProgress) return rightProgress - leftProgress
+    if (right.totalScore !== left.totalScore) return right.totalScore - left.totalScore
+    return right.changedUnlockedDays - left.changedUnlockedDays
+  }
 
   for (let day = 0; day < TARGET_DAYS; day++) {
     const dateStr = format(addDays(weekStartDate, day), 'yyyy-MM-dd')
@@ -513,7 +609,7 @@ export async function selectWeeklyMenu(
       if (lockedRecipeId != null) {
         const lockedRecipe = context.mainEligible.find((r) => r.id === lockedRecipeId)
         if (!lockedRecipe || state.usedRecipeIds.has(lockedRecipeId)) continue
-        nextStates.push(appendMainRecipeToState(state, lockedRecipe, dateStr, 0, true, context))
+        nextStates.push(appendMainRecipeToState(state, lockedRecipe, dateStr, 0, true, context, false))
         continue
       }
 
@@ -531,10 +627,30 @@ export async function selectWeeklyMenu(
             weights,
           ))
         .filter((candidate): candidate is MainCandidateScoreBreakdown => candidate != null)
-        .sort(compareCandidateScores)
-        .slice(0, candidateWidth)
+        .map((candidate) => {
+          if (generationMode !== 'regenerate') return candidate
+          const currentRecipeId = currentUnlockedMap.get(dateStr)
+          if (currentRecipeId == null) return candidate
+          const noveltyAdjustment = candidate.recipe.id === currentRecipeId
+            ? -REGENERATE_SAME_MAIN_PENALTY
+            : REGENERATE_DIFFERENT_MAIN_BONUS
+          return {
+            ...candidate,
+            noveltyAdjustment,
+            totalScore: candidate.totalScore + noveltyAdjustment,
+          }
+        })
 
-      for (const candidate of dayCandidates) {
+      const limitedDayCandidates = generationMode === 'regenerate'
+        ? takeSeededCandidateWindow(dayCandidates, candidateWidth, random)
+        : dayCandidates
+            .sort(compareCandidateScores)
+            .slice(0, candidateWidth)
+
+      for (const candidate of limitedDayCandidates) {
+        const changedUnlockedDay = generationMode === 'regenerate'
+          && currentUnlockedMap.has(dateStr)
+          && currentUnlockedMap.get(dateStr) !== candidate.recipe.id
         nextStates.push(
           appendMainRecipeToState(
             state,
@@ -543,19 +659,38 @@ export async function selectWeeklyMenu(
             candidate.totalScore,
             false,
             context,
+            changedUnlockedDay,
           ),
         )
       }
     }
 
-    beamStates = nextStates
-      .sort((a, b) => b.totalScore - a.totalScore)
+    const viableStates = generationMode === 'regenerate'
+      ? nextStates.filter((state) => state.changedUnlockedDays + remainingUnlockedDaysAfterIndex[day] >= minimumChangedUnlockedDays)
+      : nextStates
+
+    beamStates = viableStates
+      .sort(compareBeamStates)
       .slice(0, beamWidth)
 
     if (beamStates.length === 0) break
   }
 
-  const finalState = beamStates[0]
+  const finalCandidates = generationMode === 'regenerate'
+    ? beamStates.filter((state) => state.changedUnlockedDays >= minimumChangedUnlockedDays)
+    : beamStates
+
+  const rankedFinalCandidates = (finalCandidates.length > 0 ? finalCandidates : beamStates)
+    .sort(compareBeamStates)
+  const topState = rankedFinalCandidates[0]
+  const finalPool = topState
+    ? rankedFinalCandidates.filter((state) =>
+      Math.min(state.changedUnlockedDays, minimumChangedUnlockedDays) === Math.min(topState.changedUnlockedDays, minimumChangedUnlockedDays)
+      && topState.totalScore - state.totalScore <= FINAL_STATE_POOL_SCORE_DELTA)
+    : []
+  const finalState = finalPool.length > 0
+    ? finalPool[Math.floor(random() * finalPool.length)]
+    : rankedFinalCandidates[0]
   if (!finalState) return []
 
   const result = [...finalState.items]

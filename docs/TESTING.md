@@ -56,6 +56,8 @@ npm run test:smoke
 - `tests/smoke/gemini-entry.spec.ts`
 - `tests/smoke/weekly-menu-core.spec.ts`
   - 買い物リスト / ガントモーダルの viewport 内表示
+  - `再生成` で主菜が最低 5 / 7 日変わること
+  - `ConstraintError` を再露出しないこと
 - `tests/smoke/weekly-menu-editing.spec.ts`
 - `tests/smoke/connected-google.spec.ts`
 - `tests/smoke/connected-gemini.spec.ts`

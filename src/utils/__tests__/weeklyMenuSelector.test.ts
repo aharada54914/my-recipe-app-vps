@@ -324,4 +324,94 @@ describe('selectWeeklyMenu device balance', () => {
     expect(mockGetWeeklyWeatherForecast).toHaveBeenCalledTimes(1)
   })
 
+  it('regenerate changes at least 60 percent of unlocked main dishes', async () => {
+    const mains = Array.from({ length: 16 }, (_, i) => makeRecipe(i + 1, 'manual', '主菜', `主菜${i + 1}`, ['鶏肉', '玉ねぎ']))
+    mockRecipesToArray.mockResolvedValue(mains)
+
+    const initialMenu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    })
+
+    const regeneratedMenu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+      generationMode: 'regenerate',
+      minimumChangedUnlockedDays: 5,
+      regenerateSeed: 101,
+    }, initialMenu, initialMenu)
+
+    const initialByDate = new Map(initialMenu.map((item) => [item.date, item.recipeId]))
+    const changedUnlockedDays = regeneratedMenu.filter((item) => initialByDate.get(item.date) !== item.recipeId).length
+
+    expect(changedUnlockedDays).toBeGreaterThanOrEqual(5)
+  })
+
+  it('regenerate preserves locked days while changing unlocked days', async () => {
+    const mains = Array.from({ length: 16 }, (_, i) => makeRecipe(i + 1, 'manual', '主菜', `主菜${i + 1}`, ['豚肉', '玉ねぎ']))
+    mockRecipesToArray.mockResolvedValue(mains)
+
+    const initialMenu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    })
+    const lockedMenu = initialMenu.map((item, index) => index < 2 ? { ...item, locked: true } : item)
+
+    const regeneratedMenu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+      generationMode: 'regenerate',
+      minimumChangedUnlockedDays: 4,
+      regenerateSeed: 202,
+    }, lockedMenu, lockedMenu)
+
+    expect(regeneratedMenu[0]?.recipeId).toBe(lockedMenu[0]?.recipeId)
+    expect(regeneratedMenu[1]?.recipeId).toBe(lockedMenu[1]?.recipeId)
+
+    const lockedByDate = new Map(lockedMenu.map((item) => [item.date, item.recipeId]))
+    const changedUnlockedDays = regeneratedMenu
+      .filter((item) => !lockedMenu.find((candidate) => candidate.date === item.date)?.locked)
+      .filter((item) => lockedByDate.get(item.date) !== item.recipeId)
+      .length
+
+    expect(changedUnlockedDays).toBeGreaterThanOrEqual(4)
+  })
+
+  it('regenerate seed produces stable but different menus across seeds', async () => {
+    const mains = Array.from({ length: 18 }, (_, i) => makeRecipe(i + 1, 'manual', '主菜', `候補${i + 1}`, ['鶏肉', 'キャベツ']))
+    mockRecipesToArray.mockResolvedValue(mains)
+
+    const initialMenu = await selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+    })
+
+    const regenerateWithSeed = (seed: number) => selectWeeklyMenu(new Date('2026-02-22'), {
+      seasonalPriority: 'medium',
+      userPrompt: '',
+      desiredMealHour: 18,
+      desiredMealMinute: 0,
+      generationMode: 'regenerate',
+      minimumChangedUnlockedDays: 5,
+      regenerateSeed: seed,
+    }, initialMenu, initialMenu)
+
+    const seedOneFirst = await regenerateWithSeed(500)
+    const seedOneSecond = await regenerateWithSeed(500)
+    const seedTwo = await regenerateWithSeed(501)
+
+    expect(seedOneFirst.map((item) => item.recipeId)).toEqual(seedOneSecond.map((item) => item.recipeId))
+    expect(seedTwo.map((item) => item.recipeId)).not.toEqual(seedOneFirst.map((item) => item.recipeId))
+  })
+
 })

@@ -45,6 +45,34 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
 }
 
+function hashStringToSeed(input: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
+function buildWeeklyMenuFingerprint(items: WeeklyMenuItem[]): string {
+  return items
+    .map((item) => `${item.date}:${item.recipeId}:${item.sideRecipeId ?? 0}:${item.locked ? 1 : 0}`)
+    .join('|')
+}
+
+function getMinimumChangedUnlockedDays(items: WeeklyMenuItem[]): number {
+  const unlockedDays = items.filter((item) => !item.locked).length
+  if (unlockedDays === 0) return 0
+  return Math.min(unlockedDays, Math.max(4, Math.ceil(unlockedDays * 0.6)))
+}
+
+function getChangedMainDates(previousItems: WeeklyMenuItem[], nextItems: WeeklyMenuItem[]): string[] {
+  const previousByDate = new Map(previousItems.map((item) => [item.date, item.recipeId]))
+  return nextItems
+    .filter((item) => previousByDate.get(item.date) !== item.recipeId)
+    .map((item) => item.date)
+}
+
 export function useWeeklyMenuController() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -79,6 +107,8 @@ export function useWeeklyMenuController() {
   const [weatherExpanded, setWeatherExpanded] = useState(false)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherLastFetchedAt, setWeatherLastFetchedAt] = useState<Date | null>(null)
+  const [lastRegeneratedChangedMainDays, setLastRegeneratedChangedMainDays] = useState<number | null>(null)
+  const [lastRegeneratedChangedDates, setLastRegeneratedChangedDates] = useState<string[]>([])
 
   const stockItems = useLiveQuery(() => db.stock.filter((item) => item.inStock).toArray(), [])
   const latestWeather = useLiveQuery(() => db.weatherCache.orderBy('fetchedAt').last(), [])
@@ -145,31 +175,62 @@ export function useWeeklyMenuController() {
     void loadRecipes(collectRecipeIds(existingMenu.items))
   }, [existingMenu, loadRecipes])
 
+  useEffect(() => {
+    setLastRegeneratedChangedMainDays(null)
+    setLastRegeneratedChangedDates([])
+  }, [weekStartStr])
+
   const handleGenerate = useCallback(async () => {
+    const currentItems = menu?.items ?? []
+    const isRegenerate = currentItems.length > 0
+    if (isRegenerate && currentItems.every((item) => item.locked)) {
+      addToast({ type: 'info', message: 'すべて固定されているため再生成できません' })
+      return
+    }
+
     setGenerating(true)
     try {
+      const minimumChangedUnlockedDays = isRegenerate ? getMinimumChangedUnlockedDays(currentItems) : undefined
+      const regenerateSeed = isRegenerate
+        ? hashStringToSeed(`${weekStartStr}:${buildWeeklyMenuFingerprint(currentItems)}`)
+        : undefined
       const items = await selectWeeklyMenu(
         weekStart,
         {
           ...preferences,
+          generationMode: isRegenerate ? 'regenerate' : 'initial',
+          minimumChangedUnlockedDays,
+          regenerateSeed,
           preloadedWeather: isCompleteForecastForWeek(weeklyWeather, weekStart)
             ? filterForecastForWeek(weeklyWeather, weekStart)
             : undefined,
         },
-        menu?.items,
+        currentItems,
+        currentItems,
       )
 
       await persistMenuForWeek(weekStartStr, items, menu)
 
+      const changedMainDates = isRegenerate ? getChangedMainDates(currentItems, items) : []
+      setLastRegeneratedChangedDates(changedMainDates)
+      setLastRegeneratedChangedMainDays(isRegenerate ? changedMainDates.length : null)
+
       if (preferences.notifyWeeklyMenuDone && getNotificationPermission() === 'granted') {
         await showLocalNotification({
-          title: '週間献立を作成しました',
+          title: isRegenerate ? '週間献立を更新しました' : '週間献立を作成しました',
           body: `${format(weekStart, 'M/d')}開始の献立を更新しました。`,
           tag: `weekly_menu_${weekStartStr}`,
         })
       }
 
-      addToast({ type: 'success', message: '週間献立を更新しました' })
+      if (isRegenerate) {
+        addToast({
+          type: 'success',
+          message: `週間献立を更新しました（主菜${changedMainDates.length}日分を変更）`,
+        })
+      } else {
+        addToast({ type: 'success', message: '週間献立を作成しました' })
+      }
     } catch (error) {
       console.error('献立の生成に失敗しました', error)
       addToast({
@@ -581,6 +642,8 @@ export function useWeeklyMenuController() {
     includeSeasonings,
     isOverlayOpen,
     latestWeather,
+    lastRegeneratedChangedDates,
+    lastRegeneratedChangedMainDays,
     lowConfidenceNutritionCount,
     menu,
     nutritionInsights,

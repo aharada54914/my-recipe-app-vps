@@ -1,6 +1,19 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { ensureWeeklyMenuGenerated, expandWeeklyWeather, waitForRouteReady } from '../support/app'
 import { expectLocatorWithinViewport } from '../support/layout'
+
+async function readWeeklyMainTitles(page: Page) {
+  const cards = page.getByTestId('weekly-day-card')
+  const count = await cards.count()
+  const titles = new Map<string, string>()
+  for (let index = 0; index < count; index += 1) {
+    const card = cards.nth(index)
+    const date = await card.getAttribute('data-day-date')
+    const title = (await card.getByTestId('weekly-day-title').innerText()).trim()
+    if (date) titles.set(date, title)
+  }
+  return titles
+}
 
 test('weekly menu generation creates and persists summary and 7 day cards', async ({ page }) => {
   await ensureWeeklyMenuGenerated(page)
@@ -55,9 +68,18 @@ test('weekly menu can be regenerated without exposing feature matrix constraint 
   await ensureWeeklyMenuGenerated(page)
   await page.reload()
   await expect(page.getByTestId('weekly-summary-card')).toBeVisible()
+  const beforeTitles = await readWeeklyMainTitles(page)
 
   await page.getByRole('button', { name: '再生成', exact: true }).click()
-  await expect(page.getByText('週間献立を更新しました')).toBeVisible()
+  await expect(page.getByText(/週間献立を更新しました/)).toBeVisible()
   await expect(page.getByTestId('weekly-summary-card')).toBeVisible()
+  await expect(page.getByTestId('weekly-regenerate-diff-summary')).toContainText('主菜変更')
   await expect(page.getByText(/ConstraintError|bulkPut|recipeFeatureMatrix/)).toHaveCount(0)
+
+  const afterTitles = await readWeeklyMainTitles(page)
+  let changedDays = 0
+  for (const [date, title] of beforeTitles.entries()) {
+    if (afterTitles.get(date) !== title) changedDays += 1
+  }
+  expect(changedDays).toBeGreaterThanOrEqual(5)
 })

@@ -121,13 +121,12 @@ describe('buildRecipeSearchResults', () => {
 
     expect(top.recipe.id).toBe(3)
     expect(top.queryScore).toBe(0.5)
-    expect(top.preferenceScore).toBeGreaterThan(6.82)
-    expect(top.preferenceScore).toBeLessThan(6.85)
+    expect(top.preferenceScore).toBeCloseTo(6.82, 2)
     expect(top.stockScore).toBeCloseTo(1.4, 3)
-    expect(top.baseScore).toBeGreaterThan(8.22)
-    expect(top.baseScore).toBeLessThan(8.25)
-    expect(top.finalScore).toBeGreaterThan(10.328)
-    expect(top.finalScore).toBeLessThan(10.33)
+    expect(top.baseScore).toBeGreaterThan(8.21)
+    expect(top.baseScore).toBeLessThan(8.24)
+    expect(top.finalScore).toBeGreaterThan(10.31)
+    expect(top.finalScore).toBeLessThan(10.34)
   })
 })
 

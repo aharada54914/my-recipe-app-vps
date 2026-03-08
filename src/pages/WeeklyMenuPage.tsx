@@ -95,6 +95,7 @@ interface WeeklyDayAccordionCardProps {
   index: number
   isFeatured: boolean
   featuredLabel: string
+  changedSinceLastRegenerate?: boolean
   expanded: boolean
   onToggleExpanded?: () => void
   onToggleLock: () => void
@@ -115,6 +116,7 @@ function WeeklyDayAccordionCard({
   index,
   isFeatured,
   featuredLabel,
+  changedSinceLastRegenerate = false,
   expanded,
   onToggleExpanded,
   onToggleLock,
@@ -162,6 +164,11 @@ function WeeklyDayAccordionCard({
               {item.locked && (
                 <span className="rounded-md bg-bg-card-hover px-2 py-0.5 text-[11px] font-semibold text-text-secondary">
                   固定
+                </span>
+              )}
+              {!item.locked && changedSinceLastRegenerate && (
+                <span className="rounded-md bg-accent-fresh/16 px-2 py-0.5 text-[11px] font-semibold text-accent-fresh">
+                  変更
                 </span>
               )}
             </div>
@@ -286,6 +293,8 @@ export function WeeklyMenuPage() {
     handleToggleLock,
     includeSeasonings,
     isOverlayOpen,
+    lastRegeneratedChangedDates,
+    lastRegeneratedChangedMainDays,
     lowConfidenceNutritionCount,
     menu,
     nutritionInsights,
@@ -347,6 +356,10 @@ export function WeeklyMenuPage() {
     [featuredIndex, menu],
   )
   const activeExpandedDate = menu?.items.some((item) => item.date === expandedDate) ? expandedDate : null
+  const changedDatesSinceLastRegenerate = useMemo(
+    () => new Set(lastRegeneratedChangedDates),
+    [lastRegeneratedChangedDates],
+  )
 
   const toggleExpandedDate = (date: string) => {
     setExpandedDate((current) => (current === date ? null : date))
@@ -513,6 +526,14 @@ export function WeeklyMenuPage() {
               </div>
 
               <div className="mt-4 space-y-1.5 text-sm">
+                {lastRegeneratedChangedMainDays != null && (
+                  <div
+                    data-testid="weekly-regenerate-diff-summary"
+                    className="mb-3 rounded-xl border border-accent-fresh/20 bg-accent-fresh/10 px-3 py-2 text-sm font-semibold text-accent-fresh"
+                  >
+                    主菜変更 {lastRegeneratedChangedMainDays} / {menu.items.length}日
+                  </div>
+                )}
                 {nutritionInsights.gaps.map((gap) => (
                   <p key={gap} className="text-warning">・{gap}</p>
                 ))}
@@ -552,6 +573,7 @@ export function WeeklyMenuPage() {
                   index={featuredIndex}
                   isFeatured
                   featuredLabel={isFeaturedToday ? '今日' : '注目'}
+                  changedSinceLastRegenerate={changedDatesSinceLastRegenerate.has(featuredItem.date)}
                   expanded
                   onToggleLock={() => handleToggleLock(featuredIndex)}
                   onOpenSwap={(type) => handleOpenSwap(featuredIndex, type)}
@@ -597,6 +619,7 @@ export function WeeklyMenuPage() {
                       index={itemIndex}
                       isFeatured={false}
                       featuredLabel=""
+                      changedSinceLastRegenerate={changedDatesSinceLastRegenerate.has(item.date)}
                       expanded={expanded}
                       onToggleExpanded={() => toggleExpandedDate(item.date)}
                       onToggleLock={() => handleToggleLock(itemIndex)}
