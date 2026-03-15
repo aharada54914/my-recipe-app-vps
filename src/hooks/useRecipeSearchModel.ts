@@ -15,9 +15,11 @@ export function useRecipeSearchModel(input: RecipeSearchModelInput) {
     favorites: input.favorites,
     weeklyMenus: input.weeklyMenus,
     calendarEvents: input.calendarEvents,
+    now: input.now,
   }), [
     input.calendarEvents,
     input.favorites,
+    input.now,
     input.recipes,
     input.stockItems,
     input.viewHistory,
