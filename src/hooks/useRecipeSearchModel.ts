@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import type { RecipeSearchModelInput } from '../utils/recipeSearchModel'
 import {
-  buildFacetAwareCategoryCountsFromContext,
-  buildRecipeSearchResultsFromContext,
+  buildRecipeCategoryCounts,
+  buildRecipeSearchResultsFromScored,
   createRecipeSearchStaticContext,
+  scoreRecipesForQuery,
 } from '../utils/recipeSearchModel'
 
 export function useRecipeSearchModel(input: RecipeSearchModelInput) {
@@ -23,15 +24,25 @@ export function useRecipeSearchModel(input: RecipeSearchModelInput) {
     input.weeklyMenus,
   ])
 
-  const results = useMemo(
-    () => buildRecipeSearchResultsFromContext(staticContext, input.searchQuery, input.facets),
-    [input.facets, input.searchQuery, staticContext],
+  // Fuse.js検索はクエリ変更時のみ実行（ファセット変更では再実行しない）
+  const scored = useMemo(
+    () => scoreRecipesForQuery(staticContext, input.searchQuery),
+    [staticContext, input.searchQuery],
   )
 
-  const categoryCounts = useMemo(
-    () => buildFacetAwareCategoryCountsFromContext(staticContext, input.searchQuery, input.facets),
-    [input.facets, input.searchQuery, staticContext],
+  const results = useMemo(
+    () => buildRecipeSearchResultsFromScored(staticContext, scored, input.facets),
+    [staticContext, scored, input.facets],
   )
+
+  const categoryCounts = useMemo(() => {
+    const allResults = buildRecipeSearchResultsFromScored(
+      staticContext,
+      scored,
+      { ...input.facets, categories: [] },
+    )
+    return buildRecipeCategoryCounts(allResults.map((entry) => entry.recipe))
+  }, [staticContext, scored, input.facets])
 
   return { results, categoryCounts }
 }

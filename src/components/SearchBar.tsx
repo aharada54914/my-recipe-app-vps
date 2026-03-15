@@ -33,7 +33,7 @@ export function SearchBar({
   } = useSearchInputController({
     value,
     onCommit: onChange,
-    delay: 150,
+    delay: 400,
   })
 
   const suggestions = useMemo(() => {

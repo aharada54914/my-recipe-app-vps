@@ -119,21 +119,23 @@ export function createRecipeSearchStaticContext(input: RecipeSearchStaticInput):
   }
 }
 
-export function buildRecipeSearchResultsFromContext(
+/** Fuse.js検索（クエリ変更時のみ実行）。ファセットに依存しない。 */
+export function scoreRecipesForQuery(
   context: RecipeSearchStaticContext,
   searchQuery: string,
+): Array<{ recipe: Recipe; queryScore: number }> {
+  return searchQuery
+    ? searchRecipesWithScores(context.recipes, searchQuery)
+    : context.recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
+}
+
+/** スコア済みレシピにファセットを適用して最終結果を構築する。 */
+export function buildRecipeSearchResultsFromScored(
+  context: RecipeSearchStaticContext,
+  scored: Array<{ recipe: Recipe; queryScore: number }>,
   facets: RecipeSearchFacetState,
 ): RecipeSearchResult[] {
-  const {
-    recipes,
-    stockNames,
-    preferenceProfile,
-    baseScoreByRecipeId,
-  } = context
-
-  const scored = searchQuery
-    ? searchRecipesWithScores(recipes, searchQuery)
-    : recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
+  const { stockNames, preferenceProfile, baseScoreByRecipeId } = context
 
   const filtered = applyRecipeFacetFilters(
     scored.map((entry) => entry.recipe),
@@ -171,6 +173,15 @@ export function buildRecipeSearchResultsFromContext(
     })
 }
 
+export function buildRecipeSearchResultsFromContext(
+  context: RecipeSearchStaticContext,
+  searchQuery: string,
+  facets: RecipeSearchFacetState,
+): RecipeSearchResult[] {
+  const scored = scoreRecipesForQuery(context, searchQuery)
+  return buildRecipeSearchResultsFromScored(context, scored, facets)
+}
+
 export function buildRecipeSearchResults(input: RecipeSearchModelInput): RecipeSearchResult[] {
   const context = createRecipeSearchStaticContext(input)
   return buildRecipeSearchResultsFromContext(context, input.searchQuery, input.facets)
@@ -189,15 +200,8 @@ export function buildFacetAwareCategoryCountsFromContext(
   searchQuery: string,
   facets: RecipeSearchFacetState,
 ): Partial<Record<RecipeCategory, number>> {
-  const results = buildRecipeSearchResultsFromContext(
-    context,
-    searchQuery,
-    {
-      ...facets,
-      categories: [],
-    },
-  )
-
+  const scored = scoreRecipesForQuery(context, searchQuery)
+  const results = buildRecipeSearchResultsFromScored(context, scored, { ...facets, categories: [] })
   return buildRecipeCategoryCounts(results.map((entry) => entry.recipe))
 }
 
