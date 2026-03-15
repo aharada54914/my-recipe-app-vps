@@ -1,9 +1,16 @@
-import { describe, it, expect } from 'vitest'
-import { searchRecipes, getExpandedSearchTermsForDebug } from '../searchUtils'
+import Fuse from 'fuse.js'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  getExpandedSearchTermsForDebug,
+  resetRecipeSearchSeedBundleForTest,
+  searchRecipes,
+  setRecipeSearchSeedBundleForTest,
+} from '../searchUtils'
 import { expandSynonyms } from '../../data/synonyms'
 import { normalizeJaText } from '../jaText'
 import { tokenizeJa } from '../tokenizeJa'
 import type { Recipe } from '../../db/db'
+import { buildSearchDocSeed } from '../searchIndexCore'
 
 const mockRecipes: Recipe[] = [
   {
@@ -72,6 +79,10 @@ const mockRecipes: Recipe[] = [
   },
 ]
 
+afterEach(() => {
+  resetRecipeSearchSeedBundleForTest()
+})
+
 describe('searchRecipes', () => {
   it('returns all recipes for empty query', () => {
     const result = searchRecipes(mockRecipes, '')
@@ -126,6 +137,20 @@ describe('searchRecipes', () => {
     const result = searchRecipes(mockRecipes, '粕汁')
     const titles = result.map((r) => r.title)
     expect(titles).toContain('かす汁')
+  })
+
+  it('returns the same seeded results as the runtime-built index', () => {
+    const runtimeResult = searchRecipes(mockRecipes, '鶏肉').map((recipe) => recipe.id)
+    const seedDocs = mockRecipes.map((recipe) => buildSearchDocSeed(recipe))
+    const seedIndex = Fuse.createIndex(
+      ['titleSearchText', 'ingredientSearchText', 'searchText'],
+      seedDocs,
+    ).toJSON()
+
+    setRecipeSearchSeedBundleForTest(seedDocs, seedIndex)
+    const seededResult = searchRecipes(mockRecipes, '鶏肉').map((recipe) => recipe.id)
+
+    expect(seededResult).toEqual(runtimeResult)
   })
 })
 

@@ -1,246 +1,378 @@
 import Fuse, { type IFuseOptions } from 'fuse.js'
 import type { Recipe } from '../db/db'
-import { expandSynonyms, synonymMap } from '../data/synonyms'
-import { readingMap } from '../data/readings'
-import { normalizeJaText } from './jaText'
-import { tokenizeJa } from './tokenizeJa'
 import {
-    getKuromojiTokenizerVersion,
-    getTitleReadingVariantsByKuromoji,
-    warmupKuromojiTitleReadings,
+  buildSearchDocFields,
+  buildSearchDocSeed,
+  createSearchTerms,
+  type SearchDocSeed,
+} from './searchIndexCore'
+import { normalizeJaText } from './jaText'
+import {
+  getKuromojiTokenizerVersion,
+  getTitleReadingVariantsByKuromoji,
+  warmupKuromojiTitleReadings,
 } from './kuromojiTitleReadings'
 
 interface SearchRecipeDoc {
-    recipe: Recipe
-    titleSearchText: string
-    ingredientSearchText: string
-    searchText: string
+  recipe: Recipe
+  titleSearchText: string
+  ingredientSearchText: string
+  searchText: string
 }
 
-/**
- * Fuse.js options for recipe fuzzy search.
- * Searches both title and ingredient names.
- */
 const fuseOptions: IFuseOptions<SearchRecipeDoc> = {
-    keys: [
-        { name: 'titleSearchText', weight: 2.4 },
-        { name: 'ingredientSearchText', weight: 1.2 },
-        { name: 'searchText', weight: 1 },
-    ],
-    threshold: 0.4, // 0 = exact, 1 = match anything
-    distance: 100,
-    ignoreLocation: true, // don't penalize matches at end of string
-    includeScore: true,
+  keys: [
+    { name: 'titleSearchText', weight: 2.4 },
+    { name: 'ingredientSearchText', weight: 1.2 },
+    { name: 'searchText', weight: 1 },
+  ],
+  threshold: 0.4,
+  distance: 100,
+  ignoreLocation: true,
+  includeScore: true,
 }
 
-let fuseInstance: Fuse<SearchRecipeDoc> | null = null
+const MAX_QUERY_CACHE_SIZE = 24
+type ParsedFuseIndexInput = Parameters<typeof Fuse.parseIndex<SearchRecipeDoc>>[0]
+
+let seedDocs: SearchDocSeed[] | null = null
+let seedIndexJson: object | null = null
+let seedLoadPromise: Promise<void> | null = null
+let searchIndexGeneration = 0
+
 let lastRecipes: Recipe[] | null = null
-let lastDocs: SearchRecipeDoc[] | null = null
 let lastKuromojiVersion = -1
+let lastIndexGeneration = -1
+let lastSeededFuse: Fuse<SearchRecipeDoc> | null = null
+let lastDynamicFuse: Fuse<SearchRecipeDoc> | null = null
+let lastSeededDocs: SearchRecipeDoc[] = []
+let lastDynamicDocs: SearchRecipeDoc[] = []
+
+const recentQueryCache = new Map<string, SearchScoredRecipe[]>()
+const searchTermCache = new Map<string, string[]>()
+const termResultCache = new Map<string, Array<{ recipe: Recipe; score: number }>>()
 
 export interface SearchScoredRecipe {
-    recipe: Recipe
-    queryScore: number
+  recipe: Recipe
+  queryScore: number
 }
 
-function expandReadingsByCanonical(term: string): string[] {
-    const normalized = normalizeJaText(term)
-    if (!normalized) return []
+function clearSearchCaches(): void {
+  lastRecipes = null
+  lastKuromojiVersion = -1
+  lastIndexGeneration = -1
+  lastSeededFuse = null
+  lastDynamicFuse = null
+  lastSeededDocs = []
+  lastDynamicDocs = []
+  recentQueryCache.clear()
+  termResultCache.clear()
+}
 
-    const result = new Set<string>()
-    for (const [canonical, readings] of Object.entries(readingMap)) {
-        const canonicalNorm = normalizeJaText(canonical)
-        if (canonicalNorm === normalized) {
-            result.add(canonical)
-            for (const r of readings) result.add(r)
-        }
+async function loadSeedSearchBundle(): Promise<void> {
+  if (seedDocs && seedIndexJson) return
+  if (seedLoadPromise) return seedLoadPromise
+
+  const base = import.meta.env.BASE_URL || '/'
+  const docsUrl = `${base.replace(/\/?$/, '/')}seed/recipe-search-docs.json`
+  const indexUrl = `${base.replace(/\/?$/, '/')}seed/recipe-search-index.json`
+
+  seedLoadPromise = Promise.all([
+    fetch(docsUrl, { headers: { Accept: 'application/json' } }),
+    fetch(indexUrl, { headers: { Accept: 'application/json' } }),
+  ])
+    .then(async ([docsResponse, indexResponse]) => {
+      if (!docsResponse.ok) {
+        throw new Error(`Failed to load recipe search docs (${docsResponse.status})`)
+      }
+      if (!indexResponse.ok) {
+        throw new Error(`Failed to load recipe search index (${indexResponse.status})`)
+      }
+
+      seedDocs = await docsResponse.json() as SearchDocSeed[]
+      seedIndexJson = await indexResponse.json() as object
+      searchIndexGeneration += 1
+      clearSearchCaches()
+    })
+    .catch((error) => {
+      console.warn('recipe search seed bundle load failed; falling back to runtime index build', error)
+    })
+    .finally(() => {
+      seedLoadPromise = null
+    })
+
+  return seedLoadPromise
+}
+
+function buildRuntimeSearchDoc(recipe: Recipe): SearchRecipeDoc {
+  return {
+    recipe,
+    ...buildSearchDocFields(
+      recipe.title,
+      recipe.ingredients.map((ingredient) => ingredient.name),
+      getTitleReadingVariantsByKuromoji(recipe.title),
+    ),
+  }
+}
+
+function buildSeedSearchDocs(recipes: Recipe[]): {
+  docs: SearchRecipeDoc[]
+  uncoveredRecipes: Recipe[]
+  canReusePrebuiltIndex: boolean
+} {
+  if (!seedDocs || !seedIndexJson) {
+    return {
+      docs: [],
+      uncoveredRecipes: recipes,
+      canReusePrebuiltIndex: false,
     }
-    return [...result]
+  }
+
+  const recipeByNumber = new Map<string, Recipe>()
+  for (const recipe of recipes) {
+    recipeByNumber.set(recipe.recipeNumber, recipe)
+  }
+
+  const docs: SearchRecipeDoc[] = []
+  const seededRecipeNumbers = new Set<string>()
+
+  for (const seedDoc of seedDocs) {
+    const recipe = recipeByNumber.get(seedDoc.recipeNumber)
+    if (!recipe) continue
+    docs.push({
+      recipe,
+      titleSearchText: seedDoc.titleSearchText,
+      ingredientSearchText: seedDoc.ingredientSearchText,
+      searchText: seedDoc.searchText,
+    })
+    seededRecipeNumbers.add(seedDoc.recipeNumber)
+  }
+
+  const uncoveredRecipes = recipes.filter((recipe) => !seededRecipeNumbers.has(recipe.recipeNumber))
+  return {
+    docs,
+    uncoveredRecipes,
+    canReusePrebuiltIndex: docs.length === seedDocs.length,
+  }
 }
 
-function lexiconAliases(term: string): string[] {
-    const out = new Set<string>([term])
-    for (const s of expandSynonyms(term)) out.add(s)
-    for (const s of expandReadingsByCanonical(term)) out.add(s)
-    return [...out]
+function getSearchEngines(recipes: Recipe[]): {
+  seededFuse: Fuse<SearchRecipeDoc> | null
+  dynamicFuse: Fuse<SearchRecipeDoc> | null
+  seededDocs: SearchRecipeDoc[]
+  dynamicDocs: SearchRecipeDoc[]
+} {
+  const kuromojiVersion = getKuromojiTokenizerVersion()
+  if (
+    lastRecipes === recipes
+    && lastKuromojiVersion === kuromojiVersion
+    && lastIndexGeneration === searchIndexGeneration
+  ) {
+    return {
+      seededFuse: lastSeededFuse,
+      dynamicFuse: lastDynamicFuse,
+      seededDocs: lastSeededDocs,
+      dynamicDocs: lastDynamicDocs,
+    }
+  }
+
+  const { docs: seededDocs, uncoveredRecipes, canReusePrebuiltIndex } = buildSeedSearchDocs(recipes)
+  const dynamicDocs = uncoveredRecipes.map(buildRuntimeSearchDoc)
+
+  lastSeededFuse = seededDocs.length === 0
+    ? null
+    : canReusePrebuiltIndex && seedIndexJson
+      ? new Fuse(seededDocs, fuseOptions, Fuse.parseIndex<SearchRecipeDoc>(seedIndexJson as ParsedFuseIndexInput))
+      : new Fuse(seededDocs, fuseOptions)
+
+  lastDynamicFuse = dynamicDocs.length === 0
+    ? null
+    : new Fuse(dynamicDocs, fuseOptions)
+
+  lastRecipes = recipes
+  lastKuromojiVersion = kuromojiVersion
+  lastIndexGeneration = searchIndexGeneration
+  lastSeededDocs = seededDocs
+  lastDynamicDocs = dynamicDocs
+  recentQueryCache.clear()
+
+  return {
+    seededFuse: lastSeededFuse,
+    dynamicFuse: lastDynamicFuse,
+    seededDocs: lastSeededDocs,
+    dynamicDocs: lastDynamicDocs,
+  }
 }
 
-function generatePhraseVariants(text: string): string[] {
-    const normalized = normalizeJaText(text)
-    if (!normalized) return []
+function getCachedSearchTerms(query: string): string[] {
+  const cached = searchTermCache.get(query)
+  if (cached) return cached
+  const terms = createSearchTerms(query)
+  searchTermCache.set(query, terms)
+  return terms
+}
 
-    const variants = new Set<string>([text, normalized])
-    const tokens = tokenizeJa(text)
-    const tokenAliases = tokens.map((token) => ({
-        token,
-        aliases: lexiconAliases(token).slice(0, 8),
+function rememberQueryResult(query: string, result: SearchScoredRecipe[]): void {
+  if (recentQueryCache.has(query)) {
+    recentQueryCache.delete(query)
+  }
+  recentQueryCache.set(query, result)
+  if (recentQueryCache.size > MAX_QUERY_CACHE_SIZE) {
+    const oldestKey = recentQueryCache.keys().next().value
+    if (oldestKey) recentQueryCache.delete(oldestKey)
+  }
+}
+
+function getTermResults(
+  term: string,
+  normalizedTerm: string,
+  searchState: {
+    seededFuse: Fuse<SearchRecipeDoc> | null
+    dynamicFuse: Fuse<SearchRecipeDoc> | null
+    seededDocs: SearchRecipeDoc[]
+    dynamicDocs: SearchRecipeDoc[]
+  },
+): Array<{ recipe: Recipe; score: number }> {
+  const cacheKey = normalizedTerm ? `${term}\u0000${normalizedTerm}` : term
+  const cached = termResultCache.get(cacheKey)
+  if (cached) return cached
+
+  const directMatches = [...searchState.seededDocs, ...searchState.dynamicDocs]
+    .filter((doc) => {
+      if (doc.searchText.includes(term)) return true
+      return normalizedTerm.length > 0 && doc.searchText.includes(normalizedTerm)
+    })
+    .map((doc) => ({
+      recipe: doc.recipe,
+      score: directMatchScore(doc, term, normalizedTerm),
     }))
 
-    for (const { token, aliases } of tokenAliases) {
-        if (!token) continue
-        for (const alias of aliases) {
-            variants.add(alias)
-            if (text.includes(token)) variants.add(text.replaceAll(token, alias))
-            if (normalized.includes(token)) variants.add(normalized.replaceAll(token, normalizeJaText(alias)))
-        }
-    }
+  if (directMatches.length > 0) {
+    termResultCache.set(cacheKey, directMatches)
+    return directMatches
+  }
 
-    // Add token-level aliases as concatenated forms to absorb kanji/kana mixed titles like "粕汁" / "かす汁".
-    if (tokenAliases.length > 0) {
-        const aliasLists = tokenAliases.map(({ aliases }) => aliases.map((a) => normalizeJaText(a)).filter(Boolean))
-        const maxCombos = 64
-        let combos: string[] = ['']
-        for (const list of aliasLists) {
-            const next: string[] = []
-            for (const base of combos) {
-                for (const alias of list.slice(0, 6)) {
-                    next.push(base + alias)
-                    if (next.length >= maxCombos) break
-                }
-                if (next.length >= maxCombos) break
-            }
-            combos = next.length > 0 ? next : combos
-            if (combos.length >= maxCombos) break
-        }
-        for (const combo of combos) variants.add(combo)
-    }
+  const resultMap = new Map<number, { recipe: Recipe; score: number }>()
+  const engines = [searchState.seededFuse, searchState.dynamicFuse]
 
-    return [...variants]
+  for (const engine of engines) {
+    if (!engine) continue
+    const results = engine.search(term)
+    for (const result of results) {
+      const id = result.item.recipe.id
+      if (id == null) continue
+      const score = result.score ?? 1
+      const existing = resultMap.get(id)
+      if (!existing || score < existing.score) {
+        resultMap.set(id, { recipe: result.item.recipe, score })
+      }
+    }
+  }
+
+  const merged = [...resultMap.values()]
+  termResultCache.set(cacheKey, merged)
+  return merged
 }
 
-function buildTitleSearchText(recipe: Recipe): string {
-    const variants = new Set(generatePhraseVariants(recipe.title))
-    for (const reading of getTitleReadingVariantsByKuromoji(recipe.title)) {
-        variants.add(reading)
-    }
-    return [...variants].join(' ')
+function directMatchScore(doc: SearchRecipeDoc, term: string, normalizedTerm: string): number {
+  const titleText = doc.titleSearchText
+  const ingredientText = doc.ingredientSearchText
+  const recipeTitle = doc.recipe.title
+
+  let score = 0.38
+  if (ingredientText.includes(term) || (normalizedTerm && ingredientText.includes(normalizedTerm))) score -= 0.1
+  if (titleText.includes(term) || (normalizedTerm && titleText.includes(normalizedTerm))) score -= 0.16
+  if (recipeTitle.includes(term)) score -= 0.08
+
+  return Math.max(0.01, score)
 }
 
-function buildIngredientSearchText(recipe: Recipe): string {
-    const parts = new Set<string>()
-    for (const ing of recipe.ingredients) {
-        for (const variant of generatePhraseVariants(ing.name)) {
-            parts.add(variant)
-        }
-    }
-    return [...parts].join(' ')
-}
+export function warmupRecipeSearchIndex(recipes?: Recipe[]): void {
+  if (typeof window === 'undefined') return
+  void loadSeedSearchBundle().then(() => {
+    if (!recipes || lastRecipes === recipes) return
 
-function buildSearchDoc(recipe: Recipe): SearchRecipeDoc {
-    const titleSearchText = buildTitleSearchText(recipe)
-    const ingredientSearchText = buildIngredientSearchText(recipe)
-    const searchText = [titleSearchText, ingredientSearchText].filter(Boolean).join(' ')
+    const { uncoveredRecipes } = buildSeedSearchDocs(recipes)
+    if (uncoveredRecipes.length === 0) return
 
-    return {
-        recipe,
-        titleSearchText,
-        ingredientSearchText,
-        searchText,
-    }
-}
-
-function getFuseInstance(recipes: Recipe[]): Fuse<SearchRecipeDoc> {
     warmupKuromojiTitleReadings()
-    const kuromojiVersion = getKuromojiTokenizerVersion()
 
-    if (fuseInstance && lastRecipes === recipes && lastKuromojiVersion === kuromojiVersion) {
-        return fuseInstance
+    const warm = () => {
+      getSearchEngines(recipes)
     }
-    lastDocs = recipes.map(buildSearchDoc)
-    fuseInstance = new Fuse(lastDocs, fuseOptions)
-    lastRecipes = recipes
-    lastKuromojiVersion = kuromojiVersion
-    return fuseInstance
+
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(warm, { timeout: 500 })
+      return
+    }
+
+    setTimeout(warm, 0)
+  })
 }
 
-function findCanonicalByReading(term: string): string[] {
-    const normalized = normalizeJaText(term)
-    if (!normalized) return []
-
-    const matches: string[] = []
-    for (const [canonical, readings] of Object.entries(readingMap)) {
-        const hasMatch = readings.some((r) => normalizeJaText(r) === normalized)
-        if (hasMatch) matches.push(canonical)
-    }
-    return matches
+export function setRecipeSearchSeedBundleForTest(
+  docs: SearchDocSeed[],
+  index: ParsedFuseIndexInput,
+): void {
+  seedDocs = docs
+  seedIndexJson = index as object
+  searchIndexGeneration += 1
+  clearSearchCaches()
 }
 
-function shouldUseToken(token: string): boolean {
-    // precision-first: avoid short pure-hiragana tokens like "にく" being too broad.
-    if (token.length < 2) return false
-    if (/^[ぁ-ん]+$/.test(token)) return token.length >= 4
-    return true
-}
-
-function createSearchTerms(query: string): string[] {
-    const normalized = normalizeJaText(query)
-    const terms = new Set<string>([query])
-    if (normalized) terms.add(normalized)
-
-    for (const token of tokenizeJa(query)) {
-        if (shouldUseToken(token)) {
-            terms.add(token)
-        }
-    }
-
-    const currentTerms = [...terms]
-    for (const term of currentTerms) {
-        for (const canonical of findCanonicalByReading(term)) {
-            terms.add(canonical)
-            for (const synonym of expandSynonyms(canonical)) {
-                terms.add(synonym)
-            }
-
-            const canonicalAliases = synonymMap[canonical] ?? []
-            for (const alias of canonicalAliases) {
-                terms.add(alias)
-            }
-        }
-
-        for (const synonym of expandSynonyms(term)) {
-            terms.add(synonym)
-        }
-    }
-
-    return [...terms]
+export function resetRecipeSearchSeedBundleForTest(): void {
+  seedDocs = null
+  seedIndexJson = null
+  searchIndexGeneration += 1
+  clearSearchCaches()
 }
 
 export function searchRecipes(recipes: Recipe[], query: string): Recipe[] {
-    return searchRecipesWithScores(recipes, query).map((item) => item.recipe)
+  return searchRecipesWithScores(recipes, query).map((item) => item.recipe)
 }
 
 export function searchRecipesWithScores(recipes: Recipe[], query: string): SearchScoredRecipe[] {
-    if (!query.trim()) return recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
+  if (!query.trim()) return recipes.map((recipe) => ({ recipe, queryScore: 0.5 }))
 
-    const fuse = getFuseInstance(recipes)
-    const expandedTerms = createSearchTerms(query)
-    const resultMap = new Map<number, { recipe: Recipe; score: number }>()
+  const cached = recentQueryCache.get(query)
+  if (cached) return cached
 
-    for (const term of expandedTerms) {
-        const results = fuse.search(term)
-        for (const result of results) {
-            const id = result.item.recipe.id!
-            const score = result.score ?? 1
-            const existing = resultMap.get(id)
-            if (!existing || score < existing.score) {
-                resultMap.set(id, { recipe: result.item.recipe, score })
-            }
-        }
+  const searchState = getSearchEngines(recipes)
+  const expandedTerms = getCachedSearchTerms(query)
+  const resultMap = new Map<number, { recipe: Recipe; score: number }>()
+
+  for (const term of expandedTerms) {
+    const termResults = getTermResults(term, normalizeJaText(term), searchState)
+    for (const result of termResults) {
+      const id = result.recipe.id
+      if (id == null) continue
+      const existing = resultMap.get(id)
+      if (!existing || result.score < existing.score) {
+        resultMap.set(id, result)
+      }
     }
+  }
 
-    return [...resultMap.values()]
-        .sort((a, b) => a.score - b.score)
-        .map((r) => ({
-            recipe: r.recipe,
-            queryScore: Math.max(0, 1 - Math.min(1, r.score)),
-        }))
+  const scored = [...resultMap.values()]
+    .sort((left, right) => left.score - right.score)
+    .map((entry) => ({
+      recipe: entry.recipe,
+      queryScore: Math.max(0, 1 - Math.min(1, entry.score)),
+    }))
+
+  rememberQueryResult(query, scored)
+  return scored
 }
 
 export function getExpandedSearchTermsForDebug(query: string): string[] {
-    return createSearchTerms(query)
+  return createSearchTerms(query)
 }
 
 export function getRecentSearchSuggestions(history: string[], focused: boolean): string[] {
-    if (!focused) return []
-    return history.slice(0, 5)
+  if (!focused) return []
+  return history.slice(0, 5)
+}
+
+export function buildSearchDocSeedForBuild(recipe: Pick<Recipe, 'recipeNumber' | 'title' | 'ingredients'>): SearchDocSeed {
+  return buildSearchDocSeed(recipe)
 }

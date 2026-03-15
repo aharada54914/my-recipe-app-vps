@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from 'react'
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SearchBar } from '../SearchBar'
@@ -71,6 +71,51 @@ describe('SearchBar IME-safe behavior', () => {
     })
 
     expect(handleChange).toHaveBeenCalledWith('ぴー')
+
+    act(() => {
+      root.unmount()
+    })
+  })
+
+  it('does not flush a stale debounced romaji draft after composition ends', () => {
+    const handleChange = vi.fn()
+    const root = createRoot(container)
+
+    function ControlledSearchBar() {
+      const [value, setValue] = useState('')
+      return createElement(SearchBar, {
+        value,
+        onChange: (nextValue) => {
+          handleChange(nextValue)
+          setValue(nextValue)
+        },
+      })
+    }
+
+    act(() => {
+      root.render(createElement(ControlledSearchBar))
+    })
+
+    const input = container.querySelector('input')
+    expect(input).not.toBeNull()
+
+    act(() => {
+      input!.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+      input!.value = 'm'
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+      vi.advanceTimersByTime(450)
+    })
+
+    expect(handleChange).not.toHaveBeenCalled()
+
+    act(() => {
+      input!.value = '鶏もも肉'
+      input!.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
+      vi.advanceTimersByTime(450)
+    })
+
+    expect(handleChange).toHaveBeenCalledTimes(1)
+    expect(handleChange).toHaveBeenLastCalledWith('鶏もも肉')
 
     act(() => {
       root.unmount()

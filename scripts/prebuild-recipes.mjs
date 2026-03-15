@@ -8,6 +8,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import Fuse from 'fuse.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -519,10 +520,41 @@ async function main() {
     deriveEstimationConfidence,
   } = await import('../src/utils/nutritionEstimator.ts')
   const { NUTRITION_REFERENCE } = await import('../src/data/nutritionLookup.ts')
+  const { normalizeJaText } = await import('../src/utils/jaText.ts')
+  const { buildSearchDocSeed } = await import('../src/utils/searchIndexCore.ts')
   const outDir = join(ROOT, 'src', 'data')
   const publicSeedDir = join(ROOT, 'public', 'seed')
   mkdirSync(outDir, { recursive: true })
   mkdirSync(publicSeedDir, { recursive: true })
+
+  const kuromojiModule = await import('kuromoji')
+  const kuromoji = kuromojiModule.default
+  const nodeKuromojiTokenizer = await new Promise((resolve, reject) => {
+    kuromoji.builder({ dicPath: join(ROOT, 'node_modules', 'kuromoji', 'dict') }).build((err, built) => {
+      if (err || !built) {
+        reject(err ?? new Error('kuromoji tokenizer build failed in prebuild'))
+        return
+      }
+      resolve(built)
+    })
+  })
+
+  function getNodeKuromojiTitleVariants(text) {
+    if (!text.trim()) return []
+    const tokens = nodeKuromojiTokenizer.tokenize(text)
+    if (!Array.isArray(tokens) || tokens.length === 0) return []
+
+    const readingJoined = tokens
+      .map((token) => {
+        if (token.reading && token.reading !== '*') return normalizeJaText(token.reading)
+        return normalizeJaText(token.surface_form ?? '')
+      })
+      .join('')
+      .trim()
+
+    if (!readingJoined || readingJoined === normalizeJaText(text)) return []
+    return [readingJoined]
+  }
 
   // Healsio
   console.log('📖 Reading Healsio CSV...')
@@ -561,6 +593,20 @@ async function main() {
   const bookletRecipes = JSON.parse(bookletRaw)
   writeFileSync(bookletPublicOut, JSON.stringify(bookletRecipes), 'utf-8')
   console.log(`✅ Booklet: ${bookletRecipes.length} recipes → ${bookletPublicOut}`)
+
+  const searchDocSeeds = [...hotcookRecipes, ...healsioRecipes, ...bookletRecipes].map((recipe) =>
+    buildSearchDocSeed(recipe, getNodeKuromojiTitleVariants(recipe.title)),
+  )
+  const searchDocOut = join(publicSeedDir, 'recipe-search-docs.json')
+  writeFileSync(searchDocOut, JSON.stringify(searchDocSeeds), 'utf-8')
+
+  const searchIndex = Fuse.createIndex(
+    ['titleSearchText', 'ingredientSearchText', 'searchText'],
+    searchDocSeeds,
+  )
+  const searchIndexOut = join(publicSeedDir, 'recipe-search-index.json')
+  writeFileSync(searchIndexOut, JSON.stringify(searchIndex.toJSON()), 'utf-8')
+  console.log(`🔎 Search index: ${searchDocSeeds.length} docs → ${searchDocOut}`)
 
   console.log(`📦 Seed assets: ${healsioPublicOut}, ${hotcookPublicOut}, ${bookletPublicOut}`)
 

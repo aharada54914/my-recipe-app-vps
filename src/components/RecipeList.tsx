@@ -21,6 +21,7 @@ import {
   toggleRecipeSearchFlag,
   type RecipeSearchFacetState,
 } from '../utils/searchFacets'
+import { warmupRecipeSearchIndex } from '../utils/searchUtils'
 
 const SEARCH_HISTORY_KEY = 'recipe_search_history'
 
@@ -131,6 +132,11 @@ export function RecipeList({ onSelectRecipe }: RecipeListProps) {
   const activeFacetChips = useMemo(() => buildRecipeSearchFacetChips(facets), [facets])
   const activeFacetCount = countActiveRecipeSearchFacets(facets)
   const hasActiveFilters = hasActiveRecipeSearchFacets(facets)
+
+  useEffect(() => {
+    if (data.recipes.length === 0) return
+    warmupRecipeSearchIndex(data.recipes)
+  }, [data.recipes])
 
   useEffect(() => {
     setIsFiltering(true)

@@ -18,10 +18,11 @@ export function useSearchInputController({
   const lastCommittedValueRef = useRef(value)
 
   useEffect(() => {
-    if (isComposing || debouncedDraft === lastCommittedValueRef.current) return
+    // Ignore stale debounced snapshots captured before IME composition finished.
+    if (isComposing || debouncedDraft !== draftValue || debouncedDraft === lastCommittedValueRef.current) return
     lastCommittedValueRef.current = debouncedDraft
     onCommit(debouncedDraft)
-  }, [debouncedDraft, isComposing, onCommit])
+  }, [debouncedDraft, draftValue, isComposing, onCommit])
 
   useEffect(() => {
     if (isComposing || value === lastCommittedValueRef.current) return
