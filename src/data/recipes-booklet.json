@@ -1,0 +1,185 @@
+[
+  {
+    "title": "インド宮廷風キーマカレー",
+    "recipeNumber": "BKLT-001",
+    "device": "hotcook",
+    "category": "主菜",
+    "baseServings": 4,
+    "totalWeightG": 1064,
+    "totalTimeMinutes": 130,
+    "ingredients": [
+      { "name": "サラダ油", "quantity": 30, "unit": "g", "category": "sub" },
+      { "name": "玉ねぎ", "quantity": 400, "unit": "g", "category": "main" },
+      { "name": "塩", "quantity": 4, "unit": "g", "category": "sub" },
+      { "name": "おろしにんにく", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "おろししょうが", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "コリアンダーパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "クミンパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "ターメリックパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "カイエンペッパー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "ガラムマサラ", "quantity": 4, "unit": "g", "category": "sub" },
+      { "name": "カルダモンパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "トマトピューレ", "quantity": 300, "unit": "g", "category": "main" },
+      { "name": "合いびき肉", "quantity": 200, "unit": "g", "category": "main" },
+      { "name": "水", "quantity": 100, "unit": "g", "category": "sub" }
+    ],
+    "steps": [
+      { "name": "下ごしらえ", "durationMinutes": 15 },
+      { "name": "ホットクック調理", "durationMinutes": 112, "isDeviceStep": true },
+      { "name": "盛り付け", "durationMinutes": 3 }
+    ],
+    "isUserAdded": false
+  },
+  {
+    "title": "チキンコルマカレー",
+    "recipeNumber": "BKLT-002",
+    "device": "hotcook",
+    "category": "主菜",
+    "baseServings": 4,
+    "totalWeightG": 1138,
+    "totalTimeMinutes": 120,
+    "ingredients": [
+      { "name": "サラダ油", "quantity": 30, "unit": "g", "category": "sub" },
+      { "name": "玉ねぎ", "quantity": 400, "unit": "g", "category": "main" },
+      { "name": "鶏もも肉", "quantity": 320, "unit": "g", "category": "main" },
+      { "name": "プレーンヨーグルト", "quantity": 60, "unit": "g", "category": "sub" },
+      { "name": "おろしにんにく", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "おろししょうが", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "クミンパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "コリアンダーパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "ターメリックパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "カイエンペッパー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "ガラムマサラ", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "塩", "quantity": 4, "unit": "g", "category": "sub" },
+      { "name": "トマト", "quantity": 100, "unit": "g", "category": "main" },
+      { "name": "水", "quantity": 200, "unit": "g", "category": "sub" }
+    ],
+    "steps": [
+      { "name": "下ごしらえ（漬け込み含む）", "durationMinutes": 30 },
+      { "name": "ホットクック調理", "durationMinutes": 87, "isDeviceStep": true },
+      { "name": "盛り付け", "durationMinutes": 3 }
+    ],
+    "isUserAdded": false
+  },
+  {
+    "title": "ハイデラバード風ビーフカレー",
+    "recipeNumber": "BKLT-003",
+    "device": "hotcook",
+    "category": "主菜",
+    "baseServings": 4,
+    "totalWeightG": 1108,
+    "totalTimeMinutes": 145,
+    "ingredients": [
+      { "name": "サラダ油", "quantity": 40, "unit": "g", "category": "sub" },
+      { "name": "玉ねぎ", "quantity": 160, "unit": "g", "category": "main" },
+      { "name": "クミンシード", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "カルダモンホール", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "クローブホール", "quantity": 4, "unit": "g", "category": "sub" },
+      { "name": "シナモンスティック", "quantity": 1, "unit": "本", "category": "sub" },
+      { "name": "牛角切り肉", "quantity": 500, "unit": "g", "category": "main" },
+      { "name": "しいとう", "quantity": 4, "unit": "本", "category": "main" },
+      { "name": "香菜", "quantity": 60, "unit": "g", "category": "sub" },
+      { "name": "プレーンヨーグルト", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "おろしにんにく", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "おろししょうが", "quantity": 4, "unit": "g", "category": "sub" },
+      { "name": "クミンパウダー", "quantity": 4, "unit": "g", "category": "sub" },
+      { "name": "コリアンダーパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "カイエンペッパー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "ターメリックパウダー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "ブラックペッパー", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "ガラムマサラ", "quantity": 2, "unit": "g", "category": "sub" },
+      { "name": "塩", "quantity": 6, "unit": "g", "category": "sub" },
+      { "name": "トマトビューレ", "quantity": 100, "unit": "g", "category": "main" },
+      { "name": "水", "quantity": 160, "unit": "g", "category": "sub" }
+    ],
+    "steps": [
+      { "name": "下ごしらえ", "durationMinutes": 20 },
+      { "name": "ホットクック調理", "durationMinutes": 122, "isDeviceStep": true },
+      { "name": "盛り付け", "durationMinutes": 3 }
+    ],
+    "isUserAdded": false
+  },
+  {
+    "title": "クラシック欧風ビーフカレー",
+    "recipeNumber": "BKLT-004",
+    "device": "hotcook",
+    "category": "主菜",
+    "baseServings": 4,
+    "totalWeightG": 1069,
+    "totalTimeMinutes": 140,
+    "ingredients": [
+      { "name": "サラダ油", "quantity": 30, "unit": "g", "category": "sub" },
+      { "name": "玉ねぎ", "quantity": 240, "unit": "g", "category": "main" },
+      { "name": "セロリ", "quantity": 80, "unit": "g", "category": "main" },
+      { "name": "にんじん", "quantity": 100, "unit": "g", "category": "main" },
+      { "name": "にんにく", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "バター", "quantity": 15, "unit": "g", "category": "sub" },
+      { "name": "薄力粉", "quantity": 18, "unit": "g", "category": "sub" },
+      { "name": "カレー粉", "quantity": 12, "unit": "g", "category": "sub" },
+      { "name": "牛角切り肉", "quantity": 300, "unit": "g", "category": "main" },
+      { "name": "塩", "quantity": 5, "unit": "g", "category": "sub" },
+      { "name": "コンソメ", "quantity": 5, "unit": "g", "category": "sub" },
+      { "name": "ローリエ", "quantity": 2, "unit": "枚", "category": "sub" },
+      { "name": "トマトジュース", "quantity": 190, "unit": "g", "category": "main" },
+      { "name": "りんごジャム", "quantity": 36, "unit": "g", "category": "sub" },
+      { "name": "中濃ソース", "quantity": 18, "unit": "g", "category": "sub" },
+      { "name": "ウスターソース", "quantity": 12, "unit": "g", "category": "sub" }
+    ],
+    "steps": [
+      { "name": "下ごしらえ", "durationMinutes": 20 },
+      { "name": "ホットクック調理", "durationMinutes": 117, "isDeviceStep": true },
+      { "name": "盛り付け", "durationMinutes": 3 }
+    ],
+    "isUserAdded": false
+  },
+  {
+    "title": "豚肩ロースの赤ワイン煮こみ",
+    "recipeNumber": "BKLT-005",
+    "device": "hotcook",
+    "category": "主菜",
+    "baseServings": 4,
+    "totalWeightG": 1244,
+    "totalTimeMinutes": 145,
+    "ingredients": [
+      { "name": "バター", "quantity": 15, "unit": "g", "category": "sub" },
+      { "name": "玉ねぎ", "quantity": 200, "unit": "g", "category": "main" },
+      { "name": "セロリ", "quantity": 50, "unit": "g", "category": "main" },
+      { "name": "にんじん", "quantity": 50, "unit": "g", "category": "main" },
+      { "name": "にんにく", "quantity": 5, "unit": "g", "category": "sub" },
+      { "name": "豚肩ロースかたまり肉", "quantity": 600, "unit": "g", "category": "main" },
+      { "name": "トマトビューレ", "quantity": 100, "unit": "g", "category": "main" },
+      { "name": "塩", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "砂糖", "quantity": 10, "unit": "g", "category": "sub" },
+      { "name": "赤ワイン", "quantity": 200, "unit": "g", "category": "sub" },
+      { "name": "こしょう", "quantity": 1, "unit": "g", "category": "sub" },
+      { "name": "ハーブやスパイス（ローリエ・タイム等）", "quantity": "適量", "unit": "", "category": "sub" }
+    ],
+    "steps": [
+      { "name": "下ごしらえ", "durationMinutes": 20 },
+      { "name": "ホットクック調理", "durationMinutes": 122, "isDeviceStep": true },
+      { "name": "盛り付け", "durationMinutes": 3 }
+    ],
+    "isUserAdded": false
+  },
+  {
+    "title": "葱油ソース",
+    "recipeNumber": "BKLT-006",
+    "device": "hotcook",
+    "category": "副菜",
+    "baseServings": 2,
+    "totalWeightG": 49,
+    "totalTimeMinutes": 5,
+    "ingredients": [
+      { "name": "青ねぎ", "quantity": 4, "unit": "g", "category": "main" },
+      { "name": "しょうゆ", "quantity": 8, "unit": "g", "category": "sub" },
+      { "name": "オイスターソース", "quantity": 18, "unit": "g", "category": "sub" },
+      { "name": "しょうが", "quantity": 4, "unit": "g", "category": "sub" },
+      { "name": "ごま油", "quantity": 15, "unit": "g", "category": "sub" }
+    ],
+    "steps": [
+      { "name": "ホットクック調理", "durationMinutes": 2, "isDeviceStep": true },
+      { "name": "盛り付け", "durationMinutes": 3 }
+    ],
+    "isUserAdded": false
+  }
+]

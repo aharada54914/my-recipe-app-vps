@@ -80,6 +80,10 @@ const WEEKLY_MENUS: WeeklyMenu[] = []
 const CALENDAR_EVENTS: CalendarEventRecord[] = []
 
 describe('buildRecipeSearchResults', () => {
+  // Fixed reference date: scores were pinned at 2026-03-08T00:00:00Z
+  // (viewedAt=2026-03-01, addedAt=2026-03-02 → 7d/6d decay at that instant)
+  const NOW = new Date('2026-03-08T00:00:00Z')
+
   it('keeps ranking stable for chicken query golden case', () => {
     const results = buildRecipeSearchResults(createEmptySearchModelInput({
       recipes: RECIPES,
@@ -89,6 +93,7 @@ describe('buildRecipeSearchResults', () => {
       favorites: FAVORITES,
       weeklyMenus: WEEKLY_MENUS,
       calendarEvents: CALENDAR_EVENTS,
+      now: NOW,
     }))
 
     expect(getRecipeSearchResultIds(results)).toEqual([1, 2])
@@ -103,6 +108,7 @@ describe('buildRecipeSearchResults', () => {
       favorites: FAVORITES,
       weeklyMenus: WEEKLY_MENUS,
       calendarEvents: CALENDAR_EVENTS,
+      now: NOW,
     }))
 
     expect(getRecipeSearchResultIds(results).slice(0, 4)).toEqual([3, 1, 2, 4])
@@ -117,6 +123,7 @@ describe('buildRecipeSearchResults', () => {
       favorites: FAVORITES,
       weeklyMenus: WEEKLY_MENUS,
       calendarEvents: CALENDAR_EVENTS,
+      now: NOW,
     }))
 
     expect(top.recipe.id).toBe(3)
@@ -148,6 +155,7 @@ describe('buildRecipeCategoryCounts', () => {
       favorites: FAVORITES,
       weeklyMenus: WEEKLY_MENUS,
       calendarEvents: CALENDAR_EVENTS,
+      now: new Date('2026-03-08T00:00:00Z'),
       facets: {
         devices: ['healsio'],
         categories: ['スープ'],
@@ -171,6 +179,7 @@ describe('recipe search static context helpers', () => {
       favorites: FAVORITES,
       weeklyMenus: WEEKLY_MENUS,
       calendarEvents: CALENDAR_EVENTS,
+      now: new Date('2026-03-08T00:00:00Z'),
       facets: {
         devices: ['hotcook'],
         categories: ['主菜'],
@@ -195,6 +204,7 @@ describe('recipe search static context helpers', () => {
       favorites: FAVORITES,
       weeklyMenus: WEEKLY_MENUS,
       calendarEvents: CALENDAR_EVENTS,
+      now: new Date('2026-03-08T00:00:00Z'),
       facets: {
         devices: ['healsio'],
         categories: ['スープ'],

@@ -554,9 +554,17 @@ async function main() {
   writeFileSync(hotcookPublicOut, JSON.stringify(hotcookRecipes), 'utf-8')
   console.log(`✅ Hotcook: ${hotcookRecipes.length} recipes → ${hotcookOut}`)
 
-  console.log(`📦 Seed assets: ${healsioPublicOut}, ${hotcookPublicOut}`)
+  // Booklet recipes (Sharp COCORO KITCHEN TCAD CA055KRRZ 23H②)
+  const bookletSrc = join(outDir, 'recipes-booklet.json')
+  const bookletPublicOut = join(publicSeedDir, 'recipes-booklet.json')
+  const bookletRaw = readFileSync(bookletSrc, 'utf-8')
+  const bookletRecipes = JSON.parse(bookletRaw)
+  writeFileSync(bookletPublicOut, JSON.stringify(bookletRecipes), 'utf-8')
+  console.log(`✅ Booklet: ${bookletRecipes.length} recipes → ${bookletPublicOut}`)
 
-  console.log(`\n🎉 Total: ${healsioRecipes.length + hotcookRecipes.length} recipes pre-built`)
+  console.log(`📦 Seed assets: ${healsioPublicOut}, ${hotcookPublicOut}, ${bookletPublicOut}`)
+
+  console.log(`\n🎉 Total: ${healsioRecipes.length + hotcookRecipes.length + bookletRecipes.length} recipes pre-built`)
 }
 
 main().catch((error) => {

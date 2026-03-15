@@ -29,7 +29,7 @@ interface MultiScheduleViewProps {
 export function MultiScheduleView({ onBack }: MultiScheduleViewProps) {
   // T-20: Lightweight listing — only id, title, totalTimeMinutes for selector
   const recipeSummaries = useLiveQuery(
-    () => db.recipes.orderBy('title').limit(200).toArray().then(rs => rs.map(r => ({ id: r.id!, title: r.title, totalTimeMinutes: r.totalTimeMinutes, device: r.device }))),
+    () => db.recipes.orderBy('title').toArray().then(rs => rs.map(r => ({ id: r.id!, title: r.title, totalTimeMinutes: r.totalTimeMinutes, device: r.device }))),
     []
   )
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())

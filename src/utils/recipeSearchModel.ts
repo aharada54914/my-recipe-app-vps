@@ -44,6 +44,7 @@ export interface RecipeSearchModelInput {
   calendarEvents: CalendarEventRecord[]
   searchQuery: string
   facets: RecipeSearchFacetState
+  now?: Date
 }
 
 export interface RecipeSearchStaticInput {
@@ -53,6 +54,7 @@ export interface RecipeSearchStaticInput {
   favorites: Favorite[]
   weeklyMenus: WeeklyMenu[]
   calendarEvents: CalendarEventRecord[]
+  now?: Date
 }
 
 export interface RecipeSearchStaticContext extends RecipeSearchStaticInput {
@@ -84,6 +86,7 @@ export function createRecipeSearchStaticContext(input: RecipeSearchStaticInput):
     favorites,
     weeklyMenus,
     calendarEvents,
+    now,
   } = input
 
   const stockNames = new Set(stockItems.map((item) => item.name))
@@ -93,6 +96,7 @@ export function createRecipeSearchStaticContext(input: RecipeSearchStaticInput):
     favorites,
     weeklyMenus,
     calendarEvents,
+    now,
   })
 
   const baseScoreByRecipeId = new Map<number, BaseRecipeScore>()
@@ -228,6 +232,7 @@ export function createEmptySearchStaticInput(overrides: Partial<RecipeSearchStat
     favorites: [],
     weeklyMenus: [],
     calendarEvents: [],
+    now: undefined,
     ...overrides,
   }
 }

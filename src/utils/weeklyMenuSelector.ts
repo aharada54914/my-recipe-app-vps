@@ -22,6 +22,7 @@ import { getWeeklyWeatherForecast, type DailyWeather } from './season-weather/we
 import { computeUnifiedWeatherScore } from './season-weather/weatherScoring'
 import { filterForecastForWeek, isCompleteForecastForWeek } from './season-weather/weekWeather'
 import { ensureRecipeFeatureMatrix } from './recipeFeatureMatrix'
+import { sampleRandomRecipes } from './randomRecipeSampler'
 import {
   DEFAULT_WEEKLY_MENU_COMPONENT_WEIGHTS,
   type WeeklyMenuComponentWeights,
@@ -769,7 +770,7 @@ export async function getAlternativeRecipes(
   role: MealRole = 'main'
 ): Promise<Recipe[]> {
   const [recipes, stockItems] = await Promise.all([
-    db.recipes.limit(200).toArray(),
+    sampleRandomRecipes(200),
     db.stock.filter(item => item.inStock).toArray(),
   ])
 

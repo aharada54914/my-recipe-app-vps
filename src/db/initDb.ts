@@ -4,7 +4,7 @@ import { STOCK_MASTER } from '../data/stockMaster'
 
 // Increment this version string when the estimation logic changes significantly,
 // to force re-estimation on next launch for existing users.
-const NUTRITION_ESTIMATION_VERSION = 'v7'
+const NUTRITION_ESTIMATION_VERSION = 'v8'
 const NUTRITION_ESTIMATION_KEY = 'nutritionEstimationApplied'
 let initPromise: Promise<void> | null = null
 let nutritionMaintenancePromise: Promise<void> | null = null
@@ -134,13 +134,15 @@ async function applyNutritionEstimation(): Promise<void> {
 async function seedRecipesIfEmpty(): Promise<{ recipeCount: number, seeded: boolean }> {
   const recipeCount = await db.recipes.count()
   if (recipeCount === 0) {
-    const [hotcookRecipes, healsioRecipes] = await Promise.all([
+    const [hotcookRecipes, healsioRecipes, bookletRecipes] = await Promise.all([
       loadSeedRecipesAsset('recipes-hotcook.json'),
       loadSeedRecipesAsset('recipes-healsio.json'),
+      loadSeedRecipesAsset('recipes-booklet.json'),
     ])
     const allRecipes = [
       ...hotcookRecipes,
       ...healsioRecipes,
+      ...bookletRecipes,
     ].map((recipe) => normalizeRecipeCategory(recipe)) as Omit<Recipe, 'id'>[]
     await db.recipes.bulkAdd(allRecipes)
     return { recipeCount: allRecipes.length, seeded: true }

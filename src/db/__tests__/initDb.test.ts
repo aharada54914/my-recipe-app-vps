@@ -7,10 +7,10 @@ describe('shouldRunNutritionMaintenance', () => {
   })
 
   it('runs when stored estimator version is stale', () => {
-    expect(shouldRunNutritionMaintenance(12, 'v6')).toBe(true)
+    expect(shouldRunNutritionMaintenance(12, 'v7')).toBe(true)
   })
 
   it('skips when recipes exist and estimator version is current', () => {
-    expect(shouldRunNutritionMaintenance(12, 'v7')).toBe(false)
+    expect(shouldRunNutritionMaintenance(12, 'v8')).toBe(false)
   })
 })

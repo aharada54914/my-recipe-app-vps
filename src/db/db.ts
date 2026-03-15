@@ -790,6 +790,33 @@ class RecipeDB extends Dexie {
         if (!prefs.appearanceMode) prefs.appearanceMode = 'system'
       })
     })
+
+    // v19: Add Sharp COCORO KITCHEN booklet recipes (TCAD CA055KRRZ 23H②)
+    // for existing users who already have seed data loaded.
+    this.version(19).stores({
+      recipes: '++id, title, device, category, recipeNumber, [category+device], imageUrl',
+      stock: '++id, &name, inStock',
+      favorites: '++id, &recipeId, addedAt',
+      userNotes: '++id, &recipeId, updatedAt',
+      viewHistory: '++id, recipeId, viewedAt',
+      calendarEvents: '++id, recipeId, googleEventId',
+      userPreferences: '++id',
+      weeklyMenus: '++id, weekStartDate',
+      ingredientPrices: '++id, &normalizedName, updatedAt',
+      ingredientPriceSyncLogs: '++id, startedAt, status',
+      ingredientSimilarityCache: '++id, name, candidateName, score',
+      weatherCache: '++id, &date, fetchedAt, updatedAt',
+      recipeFeatureMatrix: '++id, &recipeId, confidence, source',
+      weeklyMenuSelectionLogs: '++id, eventType, weekStartDate, createdAt, selectedRecipeId, replacedRecipeId',
+    }).upgrade(async (tx) => {
+      const existing = await tx.table('recipes')
+        .where('recipeNumber').startsWith('BKLT-')
+        .count()
+      if (existing === 0) {
+        const { BOOKLET_RECIPES } = await import('../data/bookletRecipes')
+        await tx.table('recipes').bulkAdd(BOOKLET_RECIPES)
+      }
+    })
   }
 }
 

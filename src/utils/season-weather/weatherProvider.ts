@@ -39,6 +39,7 @@ function toDateOnly(value: string): string {
 
 function parseNumber(value: unknown): number | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null
+  if (typeof value === 'string' && value.trim() === '') return null
   const num = Number(value)
   return Number.isFinite(num) ? num : null
 }

@@ -16,11 +16,19 @@ export function isCompleteForecastForWeek(forecast: DailyWeather[], weekStartDat
   return weekDates.every((date) => available.has(date))
 }
 
+function monthBaseTempRange(month: number): { max: number; min: number } {
+  if (month >= 6 && month <= 9) return { max: 33, min: 24 }
+  if (month <= 2 || month === 12) return { max: 12, min: 3 }
+  return { max: 21, min: 12 }
+}
+
 function cloneForecastForDate(seed: DailyWeather | undefined, date: string): DailyWeather {
+  const month = new Date(date).getMonth() + 1
+  const tempRange = monthBaseTempRange(month)
   return {
     date,
-    maxTempC: seed?.maxTempC ?? 0,
-    minTempC: seed?.minTempC ?? 0,
+    maxTempC: seed?.maxTempC ?? tempRange.max,
+    minTempC: seed?.minTempC ?? tempRange.min,
     precipitationMm: seed?.precipitationMm ?? 0,
     humidityPercent: seed?.humidityPercent,
     weatherCode: seed?.weatherCode,

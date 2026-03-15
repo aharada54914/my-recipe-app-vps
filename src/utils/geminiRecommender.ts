@@ -1,7 +1,7 @@
-import { db } from '../db/db'
 import type { Recipe } from '../db/db'
-import { calculateMatchRate } from './recipeUtils'
-import { isHelsioDeli } from './recipeUtils'
+import { db } from '../db/db'
+import { calculateMatchRate, isHelsioDeli } from './recipeUtils'
+import { sampleRandomRecipes } from './randomRecipeSampler'
 
 /**
  * Get locally-recommended recipes based on stock match rate.
@@ -10,7 +10,7 @@ import { isHelsioDeli } from './recipeUtils'
  */
 export async function getLocalRecommendations(limit = 6): Promise<{ recipe: Recipe; matchRate: number }[]> {
   const [recipes, stockItems] = await Promise.all([
-    db.recipes.limit(200).toArray(),
+    sampleRandomRecipes(200),
     db.stock.filter(item => item.inStock).toArray(),
   ])
 
