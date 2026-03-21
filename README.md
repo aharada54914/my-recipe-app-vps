@@ -58,6 +58,8 @@ npm install
 npm run dev
 ```
 
+この repository は現在 `apps/web`、`apps/api`、`apps/cli`、`packages/shared-types` を含む npm workspace 構成です。
+
 Google OAuth や Gemini を使う場合のみ、ルートに `.env` を作成してください。
 
 ```env
@@ -79,6 +81,9 @@ npm run build
 npm run lint
 npm test
 npm run test:smoke:ci
+npm run ops:ps
+npm run ops:health
+npm run ops:logs
 npm run test:visual
 npm run ui:class-audit
 ```
@@ -136,6 +141,8 @@ Google 実アカウントなしで接続済みフローを検証できます。
 
 ## ドキュメント
 
+- [docs/manuals/FIRST_SETUP_LINE_BY_LINE.md](/Users/jrmag/my-recipe-vps/docs/manuals/FIRST_SETUP_LINE_BY_LINE.md) 最初のセットアップを1行ずつ説明
+- [docs/manuals/VPS_PRODUCTION_MANUAL.md](/Users/jrmag/my-recipe-vps/docs/manuals/VPS_PRODUCTION_MANUAL.md) VPS 本番運用マニュアル
 - [docs/FEATURES.md](/Users/jrmag/my-recipe-app/docs/FEATURES.md) 現行機能の要約
 - [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-app/docs/ARCHITECTURE.md) 現行アーキテクチャ
 - [docs/SETUP.md](/Users/jrmag/my-recipe-app/docs/SETUP.md) 開発 / 配布セットアップ
@@ -145,6 +152,7 @@ Google 実アカウントなしで接続済みフローを検証できます。
 - [SETUP_GUIDE_OKAZAKI.md](/Users/jrmag/my-recipe-app/SETUP_GUIDE_OKAZAKI.md) 岡崎弁ガイド
 - [docs/ALGORITHMS.md](/Users/jrmag/my-recipe-app/docs/ALGORITHMS.md) レコメンド / スコアリング仕様
 - [docs/PWA_SPECIFICATION.md](/Users/jrmag/my-recipe-app/docs/PWA_SPECIFICATION.md) PWA の設計仕様
+- [OPS_RUNBOOK.md](/Users/jrmag/my-recipe-vps/OPS_RUNBOOK.md) 単一 VPS での 24/365 運用手順
 
 ---
 
