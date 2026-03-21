@@ -1,0 +1,166 @@
+/**
+ * REST API client for server-side backend.
+ *
+ * When the app is running in "online" mode (API_BASE_URL is set),
+ * repositories can delegate to these helpers instead of Dexie.
+ * Dexie remains available for offline caching.
+ */
+
+const API_BASE_URL: string =
+  (typeof import.meta !== 'undefined' && import.meta.env?.['VITE_API_BASE_URL'] as string | undefined)
+  ?? 'http://localhost:3001'
+
+const TOKEN_KEY = 'kitchen_jwt'
+
+// --- Token management ---
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setToken(token: string): void {
+  try {
+    localStorage.setItem(TOKEN_KEY, token)
+  } catch {
+    // Ignore storage errors in SSR or privacy mode
+  }
+}
+
+export function clearToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // Ignore
+  }
+}
+
+// --- Request helpers ---
+
+interface ApiErrorData {
+  success: false
+  error: string
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly data?: unknown,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+async function request<T>(
+  path: string,
+  options: {
+    method?: string
+    body?: unknown
+    token?: string | null
+    skipAuth?: boolean
+  } = {},
+): Promise<T> {
+  const url = `${API_BASE_URL}${path}`
+  const token = options.skipAuth ? null : (options.token ?? getToken())
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const response = await fetch(url, {
+    method: options.method ?? 'GET',
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  })
+
+  if (!response.ok) {
+    let errorMessage = `API error: ${response.status}`
+    try {
+      const errorData = await response.json() as ApiErrorData
+      errorMessage = errorData.error ?? errorMessage
+    } catch {
+      // Response is not JSON
+    }
+    throw new ApiError(errorMessage, response.status)
+  }
+
+  return response.json() as Promise<T>
+}
+
+// --- Public API ---
+
+export async function apiGet<T>(path: string): Promise<T> {
+  return request<T>(path)
+}
+
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'POST', body })
+}
+
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'PUT', body })
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  return request<T>(path, { method: 'DELETE' })
+}
+
+// --- Auth-specific ---
+
+export async function exchangeGoogleCode(code: string): Promise<{
+  token: string
+  user: { id: string; email: string; name: string | null }
+}> {
+  const result = await request<{
+    success: boolean
+    data: {
+      token: string
+      user: { id: string; email: string; name: string | null }
+    }
+  }>('/api/auth/google', {
+    method: 'POST',
+    body: { code },
+    skipAuth: true,
+  })
+
+  if (result.data?.token) {
+    setToken(result.data.token)
+  }
+
+  return result.data
+}
+
+export async function refreshToken(): Promise<string | null> {
+  try {
+    const result = await request<{
+      success: boolean
+      data: { token: string }
+    }>('/api/auth/refresh', { method: 'POST' })
+
+    if (result.data?.token) {
+      setToken(result.data.token)
+      return result.data.token
+    }
+    return null
+  } catch {
+    clearToken()
+    return null
+  }
+}
+
+// --- Online mode detection ---
+
+export function isOnlineMode(): boolean {
+  return Boolean(
+    typeof import.meta !== 'undefined' &&
+    import.meta.env?.['VITE_API_BASE_URL'],
+  )
+}

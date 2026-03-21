@@ -1,0 +1,88 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String       @id // Google sub
+  email              String       @unique
+  name               String?
+  googleAccessToken  String?
+  googleRefreshToken String?
+  preferences        Json         @default("{}")
+  weeklyMenus        WeeklyMenu[]
+  stocks             Stock[]
+  favorites          Favorite[]
+  consultationLogs   ConsultationLog[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model Recipe {
+  id                Int      @id @default(autoincrement())
+  title             String
+  device            String   // 'hotcook' | 'healsio' | 'manual'
+  category          String
+  recipeNumber      String   @unique
+  baseServings      Int      @default(2)
+  totalWeightG      Int      @default(0)
+  totalTimeMinutes  Int      @default(30)
+  ingredients       Json     // Ingredient[]
+  steps             Json     // CookingStep[]
+  nutritionPerServing Json?
+  imageUrl          String?
+  sourceUrl         String?
+  isUserAdded       Boolean  @default(false)
+  favorites         Favorite[]
+  createdAt         DateTime @default(now())
+}
+
+model WeeklyMenu {
+  id            Int      @id @default(autoincrement())
+  userId        String
+  weekStartDate String
+  items         Json     // WeeklyMenuItem[]
+  shoppingList  String?
+  status        String   @default("draft")
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, weekStartDate])
+}
+
+model Stock {
+  id      Int     @id @default(autoincrement())
+  userId  String
+  name    String
+  inStock Boolean @default(true)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, name])
+}
+
+model Favorite {
+  id       Int      @id @default(autoincrement())
+  userId   String
+  recipeId Int
+  addedAt  DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id])
+  recipe   Recipe   @relation(fields: [recipeId], references: [id])
+
+  @@unique([userId, recipeId])
+}
+
+model ConsultationLog {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  message   String
+  response  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
