@@ -8,7 +8,7 @@
 
 ## 1. Prerequisites
 
-- Node.js `22.12+`
+- Node.js `24` 推奨（最低 `22.12+`）
 - npm `10+`
 - Google Cloud プロジェクト
   - Google OAuth / Drive / Calendar を使う場合

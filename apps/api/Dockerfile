@@ -1,5 +1,5 @@
 # --- Build stage ---
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN npx prisma generate --schema apps/api/prisma/schema.prisma
 RUN rm -f apps/api/tsconfig.tsbuildinfo && npx tsc -p apps/api/tsconfig.json
 
 # --- Production stage ---
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
