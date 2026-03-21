@@ -1,4 +1,4 @@
-import { prisma } from './client.ts'
+import { prisma } from './client.js'
 
 async function seed(): Promise<void> {
   console.info('Seeding database...')
@@ -133,7 +133,8 @@ async function seed(): Promise<void> {
 
 seed()
   .catch((err) => {
-    console.error('Seed failed:', err)
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`Seed failed: ${message}`)
     process.exit(1)
   })
   .finally(async () => {

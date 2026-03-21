@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { prisma } from '../db/client.ts'
-import { sortShoppingList } from '../lib/shoppingSorter.ts'
-import { registerShoppingListToCalendar } from '../lib/googleCalendar.ts'
+import { prisma } from '../db/client.js'
+import { sortShoppingList } from '../lib/shoppingSorter.js'
+import { registerShoppingListToCalendar } from '../lib/googleCalendar.js'
 import { RegisterToCalendarRequestSchema } from '@kitchen/shared-types'
-import type { Ingredient } from '@kitchen/shared-types'
+import type { Ingredient, ShoppingListItem, SortedShoppingList, WeeklyMenuItem } from '@kitchen/shared-types'
 
 const GenerateShoppingListSchema = z.object({
   weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -14,12 +14,7 @@ function parseIngredientsFromMenu(
   items: unknown,
   recipes: Array<{ id: number; ingredients: unknown; baseServings: number }>,
 ): Array<{ name: string; quantity: string }> {
-  const menuItems = items as Array<{
-    recipeId: number
-    sideRecipeId?: number
-    mainServings?: number
-    sideServings?: number
-  }>
+  const menuItems = items as WeeklyMenuItem[]
 
   const ingredientMap = new Map<string, string[]>()
 
@@ -82,10 +77,7 @@ export async function registerShoppingRoutes(app: FastifyInstance): Promise<void
         return
       }
 
-      const menuItems = menu.items as Array<{
-        recipeId: number
-        sideRecipeId?: number
-      }>
+      const menuItems = menu.items as WeeklyMenuItem[]
       const recipeIds = [
         ...menuItems.map(i => i.recipeId),
         ...menuItems.filter(i => i.sideRecipeId).map(i => i.sideRecipeId!),
@@ -101,7 +93,7 @@ export async function registerShoppingRoutes(app: FastifyInstance): Promise<void
         where: { userId, inStock: true },
         select: { name: true },
       })
-      const inStockNames = new Set(stocks.map(s => s.name))
+      const inStockNames = new Set(stocks.map((stock: { name: string }) => stock.name))
 
       const allIngredients = parseIngredientsFromMenu(menu.items, recipes)
       const neededIngredients = allIngredients.filter(
@@ -112,8 +104,8 @@ export async function registerShoppingRoutes(app: FastifyInstance): Promise<void
 
       // Save shopping list text to weekly menu
       const shoppingListText = sortedList.categories
-        .map(group =>
-          `--- ${group.category} ---\n${group.items.map(item => `  ${item.name} ${item.quantity}`).join('\n')}`,
+        .map((group: SortedShoppingList['categories'][number]) =>
+          `--- ${group.category} ---\n${group.items.map((item: ShoppingListItem) => `  ${item.name} ${item.quantity}`).join('\n')}`,
         )
         .join('\n\n')
 
@@ -128,12 +120,12 @@ export async function registerShoppingRoutes(app: FastifyInstance): Promise<void
         reply.status(400).send({
           success: false,
           error: 'Validation error',
-          data: err.errors,
+          data: err.issues,
         })
         return
       }
       const message = err instanceof Error ? err.message : String(err)
-      app.log.error('Shopping list generation error:', err)
+      app.log.error({ err }, 'Shopping list generation error')
       reply.status(500).send({
         success: false,
         error: `買い物リスト生成に失敗しました: ${message}`,
@@ -167,10 +159,7 @@ export async function registerShoppingRoutes(app: FastifyInstance): Promise<void
       }
 
       // Re-generate sorted list for calendar description
-      const menuItems = menu.items as Array<{
-        recipeId: number
-        sideRecipeId?: number
-      }>
+      const menuItems = menu.items as WeeklyMenuItem[]
       const recipeIds = [
         ...menuItems.map(i => i.recipeId),
         ...menuItems.filter(i => i.sideRecipeId).map(i => i.sideRecipeId!),
@@ -185,7 +174,7 @@ export async function registerShoppingRoutes(app: FastifyInstance): Promise<void
         where: { userId, inStock: true },
         select: { name: true },
       })
-      const inStockNames = new Set(stocks.map(s => s.name))
+      const inStockNames = new Set(stocks.map((stock: { name: string }) => stock.name))
 
       const allIngredients = parseIngredientsFromMenu(menu.items, recipes)
       const neededIngredients = allIngredients.filter(
@@ -213,12 +202,12 @@ export async function registerShoppingRoutes(app: FastifyInstance): Promise<void
         reply.status(400).send({
           success: false,
           error: 'Validation error',
-          data: err.errors,
+          data: err.issues,
         })
         return
       }
       const message = err instanceof Error ? err.message : String(err)
-      app.log.error('Calendar registration error:', err)
+      app.log.error({ err }, 'Calendar registration error')
       reply.status(500).send({
         success: false,
         error: `カレンダー登録に失敗しました: ${message}`,

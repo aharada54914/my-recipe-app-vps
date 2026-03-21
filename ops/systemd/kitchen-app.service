@@ -1,0 +1,15 @@
+[Unit]
+Description=Kitchen App Docker Compose Stack
+Requires=docker.service network-online.target
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/kitchen-app
+RemainAfterExit=yes
+ExecStart=/usr/bin/docker compose --project-name kitchen-app --env-file /opt/kitchen-app/.env -f /opt/kitchen-app/docker-compose.yml up -d --build
+ExecStop=/usr/bin/docker compose --project-name kitchen-app --env-file /opt/kitchen-app/.env -f /opt/kitchen-app/docker-compose.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

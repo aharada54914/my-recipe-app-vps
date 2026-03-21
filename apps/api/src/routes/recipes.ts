@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify'
+import type { InputJsonValue } from '@prisma/client/runtime/library'
 import { z } from 'zod'
-import { prisma } from '../db/client.ts'
+import { prisma } from '../db/client.js'
 import {
+  type CookingStep,
   DeviceTypeSchema,
+  type Ingredient,
+  type NutritionPerServing,
   RecipeCategorySchema,
   IngredientSchema,
   CookingStepSchema,
@@ -34,6 +38,17 @@ const CreateRecipeSchema = z.object({
 })
 
 const UpdateRecipeSchema = CreateRecipeSchema.partial()
+
+function toJsonArray<T>(value: T[]): InputJsonValue {
+  return value as InputJsonValue
+}
+
+function toJsonObject<T extends object>(value: T | undefined): InputJsonValue | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  return value as InputJsonValue
+}
 
 export async function registerRecipeRoutes(app: FastifyInstance): Promise<void> {
   // List recipes with pagination and filters
@@ -109,9 +124,9 @@ export async function registerRecipeRoutes(app: FastifyInstance): Promise<void> 
       const recipe = await prisma.recipe.create({
         data: {
           ...data,
-          ingredients: data.ingredients as unknown as Record<string, unknown>[],
-          steps: data.steps as unknown as Record<string, unknown>[],
-          nutritionPerServing: data.nutritionPerServing as unknown as Record<string, unknown> | undefined,
+          ingredients: toJsonArray<Ingredient>(data.ingredients),
+          steps: toJsonArray<CookingStep>(data.steps),
+          nutritionPerServing: toJsonObject<NutritionPerServing>(data.nutritionPerServing),
         },
       })
 
@@ -121,7 +136,7 @@ export async function registerRecipeRoutes(app: FastifyInstance): Promise<void> 
         reply.status(400).send({
           success: false,
           error: 'Validation error',
-          data: err.errors,
+          data: err.issues,
         })
         return
       }
@@ -143,13 +158,13 @@ export async function registerRecipeRoutes(app: FastifyInstance): Promise<void> 
 
       const updateData: Record<string, unknown> = { ...data }
       if (data.ingredients) {
-        updateData['ingredients'] = data.ingredients as unknown as Record<string, unknown>[]
+        updateData['ingredients'] = toJsonArray<Ingredient>(data.ingredients)
       }
       if (data.steps) {
-        updateData['steps'] = data.steps as unknown as Record<string, unknown>[]
+        updateData['steps'] = toJsonArray<CookingStep>(data.steps)
       }
-      if (data.nutritionPerServing) {
-        updateData['nutritionPerServing'] = data.nutritionPerServing as unknown as Record<string, unknown>
+      if (data.nutritionPerServing !== undefined) {
+        updateData['nutritionPerServing'] = toJsonObject<NutritionPerServing>(data.nutritionPerServing)
       }
 
       const recipe = await prisma.recipe.update({
@@ -163,7 +178,7 @@ export async function registerRecipeRoutes(app: FastifyInstance): Promise<void> 
         reply.status(400).send({
           success: false,
           error: 'Validation error',
-          data: err.errors,
+          data: err.issues,
         })
         return
       }

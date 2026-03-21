@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify'
+import type { InputJsonValue } from '@prisma/client/runtime/library'
 import { z } from 'zod'
-import { prisma } from '../db/client.ts'
-import { WeeklyMenuItemSchema, WeeklyMenuStatusSchema } from '@kitchen/shared-types'
+import { prisma } from '../db/client.js'
+import { type WeeklyMenuItem, WeeklyMenuItemSchema, WeeklyMenuStatusSchema } from '@kitchen/shared-types'
 
 const CreateWeeklyMenuSchema = z.object({
   weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -15,6 +16,10 @@ const UpdateWeeklyMenuSchema = z.object({
   shoppingList: z.string().optional(),
   status: WeeklyMenuStatusSchema.optional(),
 })
+
+function toWeeklyMenuItemsJson(items: WeeklyMenuItem[]): InputJsonValue {
+  return items as InputJsonValue
+}
 
 export async function registerWeeklyMenuRoutes(app: FastifyInstance): Promise<void> {
   // List weekly menus for current user
@@ -82,14 +87,14 @@ export async function registerWeeklyMenuRoutes(app: FastifyInstance): Promise<vo
           },
         },
         update: {
-          items: data.items as unknown as Record<string, unknown>[],
+          items: toWeeklyMenuItemsJson(data.items),
           shoppingList: data.shoppingList,
           status: data.status,
         },
         create: {
           userId,
           weekStartDate: data.weekStartDate,
-          items: data.items as unknown as Record<string, unknown>[],
+          items: toWeeklyMenuItemsJson(data.items),
           shoppingList: data.shoppingList,
           status: data.status,
         },
@@ -101,7 +106,7 @@ export async function registerWeeklyMenuRoutes(app: FastifyInstance): Promise<vo
         reply.status(400).send({
           success: false,
           error: 'Validation error',
-          data: err.errors,
+          data: err.issues,
         })
         return
       }
@@ -132,7 +137,7 @@ export async function registerWeeklyMenuRoutes(app: FastifyInstance): Promise<vo
       }
 
       const updateData: Record<string, unknown> = {}
-      if (data.items) updateData['items'] = data.items as unknown as Record<string, unknown>[]
+      if (data.items) updateData['items'] = toWeeklyMenuItemsJson(data.items)
       if (data.shoppingList !== undefined) updateData['shoppingList'] = data.shoppingList
       if (data.status) updateData['status'] = data.status
 
@@ -147,7 +152,7 @@ export async function registerWeeklyMenuRoutes(app: FastifyInstance): Promise<vo
         reply.status(400).send({
           success: false,
           error: 'Validation error',
-          data: err.errors,
+          data: err.issues,
         })
         return
       }

@@ -1,8 +1,8 @@
 import cron from 'node-cron'
-import { prisma } from '../db/client.ts'
-import { sendWeeklyMenuEmail } from '../lib/mailer.ts'
-import type { WeeklyMenuEmailData } from '../lib/mailer.ts'
-import { format, addDays, startOfWeek } from 'date-fns'
+import { prisma } from '../db/client.js'
+import { sendWeeklyMenuEmail } from '../lib/mailer.js'
+import type { WeeklyMenuEmailData } from '../lib/mailer.js'
+import { format, startOfWeek } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'] as const
@@ -62,7 +62,9 @@ async function sendWeeklyEmails(): Promise<void> {
           where: { id: { in: recipeIds } },
           select: { id: true, title: true },
         })
-        const recipeMap = new Map(recipes.map(r => [r.id, r.title]))
+        const recipeMap = new Map<number, string>(
+          recipes.map((recipe: { id: number; title: string }) => [recipe.id, recipe.title]),
+        )
 
         const items: WeeklyMenuEmailData['items'] = menuItems.map((item) => {
           const date = new Date(item.date)

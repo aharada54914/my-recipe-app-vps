@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "rm -f tsconfig.tsbuildinfo && tsc",
     "start": "node dist/server.js",
     "lint": "eslint src/",
     "test": "vitest run",

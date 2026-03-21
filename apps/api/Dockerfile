@@ -17,12 +17,11 @@ RUN npm ci --workspace=apps/api --workspace=packages/shared-types
 COPY packages/shared-types/ packages/shared-types/
 COPY apps/api/ apps/api/
 
-# Generate Prisma client
-WORKDIR /app/apps/api
-RUN npx prisma generate
+# Build shared package and API
+RUN npm --workspace packages/shared-types run build
 
-# Build TypeScript
-RUN npx tsc
+RUN npx prisma generate --schema apps/api/prisma/schema.prisma
+RUN rm -f apps/api/tsconfig.tsbuildinfo && npx tsc -p apps/api/tsconfig.json
 
 # --- Production stage ---
 FROM node:22-alpine
@@ -40,7 +39,7 @@ RUN npm ci --workspace=apps/api --workspace=packages/shared-types --omit=dev
 # Copy built output
 COPY --from=builder /app/apps/api/dist apps/api/dist/
 COPY --from=builder /app/apps/api/prisma apps/api/prisma/
-COPY --from=builder /app/apps/api/node_modules/.prisma apps/api/node_modules/.prisma/
+COPY --from=builder /app/node_modules/.prisma node_modules/.prisma/
 COPY --from=builder /app/packages/shared-types/ packages/shared-types/
 
 WORKDIR /app/apps/api

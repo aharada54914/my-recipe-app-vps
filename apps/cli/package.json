@@ -16,9 +16,10 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@kitchen/shared-types": "*",
+    "@prisma/client": "^6.19.2",
     "commander": "^13.1.0",
-    "date-fns": "^4.1.0",
-    "@kitchen/shared-types": "*"
+    "date-fns": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

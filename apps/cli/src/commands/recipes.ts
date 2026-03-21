@@ -1,6 +1,6 @@
 import type { Command } from 'commander'
 import { readFile } from 'node:fs/promises'
-import { apiGet, apiPost } from '../lib/apiClient.ts'
+import { apiGet, apiPost } from '../lib/apiClient.js'
 import type { ApiResponse, Recipe } from '@kitchen/shared-types'
 
 interface RecipeListResponse extends ApiResponse<Recipe[]> {

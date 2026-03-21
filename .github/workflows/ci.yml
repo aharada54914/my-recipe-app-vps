@@ -19,10 +19,8 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Ensure lockfile and install dependencies
-        run: |
-          env -u npm_config_http_proxy npm install --package-lock-only --ignore-scripts
-          env -u npm_config_http_proxy npm ci
+      - name: Install dependencies
+        run: env -u npm_config_http_proxy npm ci
 
       - name: Lint
         run: env -u npm_config_http_proxy npm run lint

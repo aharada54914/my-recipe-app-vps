@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '../db/client.ts'
+import { prisma } from '../db/client.js'
 
 export async function registerHealthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/health', async (_request, reply) => {

@@ -1,5 +1,5 @@
 import type { ShoppingCategory, ShoppingListItem, SortedShoppingList } from '@kitchen/shared-types'
-import { askGeminiClassification } from './geminiClassifier.ts'
+import { askGeminiClassification } from './geminiClassifier.js'
 
 // Keyword-based classification rules for common Japanese ingredients
 const CATEGORY_KEYWORDS: ReadonlyArray<{

@@ -1,0 +1,9 @@
+[Unit]
+Description=Kitchen App PostgreSQL Backup
+After=docker.service kitchen-app.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/kitchen-app
+ExecStart=/bin/bash /opt/kitchen-app/scripts/ops/kitchenctl.sh backup-db

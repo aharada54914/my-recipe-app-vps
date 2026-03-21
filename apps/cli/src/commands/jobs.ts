@@ -1,5 +1,5 @@
 import type { Command } from 'commander'
-import { apiGet, apiPost } from '../lib/apiClient.ts'
+import { apiGet, apiPost } from '../lib/apiClient.js'
 import type { ApiResponse } from '@kitchen/shared-types'
 
 export function registerJobsCommands(program: Command): void {

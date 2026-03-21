@@ -1,5 +1,5 @@
 import { google } from 'googleapis'
-import { prisma } from '../db/client.ts'
+import { prisma } from '../db/client.js'
 import type { SortedShoppingList } from '@kitchen/shared-types'
 
 function getOAuth2Client() {

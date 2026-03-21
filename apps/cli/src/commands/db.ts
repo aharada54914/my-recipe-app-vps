@@ -1,7 +1,7 @@
 import type { Command } from 'commander'
 import { execSync } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
-import { apiGet } from '../lib/apiClient.ts'
+import { apiGet } from '../lib/apiClient.js'
 import type { ApiResponse, Recipe } from '@kitchen/shared-types'
 
 export function registerDbCommands(program: Command): void {

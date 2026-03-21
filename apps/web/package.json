@@ -10,7 +10,7 @@
     "predev": "tsx scripts/prebuild-recipes.mjs",
     "dev": "vite",
     "prebuild": "tsx scripts/prebuild-recipes.mjs",
-    "build": "tsx scripts/prebuild-recipes.mjs && tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@kitchen/shared-types": "*",
     "@react-oauth/google": "^0.13.4",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-virtual": "^3.13.18",
@@ -48,12 +49,11 @@
     "tailwindcss": "^4.2.0",
     "tiny-segmenter": "^0.2.0",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11",
-    "@kitchen/shared-types": "*"
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1",
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.56.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
@@ -61,6 +61,7 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "fake-indexeddb": "^6.2.5",
     "globals": "^16.5.0",
     "jsdom": "^28.1.0",
     "path-browserify": "^1.0.1",

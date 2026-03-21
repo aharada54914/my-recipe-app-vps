@@ -1,5 +1,5 @@
 import type { Command } from 'commander'
-import { apiGet, apiPost } from '../lib/apiClient.ts'
+import { apiGet, apiPost } from '../lib/apiClient.js'
 import type { ApiResponse, WeeklyMenu } from '@kitchen/shared-types'
 
 export function registerMenuCommands(program: Command): void {

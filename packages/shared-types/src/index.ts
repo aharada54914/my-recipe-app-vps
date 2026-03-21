@@ -120,23 +120,138 @@ export const FavoriteSchema = z.object({
 })
 export type Favorite = z.infer<typeof FavoriteSchema>
 
-// --- User Preferences (subset for API) ---
+// --- User Preferences ---
+
+const OptionalStringSchema = z.preprocess((value) => {
+  if (typeof value !== 'string') return value
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}, z.string().optional())
+
+const OptionalDateSchema = z.preprocess((value) => {
+  if (value == null || value === '') return undefined
+  return value
+}, z.coerce.date().optional())
+
+const UpdatedAtSchema = z.preprocess((value) => {
+  if (value == null || value === '') return new Date()
+  return value
+}, z.coerce.date())
+
+export const USER_PREFERENCES_DEFAULTS = {
+  appearanceMode: 'system',
+  familyCalendarId: undefined,
+  mealStartHour: 18,
+  mealStartMinute: 0,
+  mealEndHour: 19,
+  mealEndMinute: 0,
+  defaultCalendarId: undefined,
+  weeklyMenuGenerationDay: 5,
+  weeklyMenuGenerationHour: 18,
+  weeklyMenuGenerationMinute: 0,
+  shoppingListHour: 19,
+  shoppingListMinute: 0,
+  seasonalPriority: 'low',
+  weeklyMenuCostMode: 'ignore',
+  weeklyMenuLuxuryRewardDays: 2,
+  lastPriceSyncAt: undefined,
+  lastWeatherSyncAt: undefined,
+  userPrompt: '',
+  notifyWeeklyMenuDone: true,
+  notifyShoppingListDone: true,
+  cookingNotifyEnabled: true,
+  cookingNotifyHour: 16,
+  cookingNotifyMinute: 0,
+  desiredMealHour: 18,
+  desiredMealMinute: 0,
+  tOpt: 22,
+  weeklyBudgetYen: undefined,
+  geminiModelChat: 'gemini-2.0-flash-lite',
+  geminiModelRecipeImportText: 'gemini-2.0-flash-lite',
+  geminiModelRecipeImportUrl: 'gemini-2.0-flash-lite',
+  geminiModelImageIngredientExtract: 'gemini-2.0-flash',
+  geminiModelStockRecipeSuggest: 'gemini-2.0-flash',
+  geminiModelWeeklyMenuRefine: 'gemini-2.0-flash-lite',
+  geminiRetryEscalationForUrlAndImage: true,
+  geminiEstimatedDailyLimit: 40,
+} as const
 
 export const UserPreferencesSchema = z.object({
-  appearanceMode: z.enum(['system', 'light', 'dark']).default('system'),
-  familyCalendarId: z.string().optional(),
-  mealStartHour: z.number().default(18),
-  mealStartMinute: z.number().default(0),
-  mealEndHour: z.number().default(19),
-  mealEndMinute: z.number().default(0),
-  weeklyMenuGenerationDay: z.number().default(0),
-  seasonalPriority: z.enum(['low', 'medium', 'high']).default('medium'),
-  weeklyMenuCostMode: z.enum(['saving', 'ignore', 'luxury']).default('ignore'),
-  userPrompt: z.string().default(''),
-  notifyWeeklyMenuDone: z.boolean().default(true),
-  notifyShoppingListDone: z.boolean().default(true),
+  appearanceMode: z.enum(['system', 'light', 'dark']).default(USER_PREFERENCES_DEFAULTS.appearanceMode),
+  familyCalendarId: OptionalStringSchema,
+  mealStartHour: z.number().int().min(0).max(23).default(USER_PREFERENCES_DEFAULTS.mealStartHour),
+  mealStartMinute: z.number().int().min(0).max(59).default(USER_PREFERENCES_DEFAULTS.mealStartMinute),
+  mealEndHour: z.number().int().min(0).max(23).default(USER_PREFERENCES_DEFAULTS.mealEndHour),
+  mealEndMinute: z.number().int().min(0).max(59).default(USER_PREFERENCES_DEFAULTS.mealEndMinute),
+  defaultCalendarId: OptionalStringSchema,
+  weeklyMenuGenerationDay: z.number().int().min(0).max(6).default(USER_PREFERENCES_DEFAULTS.weeklyMenuGenerationDay),
+  weeklyMenuGenerationHour: z.number().int().min(0).max(23).default(USER_PREFERENCES_DEFAULTS.weeklyMenuGenerationHour),
+  weeklyMenuGenerationMinute: z.number().int().min(0).max(59).default(USER_PREFERENCES_DEFAULTS.weeklyMenuGenerationMinute),
+  shoppingListHour: z.number().int().min(0).max(23).default(USER_PREFERENCES_DEFAULTS.shoppingListHour),
+  shoppingListMinute: z.number().int().min(0).max(59).default(USER_PREFERENCES_DEFAULTS.shoppingListMinute),
+  seasonalPriority: z.enum(['low', 'medium', 'high']).default(USER_PREFERENCES_DEFAULTS.seasonalPriority),
+  weeklyMenuCostMode: z.enum(['saving', 'ignore', 'luxury']).default(USER_PREFERENCES_DEFAULTS.weeklyMenuCostMode),
+  weeklyMenuLuxuryRewardDays: z.number().int().min(1).max(7).default(USER_PREFERENCES_DEFAULTS.weeklyMenuLuxuryRewardDays),
+  lastPriceSyncAt: OptionalDateSchema,
+  lastWeatherSyncAt: OptionalDateSchema,
+  userPrompt: z.string().default(USER_PREFERENCES_DEFAULTS.userPrompt),
+  notifyWeeklyMenuDone: z.boolean().default(USER_PREFERENCES_DEFAULTS.notifyWeeklyMenuDone),
+  notifyShoppingListDone: z.boolean().default(USER_PREFERENCES_DEFAULTS.notifyShoppingListDone),
+  cookingNotifyEnabled: z.boolean().default(USER_PREFERENCES_DEFAULTS.cookingNotifyEnabled),
+  cookingNotifyHour: z.number().int().min(0).max(23).default(USER_PREFERENCES_DEFAULTS.cookingNotifyHour),
+  cookingNotifyMinute: z.number().int().min(0).max(59).default(USER_PREFERENCES_DEFAULTS.cookingNotifyMinute),
+  desiredMealHour: z.number().int().min(0).max(23).default(USER_PREFERENCES_DEFAULTS.desiredMealHour),
+  desiredMealMinute: z.number().int().min(0).max(59).default(USER_PREFERENCES_DEFAULTS.desiredMealMinute),
+  tOpt: z.number().min(-50).max(60).default(USER_PREFERENCES_DEFAULTS.tOpt),
+  weeklyBudgetYen: z.number().int().positive().optional(),
+  geminiModelChat: z.string().min(1).default(USER_PREFERENCES_DEFAULTS.geminiModelChat),
+  geminiModelRecipeImportText: z.string().min(1).default(USER_PREFERENCES_DEFAULTS.geminiModelRecipeImportText),
+  geminiModelRecipeImportUrl: z.string().min(1).default(USER_PREFERENCES_DEFAULTS.geminiModelRecipeImportUrl),
+  geminiModelImageIngredientExtract: z.string().min(1).default(USER_PREFERENCES_DEFAULTS.geminiModelImageIngredientExtract),
+  geminiModelStockRecipeSuggest: z.string().min(1).default(USER_PREFERENCES_DEFAULTS.geminiModelStockRecipeSuggest),
+  geminiModelWeeklyMenuRefine: z.string().min(1).default(USER_PREFERENCES_DEFAULTS.geminiModelWeeklyMenuRefine),
+  geminiRetryEscalationForUrlAndImage: z.boolean().default(USER_PREFERENCES_DEFAULTS.geminiRetryEscalationForUrlAndImage),
+  geminiEstimatedDailyLimit: z.number().int().min(1).max(9999).default(USER_PREFERENCES_DEFAULTS.geminiEstimatedDailyLimit),
+  updatedAt: UpdatedAtSchema,
 })
 export type UserPreferences = z.infer<typeof UserPreferencesSchema>
+
+export const EditableUserPreferencesSchema = z.object({
+  appearanceMode: z.enum(['system', 'light', 'dark']).optional(),
+  familyCalendarId: OptionalStringSchema,
+  mealStartHour: z.number().int().min(0).max(23).optional(),
+  mealStartMinute: z.number().int().min(0).max(59).optional(),
+  mealEndHour: z.number().int().min(0).max(23).optional(),
+  mealEndMinute: z.number().int().min(0).max(59).optional(),
+  defaultCalendarId: OptionalStringSchema,
+  weeklyMenuGenerationDay: z.number().int().min(0).max(6).optional(),
+  weeklyMenuGenerationHour: z.number().int().min(0).max(23).optional(),
+  weeklyMenuGenerationMinute: z.number().int().min(0).max(59).optional(),
+  shoppingListHour: z.number().int().min(0).max(23).optional(),
+  shoppingListMinute: z.number().int().min(0).max(59).optional(),
+  seasonalPriority: z.enum(['low', 'medium', 'high']).optional(),
+  weeklyMenuCostMode: z.enum(['saving', 'ignore', 'luxury']).optional(),
+  weeklyMenuLuxuryRewardDays: z.number().int().min(1).max(7).optional(),
+  userPrompt: z.string().optional(),
+  notifyWeeklyMenuDone: z.boolean().optional(),
+  notifyShoppingListDone: z.boolean().optional(),
+  cookingNotifyEnabled: z.boolean().optional(),
+  cookingNotifyHour: z.number().int().min(0).max(23).optional(),
+  cookingNotifyMinute: z.number().int().min(0).max(59).optional(),
+  desiredMealHour: z.number().int().min(0).max(23).optional(),
+  desiredMealMinute: z.number().int().min(0).max(59).optional(),
+  tOpt: z.number().min(-50).max(60).optional(),
+  weeklyBudgetYen: z.number().int().positive().optional(),
+  geminiModelChat: z.string().min(1).optional(),
+  geminiModelRecipeImportText: z.string().min(1).optional(),
+  geminiModelRecipeImportUrl: z.string().min(1).optional(),
+  geminiModelImageIngredientExtract: z.string().min(1).optional(),
+  geminiModelStockRecipeSuggest: z.string().min(1).optional(),
+  geminiModelWeeklyMenuRefine: z.string().min(1).optional(),
+  geminiRetryEscalationForUrlAndImage: z.boolean().optional(),
+  geminiEstimatedDailyLimit: z.number().int().min(1).max(9999).optional(),
+}).strict()
+export type EditableUserPreferences = z.infer<typeof EditableUserPreferencesSchema>
 
 // --- API Response ---
 

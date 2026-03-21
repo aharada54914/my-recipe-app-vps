@@ -1,5 +1,13 @@
 import { db, type UserPreferences } from '../db/db'
 import { DEFAULT_PREFERENCES } from '../contexts/preferencesContextDef'
+import { apiGet, apiPatch, apiPost, getToken } from '../lib/apiClient'
+import {
+  EditableUserPreferencesSchema,
+  type ApiResponse,
+  type EditableUserPreferences,
+  type UserPreferences as RemoteUserPreferences,
+  UserPreferencesSchema,
+} from '@kitchen/shared-types'
 
 export function mergeWithDefaultPreferences(
   stored: Partial<UserPreferences> | null | undefined,
@@ -7,6 +15,49 @@ export function mergeWithDefaultPreferences(
   return stored != null
     ? { ...DEFAULT_PREFERENCES, ...stored }
     : { ...DEFAULT_PREFERENCES, updatedAt: new Date() }
+}
+
+function normalizeRemotePreferences(
+  remote: RemoteUserPreferences,
+  currentId?: number,
+): UserPreferences {
+  return {
+    ...DEFAULT_PREFERENCES,
+    ...remote,
+    id: currentId,
+    lastPriceSyncAt: remote.lastPriceSyncAt ? new Date(remote.lastPriceSyncAt) : undefined,
+    lastWeatherSyncAt: remote.lastWeatherSyncAt ? new Date(remote.lastWeatherSyncAt) : undefined,
+    updatedAt: new Date(remote.updatedAt),
+  }
+}
+
+async function writeCanonicalPreferencesRecord(
+  nextPreferences: Omit<UserPreferences, 'id'>,
+): Promise<UserPreferences> {
+  const records = await getAllPreferenceRecords()
+  const canonical = await dedupePreferencesRecords(records)
+
+  if (canonical?.id != null) {
+    await db.userPreferences.put({
+      ...nextPreferences,
+      id: canonical.id,
+    })
+    return {
+      ...nextPreferences,
+      id: canonical.id,
+    }
+  }
+
+  const id = await db.userPreferences.add(nextPreferences)
+  return {
+    ...nextPreferences,
+    id,
+  }
+}
+
+function stripPreferenceId(preferences: UserPreferences): Omit<UserPreferences, 'id'> {
+  const { id: _id, ...nextPreferences } = preferences
+  return nextPreferences
 }
 
 function getPreferencesUpdatedAtValue(record: Partial<UserPreferences>): number {
@@ -65,8 +116,7 @@ export async function ensurePreferencesRecord(): Promise<UserPreferences> {
     ...DEFAULT_PREFERENCES,
     updatedAt: new Date(),
   }
-  const id = await db.userPreferences.add(nextPreferences)
-  return { ...nextPreferences, id }
+  return writeCanonicalPreferencesRecord(nextPreferences)
 }
 
 export async function updateStoredPreferences(id: number, updates: Partial<UserPreferences>): Promise<void> {
@@ -99,4 +149,43 @@ export async function resetStoredPreferences(id: number): Promise<void> {
     ...DEFAULT_PREFERENCES,
     updatedAt: new Date(),
   })
+}
+
+export function hasRemotePreferencesSession(): boolean {
+  const token = getToken()
+  return typeof token === 'string' && token.length > 0
+}
+
+export async function syncStoredPreferencesFromRemote(): Promise<UserPreferences> {
+  const response = await apiGet<ApiResponse<RemoteUserPreferences>>('/api/preferences')
+  const parsed = UserPreferencesSchema.parse(response.data)
+  const existing = await getStoredPreferences()
+  const normalized = normalizeRemotePreferences(parsed, existing?.id)
+  return writeCanonicalPreferencesRecord(stripPreferenceId(normalized))
+}
+
+function sanitizeEditablePreferences(
+  updates: Partial<UserPreferences>,
+): EditableUserPreferences {
+  const { id: _id, updatedAt: _updatedAt, lastPriceSyncAt: _lastPriceSyncAt, lastWeatherSyncAt: _lastWeatherSyncAt, ...editable } = updates
+  return EditableUserPreferencesSchema.parse(editable)
+}
+
+export async function updateRemotePreferences(
+  updates: Partial<UserPreferences>,
+): Promise<UserPreferences> {
+  const editableUpdates = sanitizeEditablePreferences(updates)
+  const response = await apiPatch<ApiResponse<RemoteUserPreferences>>('/api/preferences', editableUpdates)
+  const parsed = UserPreferencesSchema.parse(response.data)
+  const existing = await getStoredPreferences()
+  const normalized = normalizeRemotePreferences(parsed, existing?.id)
+  return writeCanonicalPreferencesRecord(stripPreferenceId(normalized))
+}
+
+export async function resetRemotePreferences(): Promise<UserPreferences> {
+  const response = await apiPost<ApiResponse<RemoteUserPreferences>>('/api/preferences/reset', {})
+  const parsed = UserPreferencesSchema.parse(response.data)
+  const existing = await getStoredPreferences()
+  const normalized = normalizeRemotePreferences(parsed, existing?.id)
+  return writeCanonicalPreferencesRecord(stripPreferenceId(normalized))
 }

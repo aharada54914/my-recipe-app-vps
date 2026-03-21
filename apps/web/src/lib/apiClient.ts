@@ -6,9 +6,20 @@
  * Dexie remains available for offline caching.
  */
 
-const API_BASE_URL: string =
-  (typeof import.meta !== 'undefined' && import.meta.env?.['VITE_API_BASE_URL'] as string | undefined)
-  ?? 'http://localhost:3001'
+function resolveApiBaseUrl(): string {
+  const envValue = import.meta.env?.['VITE_API_BASE_URL']
+  if (typeof envValue === 'string' && envValue.length > 0) {
+    return envValue
+  }
+
+  if (typeof window !== 'undefined' && typeof window.location?.origin === 'string') {
+    return window.location.origin
+  }
+
+  return 'http://localhost:3001'
+}
+
+const API_BASE_URL = resolveApiBaseUrl()
 
 const TOKEN_KEY = 'kitchen_jwt'
 
@@ -46,13 +57,14 @@ interface ApiErrorData {
 }
 
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly data?: unknown,
-  ) {
+  readonly status: number
+  readonly data?: unknown
+
+  constructor(message: string, status: number, data?: unknown) {
     super(message)
     this.name = 'ApiError'
+    this.status = status
+    this.data = data
   }
 }
 
@@ -107,6 +119,10 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: 'PUT', body })
+}
+
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'PATCH', body })
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {

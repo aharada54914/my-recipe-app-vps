@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { google } from 'googleapis'
-import { prisma } from '../db/client.ts'
+import { prisma } from '../db/client.js'
+import { normalizeUserPreferences } from '../lib/userPreferences.js'
 
 const GoogleTokenSchema = z.object({
   code: z.string().min(1),
@@ -79,7 +80,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      app.log.error('Google auth error:', err)
+      app.log.error({ err }, 'Google auth error')
       reply.status(500).send({
         success: false,
         error: `Authentication failed: ${message}`,
@@ -134,7 +135,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       reply.send({
         success: true,
-        data: user,
+        data: {
+          ...user,
+          preferences: normalizeUserPreferences(user.preferences),
+        },
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

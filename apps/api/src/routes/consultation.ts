@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { prisma } from '../db/client.ts'
-import { askGeminiConsultation } from '../lib/gemini.ts'
+import { prisma } from '../db/client.js'
+import { askGeminiConsultation } from '../lib/gemini.js'
 import { ConsultationRequestSchema } from '@kitchen/shared-types'
 
 const DAILY_LIMIT = 10
@@ -106,12 +106,12 @@ export async function registerConsultationRoutes(app: FastifyInstance): Promise<
         reply.status(400).send({
           success: false,
           error: 'Validation error',
-          data: err.errors,
+          data: err.issues,
         })
         return
       }
       const message = err instanceof Error ? err.message : String(err)
-      app.log.error('Consultation error:', err)
+      app.log.error({ err }, 'Consultation error')
       reply.status(500).send({
         success: false,
         error: `相談処理に失敗しました: ${message}`,

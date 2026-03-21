@@ -32,3 +32,13 @@ public/seed
 .vercel
 .claude/worktrees
 .tmp-ui-audit/
+backups/*
+!backups/.gitkeep
+ssl/*
+!ssl/.gitkeep
+*.tsbuildinfo
+apps/web/public/seed/*.json
+!apps/web/public/seed/.gitkeep
+task_plan.md
+findings.md
+progress.md

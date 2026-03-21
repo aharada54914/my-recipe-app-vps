@@ -5,9 +5,13 @@ import { PreferencesContext } from './preferencesContextDef'
 import {
   ensurePreferencesRecord,
   getStoredPreferences,
+  hasRemotePreferencesSession,
   mergeWithDefaultPreferences,
   resetStoredPreferences,
+  resetRemotePreferences,
+  syncStoredPreferencesFromRemote,
   updateStoredPreferences,
+  updateRemotePreferences,
 } from '../repositories/preferencesRepository'
 import { runPreferencesStartupTasks } from '../services/preferencesStartup'
 import {
@@ -21,11 +25,28 @@ import {
 export type { PreferencesContextValue } from './preferencesContextDef'
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
+  const [hasRemoteSession, setHasRemoteSession] = useState<boolean>(() => hasRemotePreferencesSession())
   // Return null when loaded-but-empty to distinguish from undefined (still loading)
   const stored = useLiveQuery(async () => {
     const prefs = await getStoredPreferences()
     return prefs ?? null
   })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const syncRemoteSession = () => {
+      setHasRemoteSession(hasRemotePreferencesSession())
+    }
+
+    window.addEventListener('storage', syncRemoteSession)
+    const interval = window.setInterval(syncRemoteSession, 1000)
+
+    return () => {
+      window.removeEventListener('storage', syncRemoteSession)
+      window.clearInterval(interval)
+    }
+  }, [])
 
   // Auto-create default preferences if none exist
   useEffect(() => {
@@ -39,6 +60,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     if (stored === undefined || stored === null || !stored.id) return
     void runPreferencesStartupTasks(stored)
   }, [stored])
+
+  useEffect(() => {
+    if (!hasRemoteSession) return
+
+    void syncStoredPreferencesFromRemote().catch((err: unknown) => {
+      console.warn('Failed to sync preferences from server, using local cache instead.', err)
+    })
+  }, [hasRemoteSession])
 
   const preferences: UserPreferences = mergeWithDefaultPreferences(stored)
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
@@ -88,25 +117,63 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     value: UserPreferences[K],
   ) => {
     if (!preferences.id) return
-    await updateStoredPreferences(preferences.id, {
+    const updates = {
       [key]: value,
-    } as Partial<UserPreferences>)
-  }, [preferences.id])
+    } as Partial<UserPreferences>
+
+    if (hasRemoteSession) {
+      try {
+        await updateRemotePreferences(updates)
+        return
+      } catch (err) {
+        console.warn('Failed to persist preference to server, falling back to local storage.', err)
+      }
+    }
+
+    await updateStoredPreferences(preferences.id, updates)
+  }, [hasRemoteSession, preferences.id])
 
   const updatePreferences = useCallback(async (updates: Partial<UserPreferences>) => {
     if (!preferences.id) return
+    if (hasRemoteSession) {
+      try {
+        await updateRemotePreferences(updates)
+        return
+      } catch (err) {
+        console.warn('Failed to persist preferences to server, falling back to local storage.', err)
+      }
+    }
+
     await updateStoredPreferences(preferences.id, updates)
-  }, [preferences.id])
+  }, [hasRemoteSession, preferences.id])
 
   const setAppearanceMode = useCallback(async (mode: AppearanceMode) => {
     if (!preferences.id) return
+    if (hasRemoteSession) {
+      try {
+        await updateRemotePreferences({ appearanceMode: mode })
+        return
+      } catch (err) {
+        console.warn('Failed to persist appearance mode to server, falling back to local storage.', err)
+      }
+    }
+
     await updateStoredPreferences(preferences.id, { appearanceMode: mode })
-  }, [preferences.id])
+  }, [hasRemoteSession, preferences.id])
 
   const resetToDefaults = useCallback(async () => {
     if (!preferences.id) return
+    if (hasRemoteSession) {
+      try {
+        await resetRemotePreferences()
+        return
+      } catch (err) {
+        console.warn('Failed to reset preferences on server, falling back to local storage.', err)
+      }
+    }
+
     await resetStoredPreferences(preferences.id)
-  }, [preferences.id])
+  }, [hasRemoteSession, preferences.id])
 
   return (
     <PreferencesContext.Provider

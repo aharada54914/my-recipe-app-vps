@@ -1,13 +1,14 @@
 import Fastify from 'fastify'
-import { registerCors } from './plugins/cors.ts'
-import { registerAuth } from './plugins/auth.ts'
-import { registerRecipeRoutes } from './routes/recipes.ts'
-import { registerWeeklyMenuRoutes } from './routes/weeklyMenu.ts'
-import { registerConsultationRoutes } from './routes/consultation.ts'
-import { registerShoppingRoutes } from './routes/shopping.ts'
-import { registerAuthRoutes } from './routes/auth.ts'
-import { registerHealthRoutes } from './routes/health.ts'
-import { startWeeklyEmailJob } from './jobs/weeklyEmailJob.ts'
+import { registerCors } from './plugins/cors.js'
+import { registerAuth } from './plugins/auth.js'
+import { registerRecipeRoutes } from './routes/recipes.js'
+import { registerWeeklyMenuRoutes } from './routes/weeklyMenu.js'
+import { registerConsultationRoutes } from './routes/consultation.js'
+import { registerShoppingRoutes } from './routes/shopping.js'
+import { registerAuthRoutes } from './routes/auth.js'
+import { registerHealthRoutes } from './routes/health.js'
+import { registerPreferencesRoutes } from './routes/preferences.js'
+import { startWeeklyEmailJob } from './jobs/weeklyEmailJob.js'
 
 const envPort = process.env['API_PORT']
 const port = envPort ? Number.parseInt(envPort, 10) : 3001
@@ -27,6 +28,7 @@ async function buildApp() {
   // Routes
   await registerHealthRoutes(app)
   await registerAuthRoutes(app)
+  await registerPreferencesRoutes(app)
   await registerRecipeRoutes(app)
   await registerWeeklyMenuRoutes(app)
   await registerConsultationRoutes(app)
@@ -39,13 +41,17 @@ async function start() {
   try {
     const app = await buildApp()
 
-    // Start cron jobs
-    startWeeklyEmailJob()
+    if (process.env['ENABLE_WEEKLY_EMAIL_JOB'] !== 'false') {
+      startWeeklyEmailJob()
+    } else {
+      app.log.info('Weekly email job disabled by ENABLE_WEEKLY_EMAIL_JOB=false')
+    }
 
     await app.listen({ port, host })
     app.log.info(`Server listening on ${host}:${port}`)
   } catch (err) {
-    console.error('Failed to start server:', err)
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`Failed to start server: ${message}`)
     process.exit(1)
   }
 }

@@ -7,12 +7,20 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import Fuse from 'fuse.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const ROOT = join(__dirname, '..')
+const APP_ROOT = join(__dirname, '..')
+const REPO_ROOT = join(__dirname, '..', '..', '..')
+const require = createRequire(import.meta.url)
+
+function resolveKuromojiDictPath() {
+  const packageJsonPath = require.resolve('kuromoji/package.json')
+  return join(dirname(packageJsonPath), 'dict')
+}
 
 // ─── RFC4180 CSV Parser (multiline-safe) ───
 
@@ -522,15 +530,16 @@ async function main() {
   const { NUTRITION_REFERENCE } = await import('../src/data/nutritionLookup.ts')
   const { normalizeJaText } = await import('../src/utils/jaText.ts')
   const { buildSearchDocSeed } = await import('../src/utils/searchIndexCore.ts')
-  const outDir = join(ROOT, 'src', 'data')
-  const publicSeedDir = join(ROOT, 'public', 'seed')
+  const outDir = join(APP_ROOT, 'src', 'data')
+  const publicSeedDir = join(APP_ROOT, 'public', 'seed')
   mkdirSync(outDir, { recursive: true })
   mkdirSync(publicSeedDir, { recursive: true })
 
   const kuromojiModule = await import('kuromoji')
   const kuromoji = kuromojiModule.default
+  const kuromojiDictPath = resolveKuromojiDictPath()
   const nodeKuromojiTokenizer = await new Promise((resolve, reject) => {
-    kuromoji.builder({ dicPath: join(ROOT, 'node_modules', 'kuromoji', 'dict') }).build((err, built) => {
+    kuromoji.builder({ dicPath: kuromojiDictPath }).build((err, built) => {
       if (err || !built) {
         reject(err ?? new Error('kuromoji tokenizer build failed in prebuild'))
         return
@@ -558,7 +567,7 @@ async function main() {
 
   // Healsio
   console.log('📖 Reading Healsio CSV...')
-  const healsioCsv = readFileSync(join(ROOT, 'AX-XA20_recipes_complete.csv'), 'utf-8')
+  const healsioCsv = readFileSync(join(REPO_ROOT, 'AX-XA20_recipes_complete.csv'), 'utf-8')
   const healsioRecipes = attachEstimatedNutrition(
     convertHealsioCSV(healsioCsv),
     estimateRecipeNutritionDetailed,
@@ -573,7 +582,7 @@ async function main() {
 
   // Hotcook
   console.log('📖 Reading Hotcook CSV...')
-  const hotcookCsv = readFileSync(join(ROOT, 'KN-HW24H_recipes_complete_complete.csv'), 'utf-8')
+  const hotcookCsv = readFileSync(join(REPO_ROOT, 'KN-HW24H_recipes_complete_complete.csv'), 'utf-8')
   const hotcookRecipes = attachEstimatedNutrition(
     convertHotcookCSV(hotcookCsv),
     estimateRecipeNutritionDetailed,
