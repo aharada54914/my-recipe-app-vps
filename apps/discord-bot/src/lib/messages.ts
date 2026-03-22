@@ -73,6 +73,18 @@ export function buildRecipeImportDraftMessage(
 }
 
 export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSummary) {
+  const calendarSyncLines = proposal.calendarSync
+    ? [
+      '',
+      `**家族カレンダー登録**: ${proposal.calendarSync.status === 'registered' ? '成功' : proposal.calendarSync.status === 'failed' ? '失敗' : '未実行'}`,
+      ...(proposal.calendarSync.calendarId ? [`登録先: ${proposal.calendarSync.calendarId}`] : []),
+      ...(proposal.calendarSync.registeredCount != null ? [`登録件数: ${proposal.calendarSync.registeredCount}件`] : []),
+      ...(proposal.calendarSync.errors && proposal.calendarSync.errors.length > 0
+        ? [`詳細: ${proposal.calendarSync.errors.slice(0, 3).join(' / ')}`]
+        : []),
+    ]
+    : []
+
   const embed = new EmbedBuilder()
     .setTitle(`週間献立案 #${proposal.id}`)
     .setDescription([
@@ -89,6 +101,7 @@ export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSumma
           item.scoreSummary ? `選定理由: ${item.scoreSummary}` : '',
         ].filter(Boolean).join('\n'),
       ),
+      ...calendarSyncLines,
     ].join('\n'))
 
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -103,7 +116,7 @@ export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSumma
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`weekly-menu:approve:${proposal.id}`)
-      .setLabel('この献立で保存')
+      .setLabel('保存して家族カレンダーへ登録')
       .setStyle(ButtonStyle.Success)
       .setDisabled(proposal.status === 'persisted' || proposal.status === 'cancelled'),
     new ButtonBuilder()

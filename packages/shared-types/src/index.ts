@@ -472,6 +472,12 @@ export const WeeklyMenuProposalSummarySchema = z.object({
   items: z.array(WeeklyMenuProposalItemSchema).length(7),
   notes: z.string().optional(),
   approvedWeeklyMenuId: z.number().int().positive().optional(),
+  calendarSync: z.object({
+    status: z.enum(['not_started', 'registered', 'failed']),
+    calendarId: z.string().min(1).optional(),
+    registeredCount: z.number().int().min(0).optional(),
+    errors: z.array(z.string().min(1)).optional(),
+  }).optional(),
 })
 export type WeeklyMenuProposalSummary = z.infer<typeof WeeklyMenuProposalSummarySchema>
 

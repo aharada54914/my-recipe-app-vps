@@ -17,6 +17,7 @@ import {
   type PlannerRecipeRecord,
 } from './planner.js'
 import { WeeklyMenuProposalItemSchema } from '@kitchen/shared-types'
+import { registerWeeklyMenuToFamilyCalendar } from '../googleCalendar.js'
 
 function toJsonValue<T>(value: T): InputJsonValue {
   return value as InputJsonValue
@@ -31,11 +32,29 @@ function normalizeProposal(record: {
   notes: string | null
   status: string
   approvedWeeklyMenuId: number | null
-  session: { threadId: string | null }
+  session: {
+    threadId: string | null
+    metadata?: unknown
+  }
 }): WeeklyMenuProposalSummary {
   const items = Array.isArray(record.items)
     ? WeeklyMenuProposalItemSchema.array().parse(record.items)
     : []
+  const metadata = isRecord(record.session.metadata) ? record.session.metadata : {}
+  const calendarSync = isRecord(metadata.calendarSync)
+    ? {
+      status: normalizeCalendarSyncStatus(metadata.calendarSync.status),
+      ...(typeof metadata.calendarSync.calendarId === 'string'
+        ? { calendarId: metadata.calendarSync.calendarId }
+        : {}),
+      ...(typeof metadata.calendarSync.registeredCount === 'number'
+        ? { registeredCount: metadata.calendarSync.registeredCount }
+        : {}),
+      ...(Array.isArray(metadata.calendarSync.errors)
+        ? { errors: metadata.calendarSync.errors.filter((value): value is string => typeof value === 'string') }
+        : {}),
+    }
+    : undefined
 
   return {
     id: record.id,
@@ -47,7 +66,16 @@ function normalizeProposal(record: {
     items,
     ...(record.notes ? { notes: record.notes } : {}),
     ...(record.approvedWeeklyMenuId ? { approvedWeeklyMenuId: record.approvedWeeklyMenuId } : {}),
+    ...(calendarSync ? { calendarSync } : {}),
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeCalendarSyncStatus(value: unknown): 'not_started' | 'registered' | 'failed' {
+  return value === 'registered' || value === 'failed' ? value : 'not_started'
 }
 
 async function appendConversationTurn(params: {
@@ -186,7 +214,7 @@ export async function createWeeklyMenuProposal(input: {
     },
     include: {
       session: {
-        select: { threadId: true },
+        select: { threadId: true, metadata: true },
       },
     },
   })
@@ -210,7 +238,7 @@ export async function getWeeklyMenuProposalById(id: number): Promise<WeeklyMenuP
     where: { id },
     include: {
       session: {
-        select: { threadId: true, discordUserId: true },
+        select: { threadId: true, discordUserId: true, metadata: true },
       },
     },
   })
@@ -262,7 +290,7 @@ export async function replaceWeeklyMenuProposalItem(
     },
     include: {
       session: {
-        select: { threadId: true },
+        select: { threadId: true, metadata: true },
       },
     },
   })
@@ -291,6 +319,9 @@ export async function approveWeeklyMenuProposal(id: number, discordUserId: strin
   if (!existing) throw new Error('週間献立案が見つかりません。')
   if (existing.session.discordUserId !== discordUserId) {
     throw new Error('この献立案を承認できるのは作成したユーザーのみです。')
+  }
+  if (existing.status === 'persisted') {
+    return normalizeProposal(existing)
   }
 
   const items: WeeklyMenuProposalItem[] = Array.isArray(existing.items)
@@ -325,6 +356,32 @@ export async function approveWeeklyMenuProposal(id: number, discordUserId: strin
     },
   })
 
+  let calendarSync:
+    | { status: 'registered'; calendarId: string; registeredCount: number; errors: string[] }
+    | { status: 'failed'; registeredCount: number; errors: string[] }
+    | undefined
+
+  try {
+    const registration = await registerWeeklyMenuToFamilyCalendar({
+      userId: existing.userId,
+      weekStartDate: existing.weekStartDate,
+      items: weeklyItems,
+    })
+    calendarSync = {
+      status: registration.errors.length === 0 ? 'registered' : 'failed',
+      calendarId: registration.calendarId,
+      registeredCount: registration.registeredCount,
+      errors: registration.errors,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    calendarSync = {
+      status: 'failed',
+      registeredCount: 0,
+      errors: [message],
+    }
+  }
+
   const proposal = await prisma.weeklyMenuProposal.update({
     where: { id },
     data: {
@@ -334,12 +391,16 @@ export async function approveWeeklyMenuProposal(id: number, discordUserId: strin
         update: {
           status: 'completed',
           approvedAt: new Date(),
+          metadata: toJsonValue({
+            ...(isRecord(existing.session.metadata) ? existing.session.metadata : {}),
+            calendarSync,
+          }),
         },
       },
     },
     include: {
       session: {
-        select: { threadId: true },
+        select: { threadId: true, metadata: true },
       },
     },
   })
@@ -349,7 +410,10 @@ export async function approveWeeklyMenuProposal(id: number, discordUserId: strin
     actorType: 'discord_user',
     actorId: discordUserId,
     eventType: 'weekly_menu_approved',
-    payload: { weeklyMenuId: menu.id },
+    payload: {
+      weeklyMenuId: menu.id,
+      ...(calendarSync ? { calendarSync } : {}),
+    },
   })
 
   return normalizeProposal(proposal)
@@ -375,7 +439,7 @@ export async function cancelWeeklyMenuProposal(id: number, discordUserId: string
     },
     include: {
       session: {
-        select: { threadId: true },
+        select: { threadId: true, metadata: true },
       },
     },
   })
