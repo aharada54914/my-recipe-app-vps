@@ -20,8 +20,8 @@
 ## 2. Local Development
 
 ```bash
-git clone https://github.com/aharada54914/my-recipe-app.git
-cd my-recipe-app
+git clone https://github.com/aharada54914/my-recipe-app-vps.git
+cd my-recipe-app-vps
 npm install
 npm run dev
 ```
@@ -68,8 +68,30 @@ npm run test:visual:update
 4. OAuth Client ID を `Web application` で作成
 5. Authorized JavaScript origins に登録
    - `http://localhost:5173`
+   - VPS を SSH トンネル経由で検証する場合は `http://localhost:3000`
    - 本番 URL
 6. `.env` またはホスティング先環境変数に `VITE_GOOGLE_CLIENT_ID` を設定
+
+### VPS を localhost として開いて Google ログイン確認する
+
+raw IP (`http://178.104.88.252`) は Google OAuth の Authorized JavaScript origins に使えない。
+VPS 上のアプリを Mac の `localhost` にトンネルして検証する。
+
+```bash
+bash scripts/ops/open-localhost-tunnel.sh
+```
+
+port を変えたい場合:
+
+```bash
+bash scripts/ops/open-localhost-tunnel.sh 3001
+```
+
+その後、ブラウザで `http://localhost:3000/settings` を開く。
+
+- ブラウザから見える origin は `http://localhost:3000`
+- 実体は VPS の `127.0.0.1:80`
+- Google OAuth Console には `http://localhost:3000` を追加しておく
 
 ---
 
@@ -136,7 +158,7 @@ tsx scripts/prebuild-recipes.mjs
 
 ## 9. 関連ドキュメント
 
-- [README.md](/Users/jrmag/my-recipe-app/README.md)
-- [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-app/docs/ARCHITECTURE.md)
-- [docs/TESTING.md](/Users/jrmag/my-recipe-app/docs/TESTING.md)
-- [docs/SETTINGS_GUIDE.md](/Users/jrmag/my-recipe-app/docs/SETTINGS_GUIDE.md)
+- [README.md](/Users/jrmag/my-recipe-vps/README.md)
+- [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-vps/docs/ARCHITECTURE.md)
+- [docs/TESTING.md](/Users/jrmag/my-recipe-vps/docs/TESTING.md)
+- [docs/SETTINGS_GUIDE.md](/Users/jrmag/my-recipe-vps/docs/SETTINGS_GUIDE.md)

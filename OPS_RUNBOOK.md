@@ -51,6 +51,34 @@ bash scripts/ops/kitchenctl.sh backup-db
 bash scripts/ops/kitchenctl.sh prune-backups
 ```
 
+## localhost トンネルで Google ログイン確認
+
+Google OAuth は raw IP (`http://178.104.88.252`) を Authorized JavaScript origins に入れられないため、
+Mac 側で SSH トンネルを張って `http://localhost:3000` として開く。
+
+```bash
+bash scripts/ops/open-localhost-tunnel.sh
+```
+
+別 port で開きたい場合:
+
+```bash
+bash scripts/ops/open-localhost-tunnel.sh 3001
+```
+
+これで以下の流れになる。
+
+1. Mac の `http://localhost:3000` が VPS の `127.0.0.1:80` を参照する
+2. ブラウザ上の origin は `http://localhost:3000` になる
+3. Google OAuth Console の Authorized JavaScript origins には使う port を含めた `http://localhost:3000` を登録する
+4. ブラウザで `http://localhost:3000/settings` を開き、Google ログインと家族カレンダー設定を行う
+
+注意:
+
+- この方法は「自分の Mac から検証する」ための経路であり、家族向けの正式公開 URL にはならない
+- API は nginx 配下の同一 origin で見えるため、`VITE_API_BASE_URL` を別に切り替える必要はない
+- ログイン状態は `localhost` origin の localStorage に保存されるため、`http://178.104.88.252` 側とは共有されない
+
 ## バックアップ
 
 - DB dump は `backups/` に `*.sql.gz` で保存
