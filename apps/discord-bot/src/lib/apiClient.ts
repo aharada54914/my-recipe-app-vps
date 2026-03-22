@@ -1,8 +1,17 @@
 import {
+  type CreateDiscordKitchenAdviceRequest,
+  type CreateDiscordPhotoAnalysisRequest,
   type CreateDiscordRecipeImportDraftRequest,
+  type CreateDiscordWeeklyMenuProposalRequest,
   type DiscordWorkflow,
+  type KitchenAdviceSessionSummary,
+  type PhotoAnalysisDraftSummary,
+  type ReplaceDiscordWeeklyMenuItemRequest,
   type RecipeImportDraftSummary,
+  type SelectDiscordPhotoCandidateRequest,
   type UpdateDiscordRecipeImportDraftRequest,
+  type UpdateDiscordPhotoAnalysisRequest,
+  type WeeklyMenuProposalSummary,
 } from '@kitchen/shared-types'
 
 interface ApiEnvelope<T> {
@@ -112,5 +121,133 @@ export async function cancelRecipeImportDraft(input: {
     body: JSON.stringify({
       discordUserId: input.discordUserId,
     }),
+  })
+}
+
+export async function createWeeklyMenuProposal(
+  input: CreateDiscordWeeklyMenuProposalRequest,
+): Promise<WeeklyMenuProposalSummary> {
+  return request<WeeklyMenuProposalSummary>('/api/internal/discord/weekly-menu-proposals', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function getWeeklyMenuProposal(id: number): Promise<WeeklyMenuProposalSummary> {
+  return request<WeeklyMenuProposalSummary>(`/api/internal/discord/weekly-menu-proposals/${id}`)
+}
+
+export async function replaceWeeklyMenuItem(input: {
+  id: number
+  patch: ReplaceDiscordWeeklyMenuItemRequest
+}): Promise<WeeklyMenuProposalSummary> {
+  return request<WeeklyMenuProposalSummary>(`/api/internal/discord/weekly-menu-proposals/${input.id}/replace`, {
+    method: 'POST',
+    body: JSON.stringify(input.patch),
+  })
+}
+
+export async function approveWeeklyMenuProposal(input: {
+  id: number
+  discordUserId: string
+}): Promise<WeeklyMenuProposalSummary> {
+  return request<WeeklyMenuProposalSummary>(`/api/internal/discord/weekly-menu-proposals/${input.id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ discordUserId: input.discordUserId }),
+  })
+}
+
+export async function cancelWeeklyMenuProposal(input: {
+  id: number
+  discordUserId: string
+}): Promise<WeeklyMenuProposalSummary> {
+  return request<WeeklyMenuProposalSummary>(`/api/internal/discord/weekly-menu-proposals/${input.id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ discordUserId: input.discordUserId }),
+  })
+}
+
+export async function createPhotoAnalysisDraft(
+  input: CreateDiscordPhotoAnalysisRequest,
+): Promise<PhotoAnalysisDraftSummary> {
+  return request<PhotoAnalysisDraftSummary>('/api/internal/discord/photo-analysis', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function getPhotoAnalysisDraft(id: number): Promise<PhotoAnalysisDraftSummary> {
+  return request<PhotoAnalysisDraftSummary>(`/api/internal/discord/photo-analysis/${id}`)
+}
+
+export async function updatePhotoAnalysisDraft(
+  input: UpdateDiscordPhotoAnalysisRequest & { id: number },
+): Promise<PhotoAnalysisDraftSummary> {
+  return request<PhotoAnalysisDraftSummary>(`/api/internal/discord/photo-analysis/${input.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      discordUserId: input.discordUserId,
+      ...(input.ingredients ? { ingredients: input.ingredients } : {}),
+      ...(input.excludeRecipeIds ? { excludeRecipeIds: input.excludeRecipeIds } : {}),
+    }),
+  })
+}
+
+export async function selectPhotoCandidate(
+  input: SelectDiscordPhotoCandidateRequest & { id: number },
+): Promise<PhotoAnalysisDraftSummary> {
+  return request<PhotoAnalysisDraftSummary>(`/api/internal/discord/photo-analysis/${input.id}/select`, {
+    method: 'POST',
+    body: JSON.stringify({
+      discordUserId: input.discordUserId,
+      recipeId: input.recipeId,
+    }),
+  })
+}
+
+export async function cancelPhotoAnalysisDraft(input: {
+  id: number
+  discordUserId: string
+}): Promise<PhotoAnalysisDraftSummary> {
+  return request<PhotoAnalysisDraftSummary>(`/api/internal/discord/photo-analysis/${input.id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ discordUserId: input.discordUserId }),
+  })
+}
+
+export async function createKitchenAdviceSession(
+  input: CreateDiscordKitchenAdviceRequest,
+): Promise<KitchenAdviceSessionSummary> {
+  return request<KitchenAdviceSessionSummary>('/api/internal/discord/kitchen-advice', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function getKitchenAdviceSession(id: number): Promise<KitchenAdviceSessionSummary> {
+  return request<KitchenAdviceSessionSummary>(`/api/internal/discord/kitchen-advice/${id}`)
+}
+
+export async function followUpKitchenAdviceSession(input: {
+  id: number
+  discordUserId: string
+  prompt: string
+}): Promise<KitchenAdviceSessionSummary> {
+  return request<KitchenAdviceSessionSummary>(`/api/internal/discord/kitchen-advice/${input.id}/follow-up`, {
+    method: 'POST',
+    body: JSON.stringify({
+      discordUserId: input.discordUserId,
+      prompt: input.prompt,
+    }),
+  })
+}
+
+export async function cancelKitchenAdviceSession(input: {
+  id: number
+  discordUserId: string
+}): Promise<KitchenAdviceSessionSummary> {
+  return request<KitchenAdviceSessionSummary>(`/api/internal/discord/kitchen-advice/${input.id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ discordUserId: input.discordUserId }),
   })
 }

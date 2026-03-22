@@ -19,6 +19,9 @@ model User {
   favorites          Favorite[]
   consultationLogs   ConsultationLog[]
   discordLinks       DiscordUserLink[]
+  weeklyMenuProposals WeeklyMenuProposal[]
+  photoAnalysisDrafts PhotoAnalysisDraft[]
+  kitchenAdviceStates KitchenAdviceState[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 }
@@ -126,6 +129,9 @@ model ConversationSession {
   updatedAt         DateTime             @updatedAt
   turns             ConversationTurn[]
   recipeImportDraft RecipeImportDraft?
+  weeklyMenuProposal WeeklyMenuProposal?
+  photoAnalysisDraft PhotoAnalysisDraft?
+  kitchenAdviceState KitchenAdviceState?
 
   @@index([guildId, workflow, createdAt])
   @@index([discordUserId, createdAt])
@@ -157,5 +163,60 @@ model RecipeImportDraft {
   updatedAt        DateTime            @updatedAt
   session          ConversationSession @relation(fields: [sessionId], references: [id])
 
+  @@index([status, createdAt])
+}
+
+model WeeklyMenuProposal {
+  id                   Int                 @id @default(autoincrement())
+  sessionId            Int                 @unique
+  userId               String
+  requestedServings    Int
+  weekStartDate        String
+  items                Json
+  weatherSummary       Json
+  notes                String?
+  status               String              @default("draft")
+  approvedWeeklyMenuId Int?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  session              ConversationSession @relation(fields: [sessionId], references: [id])
+  user                 User                @relation(fields: [userId], references: [id])
+
+  @@index([userId, weekStartDate])
+  @@index([status, createdAt])
+}
+
+model PhotoAnalysisDraft {
+  id                Int                 @id @default(autoincrement())
+  sessionId         Int                 @unique
+  userId            String
+  requestedServings Int
+  imageUrl          String
+  detectedIngredients Json
+  candidateRecipes  Json
+  status            String              @default("draft")
+  selectedRecipeId  Int?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  session           ConversationSession @relation(fields: [sessionId], references: [id])
+  user              User                @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model KitchenAdviceState {
+  id                Int                 @id @default(autoincrement())
+  sessionId         Int                 @unique
+  userId            String
+  requestedServings Int
+  latestResponse    String
+  status            String              @default("active")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  session           ConversationSession @relation(fields: [sessionId], references: [id])
+  user              User                @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
   @@index([status, createdAt])
 }

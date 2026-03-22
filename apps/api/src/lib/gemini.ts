@@ -36,6 +36,9 @@ export interface ConsultationContext {
   sideMenuTitle?: string
   stockItems?: Array<{ name: string; inStock: boolean }>
   userPrompt?: string
+  requestedServings?: number
+  history?: Array<{ actor: 'user' | 'assistant'; content: string }>
+  guidance?: string
 }
 
 export async function askGeminiConsultation(
@@ -68,6 +71,19 @@ export async function askGeminiConsultation(
   if (context.userPrompt) {
     systemParts.push(`ユーザーの食の好み・制限: ${context.userPrompt}`)
   }
+  if (context.requestedServings) {
+    systemParts.push(`今回の想定人数: ${context.requestedServings}人分`)
+  }
+  if (context.guidance) {
+    systemParts.push(`追加ガイダンス: ${context.guidance}`)
+  }
+  if (context.history && context.history.length > 0) {
+    const historyText = context.history
+      .slice(-6)
+      .map((entry) => `${entry.actor === 'user' ? 'ユーザー' : 'アシスタント'}: ${entry.content}`)
+      .join('\n')
+    systemParts.push(`直近の会話:\n${historyText}`)
+  }
 
   const systemPrompt = systemParts.join('\n')
   const fullPrompt = `${systemPrompt}\n\nユーザーの質問: ${message}`
@@ -75,4 +91,23 @@ export async function askGeminiConsultation(
   const result = await model.generateContent(fullPrompt)
   const response = result.response
   return response.text()
+}
+
+export interface InlineImagePart {
+  mimeType: string
+  data: string
+}
+
+export async function generateGeminiTextFromImageAndPrompt(
+  prompt: string,
+  image: InlineImagePart,
+  modelName = 'gemini-2.0-flash',
+): Promise<string> {
+  const ai = getGenAI()
+  const model = ai.getGenerativeModel({ model: modelName })
+  const result = await model.generateContent([
+    { text: prompt },
+    { inlineData: { mimeType: image.mimeType, data: image.data } },
+  ])
+  return result.response.text()
 }

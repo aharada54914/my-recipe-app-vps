@@ -432,3 +432,163 @@ export const UpdateDiscordRecipeImportDraftRequestSchema = z.object({
 }).strict()
 export type UpdateDiscordRecipeImportDraftRequest =
   z.infer<typeof UpdateDiscordRecipeImportDraftRequestSchema>
+
+export const WeeklyMenuProposalStatusSchema = z.enum([
+  'draft',
+  'approved',
+  'persisted',
+  'cancelled',
+  'error',
+])
+export type WeeklyMenuProposalStatus = z.infer<typeof WeeklyMenuProposalStatusSchema>
+
+export const WeeklyMenuProposalItemSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  weatherText: z.string().min(1),
+  maxTempC: z.number(),
+  precipitationMm: z.number().nonnegative(),
+  recipeId: z.number().int().positive(),
+  recipeTitle: z.string().min(1),
+  device: DeviceTypeSchema,
+  category: EditableRecipeCategorySchema,
+  servings: z.number().int().positive(),
+  baseServings: z.number().int().positive(),
+  replacementNotes: z.string().optional(),
+})
+export type WeeklyMenuProposalItem = z.infer<typeof WeeklyMenuProposalItemSchema>
+
+export const WeeklyMenuProposalSummarySchema = z.object({
+  id: z.number().int().positive(),
+  sessionId: z.number().int().positive(),
+  threadId: z.string().min(1).optional(),
+  status: WeeklyMenuProposalStatusSchema,
+  requestedServings: z.number().int().positive(),
+  weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  items: z.array(WeeklyMenuProposalItemSchema).length(7),
+  notes: z.string().optional(),
+  approvedWeeklyMenuId: z.number().int().positive().optional(),
+})
+export type WeeklyMenuProposalSummary = z.infer<typeof WeeklyMenuProposalSummarySchema>
+
+export const CreateDiscordWeeklyMenuProposalRequestSchema = z.object({
+  guildId: z.string().min(1),
+  channelId: z.string().min(1),
+  threadId: z.string().min(1).optional(),
+  discordUserId: z.string().min(1),
+  requestedServings: z.number().int().positive().min(1).max(20),
+  notes: z.string().max(400).optional(),
+})
+export type CreateDiscordWeeklyMenuProposalRequest =
+  z.infer<typeof CreateDiscordWeeklyMenuProposalRequestSchema>
+
+export const ReplaceDiscordWeeklyMenuItemRequestSchema = z.object({
+  dayIndex: z.number().int().min(0).max(6),
+  discordUserId: z.string().min(1),
+  notes: z.string().max(300).optional(),
+})
+export type ReplaceDiscordWeeklyMenuItemRequest =
+  z.infer<typeof ReplaceDiscordWeeklyMenuItemRequestSchema>
+
+export const PhotoRecipeCandidateSchema = z.object({
+  recipeId: z.number().int().positive(),
+  title: z.string().min(1),
+  device: DeviceTypeSchema,
+  category: EditableRecipeCategorySchema,
+  baseServings: z.number().int().positive(),
+  requestedServings: z.number().int().positive(),
+  matchedIngredients: z.array(z.string().min(1)).min(1),
+  missingIngredients: z.array(z.string().min(1)).default([]),
+  score: z.number(),
+})
+export type PhotoRecipeCandidate = z.infer<typeof PhotoRecipeCandidateSchema>
+
+export const PhotoAnalysisDraftStatusSchema = z.enum([
+  'draft',
+  'approved',
+  'cancelled',
+  'error',
+])
+export type PhotoAnalysisDraftStatus = z.infer<typeof PhotoAnalysisDraftStatusSchema>
+
+export const PhotoAnalysisDraftSummarySchema = z.object({
+  id: z.number().int().positive(),
+  sessionId: z.number().int().positive(),
+  threadId: z.string().min(1).optional(),
+  status: PhotoAnalysisDraftStatusSchema,
+  imageUrl: z.string().url(),
+  requestedServings: z.number().int().positive(),
+  detectedIngredients: z.array(z.string().min(1)),
+  candidates: z.array(PhotoRecipeCandidateSchema).max(3),
+  selectedRecipeId: z.number().int().positive().optional(),
+})
+export type PhotoAnalysisDraftSummary = z.infer<typeof PhotoAnalysisDraftSummarySchema>
+
+export const CreateDiscordPhotoAnalysisRequestSchema = z.object({
+  guildId: z.string().min(1),
+  channelId: z.string().min(1),
+  threadId: z.string().min(1).optional(),
+  discordUserId: z.string().min(1),
+  requestedServings: z.number().int().positive().min(1).max(20),
+  imageUrl: z.string().url(),
+})
+export type CreateDiscordPhotoAnalysisRequest =
+  z.infer<typeof CreateDiscordPhotoAnalysisRequestSchema>
+
+export const UpdateDiscordPhotoAnalysisRequestSchema = z.object({
+  discordUserId: z.string().min(1),
+  ingredients: z.array(z.string().min(1)).min(1).max(30).optional(),
+  excludeRecipeIds: z.array(z.number().int().positive()).max(20).optional(),
+})
+export type UpdateDiscordPhotoAnalysisRequest =
+  z.infer<typeof UpdateDiscordPhotoAnalysisRequestSchema>
+
+export const SelectDiscordPhotoCandidateRequestSchema = z.object({
+  discordUserId: z.string().min(1),
+  recipeId: z.number().int().positive(),
+})
+export type SelectDiscordPhotoCandidateRequest =
+  z.infer<typeof SelectDiscordPhotoCandidateRequestSchema>
+
+export const KitchenAdviceSessionStatusSchema = z.enum([
+  'active',
+  'completed',
+  'cancelled',
+  'error',
+])
+export type KitchenAdviceSessionStatus = z.infer<typeof KitchenAdviceSessionStatusSchema>
+
+export const KitchenAdviceMessageSchema = z.object({
+  actor: z.enum(['user', 'assistant']),
+  content: z.string().min(1),
+  createdAt: z.coerce.date().optional(),
+})
+export type KitchenAdviceMessage = z.infer<typeof KitchenAdviceMessageSchema>
+
+export const KitchenAdviceSessionSummarySchema = z.object({
+  id: z.number().int().positive(),
+  sessionId: z.number().int().positive(),
+  threadId: z.string().min(1).optional(),
+  status: KitchenAdviceSessionStatusSchema,
+  requestedServings: z.number().int().positive(),
+  latestResponse: z.string().min(1),
+  messages: z.array(KitchenAdviceMessageSchema).min(1),
+})
+export type KitchenAdviceSessionSummary = z.infer<typeof KitchenAdviceSessionSummarySchema>
+
+export const CreateDiscordKitchenAdviceRequestSchema = z.object({
+  guildId: z.string().min(1),
+  channelId: z.string().min(1),
+  threadId: z.string().min(1).optional(),
+  discordUserId: z.string().min(1),
+  requestedServings: z.number().int().positive().min(1).max(20),
+  question: z.string().min(1).max(500),
+})
+export type CreateDiscordKitchenAdviceRequest =
+  z.infer<typeof CreateDiscordKitchenAdviceRequestSchema>
+
+export const FollowUpDiscordKitchenAdviceRequestSchema = z.object({
+  discordUserId: z.string().min(1),
+  prompt: z.string().min(1).max(300),
+})
+export type FollowUpDiscordKitchenAdviceRequest =
+  z.infer<typeof FollowUpDiscordKitchenAdviceRequestSchema>

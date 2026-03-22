@@ -32,6 +32,23 @@ import {
   updateRecipeImportDraft,
 } from './lib/apiClient.js'
 import { buildRecipeImportDraftMessage } from './lib/messages.js'
+import {
+  buildWeeklyMenuCommand,
+  handlePlanWeekCommand,
+  handleWeeklyMenuButton,
+  handleWeeklyMenuModal,
+} from './workflows/weeklyMenu.js'
+import {
+  buildStockPhotoCommand,
+  handleAnalyzePhotoCommand,
+  handleStockPhotoButton,
+  handleStockPhotoModal,
+} from './workflows/stockPhoto.js'
+import {
+  buildKitchenAdviceCommand,
+  handleKitchenAdviceButton,
+  handleKitchenAdviceCommand,
+} from './workflows/kitchenAdvice.js'
 
 const WORKFLOW_CHOICES = [
   ['URLレシピ取込', 'recipe_import'],
@@ -82,6 +99,9 @@ function buildCommands() {
       .addIntegerOption((option) =>
         option.setName('servings').setDescription('今回は何人分か').setRequired(true).setMinValue(1).setMaxValue(20),
       ),
+    buildWeeklyMenuCommand(),
+    buildStockPhotoCommand(),
+    buildKitchenAdviceCommand(),
   ].map((command) => command.toJSON())
 }
 
@@ -336,7 +356,7 @@ async function main(): Promise<void> {
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
   })
 
-  client.once('ready', async (readyClient) => {
+  client.once('clientReady', async (readyClient) => {
     await registerCommands()
     readyClient.user.setActivity('Kitchen workflows')
     console.log(`Discord bot ready: ${readyClient.user.tag}`)
@@ -351,17 +371,39 @@ async function main(): Promise<void> {
         }
         if (interaction.commandName === 'import-url') {
           await handleImportUrl(interaction)
+          return
+        }
+        if (interaction.commandName === 'plan-week') {
+          await handlePlanWeekCommand(interaction, ensureWorkflowChannel)
+          return
+        }
+        if (interaction.commandName === 'analyze-photo') {
+          await handleAnalyzePhotoCommand(interaction, ensureWorkflowChannel)
+          return
+        }
+        if (interaction.commandName === 'ask-cooking') {
+          await handleKitchenAdviceCommand(interaction, ensureWorkflowChannel)
+          return
         }
         return
       }
 
-      if (interaction.isButton() && interaction.customId.startsWith('recipe-import:')) {
-        await handleRecipeImportButton(interaction)
-        return
+      if (interaction.isButton()) {
+        if (await handleWeeklyMenuButton(interaction)) return
+        if (await handleStockPhotoButton(interaction)) return
+        if (await handleKitchenAdviceButton(interaction)) return
+        if (interaction.customId.startsWith('recipe-import:')) {
+          await handleRecipeImportButton(interaction)
+          return
+        }
       }
 
-      if (interaction.isModalSubmit() && interaction.customId.startsWith('recipe-import-modal:')) {
-        await handleRecipeImportModal(interaction)
+      if (interaction.isModalSubmit()) {
+        if (await handleWeeklyMenuModal(interaction)) return
+        if (await handleStockPhotoModal(interaction)) return
+        if (interaction.customId.startsWith('recipe-import-modal:')) {
+          await handleRecipeImportModal(interaction)
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
