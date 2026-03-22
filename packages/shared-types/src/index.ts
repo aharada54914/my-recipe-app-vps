@@ -11,6 +11,8 @@ export type DeviceType = z.infer<typeof DeviceTypeSchema>
 
 export const RecipeCategorySchema = z.enum(['すべて', '主菜', '副菜', 'スープ', '一品料理', 'スイーツ'])
 export type RecipeCategory = z.infer<typeof RecipeCategorySchema>
+export const EditableRecipeCategorySchema = z.enum(['主菜', '副菜', 'スープ', '一品料理', 'スイーツ'])
+export type EditableRecipeCategory = z.infer<typeof EditableRecipeCategorySchema>
 
 export const IngredientCategorySchema = z.enum(['main', 'sub'])
 export type IngredientCategory = z.infer<typeof IngredientCategorySchema>
@@ -313,3 +315,120 @@ export const RegisterToCalendarRequestSchema = z.object({
   scheduledTime: z.string().optional(),
 })
 export type RegisterToCalendarRequest = z.infer<typeof RegisterToCalendarRequestSchema>
+
+// --- Discord Workflow ---
+
+export const DiscordWorkflowSchema = z.enum([
+  'recipe_import',
+  'weekly_menu',
+  'stock_photo',
+  'kitchen_advice',
+])
+export type DiscordWorkflow = z.infer<typeof DiscordWorkflowSchema>
+
+export const ConversationSessionStatusSchema = z.enum([
+  'draft',
+  'awaiting_user',
+  'approved',
+  'cancelled',
+  'completed',
+  'error',
+])
+export type ConversationSessionStatus = z.infer<typeof ConversationSessionStatusSchema>
+
+export const RecipeImportDraftStatusSchema = z.enum([
+  'draft',
+  'needs_review',
+  'approved',
+  'persisted',
+  'cancelled',
+  'error',
+])
+export type RecipeImportDraftStatus = z.infer<typeof RecipeImportDraftStatusSchema>
+
+export const RecipeImportReviewFieldSchema = z.enum([
+  'title',
+  'device',
+  'category',
+  'baseServings',
+  'totalTimeMinutes',
+  'nutritionPerServing',
+])
+export type RecipeImportReviewField = z.infer<typeof RecipeImportReviewFieldSchema>
+
+export const DiscordChannelBindingSchema = z.object({
+  guildId: z.string().min(1),
+  workflow: DiscordWorkflowSchema,
+  channelId: z.string().min(1),
+})
+export type DiscordChannelBinding = z.infer<typeof DiscordChannelBindingSchema>
+
+export const ConversationSessionSchema = z.object({
+  id: z.number().int().positive().optional(),
+  workflow: DiscordWorkflowSchema,
+  status: ConversationSessionStatusSchema,
+  guildId: z.string().min(1),
+  channelId: z.string().min(1),
+  threadId: z.string().min(1).optional(),
+  discordUserId: z.string().min(1),
+  requestedServings: z.number().int().positive().optional(),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  approvedAt: z.coerce.date().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+})
+export type ConversationSession = z.infer<typeof ConversationSessionSchema>
+
+export const RecipeImportDraftSchema = z.object({
+  id: z.number().int().positive().optional(),
+  sessionId: z.number().int().positive(),
+  sourceUrl: z.string().url(),
+  requestedServings: z.number().int().positive(),
+  extractedRecipe: RecipeSchema.omit({ id: true }),
+  reviewFields: z.array(RecipeImportReviewFieldSchema).default([]),
+  status: RecipeImportDraftStatusSchema.default('draft'),
+  createdRecipeId: z.number().int().positive().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+})
+export type RecipeImportDraft = z.infer<typeof RecipeImportDraftSchema>
+
+export const RecipeImportDraftSummarySchema = z.object({
+  id: z.number().int().positive(),
+  sessionId: z.number().int().positive(),
+  threadId: z.string().min(1).optional(),
+  status: RecipeImportDraftStatusSchema,
+  sourceUrl: z.string().url(),
+  requestedServings: z.number().int().positive(),
+  title: z.string().min(1),
+  baseServings: z.number().int().positive(),
+  device: DeviceTypeSchema,
+  category: EditableRecipeCategorySchema,
+  totalTimeMinutes: z.number().int().positive(),
+  ingredientCount: z.number().int().nonnegative(),
+  stepCount: z.number().int().nonnegative(),
+  reviewFields: z.array(RecipeImportReviewFieldSchema).default([]),
+  createdRecipeId: z.number().int().positive().optional(),
+})
+export type RecipeImportDraftSummary = z.infer<typeof RecipeImportDraftSummarySchema>
+
+export const CreateDiscordRecipeImportDraftRequestSchema = z.object({
+  guildId: z.string().min(1),
+  channelId: z.string().min(1),
+  threadId: z.string().min(1).optional(),
+  discordUserId: z.string().min(1),
+  requestedServings: z.number().int().positive(),
+  url: z.string().url(),
+})
+export type CreateDiscordRecipeImportDraftRequest =
+  z.infer<typeof CreateDiscordRecipeImportDraftRequestSchema>
+
+export const UpdateDiscordRecipeImportDraftRequestSchema = z.object({
+  title: z.string().min(1).optional(),
+  device: DeviceTypeSchema.optional(),
+  category: EditableRecipeCategorySchema.optional(),
+  baseServings: z.number().int().positive().optional(),
+  totalTimeMinutes: z.number().int().positive().optional(),
+}).strict()
+export type UpdateDiscordRecipeImportDraftRequest =
+  z.infer<typeof UpdateDiscordRecipeImportDraftRequestSchema>

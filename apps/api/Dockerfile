@@ -44,6 +44,6 @@ COPY --from=builder /app/packages/shared-types/ packages/shared-types/
 
 WORKDIR /app/apps/api
 
-# Run migrations then start server
+# Push schema then start server
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+CMD ["sh", "-c", "npx prisma db push && node dist/server.js"]

@@ -14,6 +14,23 @@ function getGenAI(): GoogleGenerativeAI {
   return genAI
 }
 
+export function stripCodeFences(text: string): string {
+  return text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+}
+
+export function extractJsonObjectText(text: string): string {
+  const stripped = stripCodeFences(text)
+  const match = stripped.match(/\{[\s\S]*\}/)
+  return match ? match[0] : stripped
+}
+
+export async function generateGeminiText(prompt: string, modelName = 'gemini-2.0-flash-lite'): Promise<string> {
+  const ai = getGenAI()
+  const model = ai.getGenerativeModel({ model: modelName })
+  const result = await model.generateContent(prompt)
+  return result.response.text()
+}
+
 export interface ConsultationContext {
   todayMenuTitle?: string
   sideMenuTitle?: string

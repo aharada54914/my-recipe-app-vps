@@ -18,6 +18,7 @@ model User {
   stocks             Stock[]
   favorites          Favorite[]
   consultationLogs   ConsultationLog[]
+  discordLinks       DiscordUserLink[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 }
@@ -85,4 +86,76 @@ model ConsultationLog {
   user      User     @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
+}
+
+model DiscordGuildConfig {
+  id                    Int      @id @default(autoincrement())
+  guildId               String   @unique
+  recipeImportChannelId String?
+  weeklyMenuChannelId   String?
+  stockPhotoChannelId   String?
+  kitchenAdviceChannelId String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model DiscordUserLink {
+  id            Int      @id @default(autoincrement())
+  discordUserId String   @unique
+  guildId       String?
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ConversationSession {
+  id                Int                  @id @default(autoincrement())
+  workflow          String
+  status            String               @default("draft")
+  guildId           String
+  channelId         String
+  threadId          String?              @unique
+  discordUserId     String
+  requestedServings Int?
+  metadata          Json                 @default("{}")
+  approvedAt        DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  turns             ConversationTurn[]
+  recipeImportDraft RecipeImportDraft?
+
+  @@index([guildId, workflow, createdAt])
+  @@index([discordUserId, createdAt])
+}
+
+model ConversationTurn {
+  id         Int                 @id @default(autoincrement())
+  sessionId  Int
+  actorType  String
+  actorId    String
+  eventType  String
+  payload    Json                @default("{}")
+  createdAt  DateTime            @default(now())
+  session    ConversationSession @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId, createdAt])
+}
+
+model RecipeImportDraft {
+  id               Int                 @id @default(autoincrement())
+  sessionId        Int                 @unique
+  sourceUrl        String
+  requestedServings Int
+  extractedRecipe  Json
+  reviewFields     Json                @default("[]")
+  status           String              @default("draft")
+  createdRecipeId  Int?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  session          ConversationSession @relation(fields: [sessionId], references: [id])
+
+  @@index([status, createdAt])
 }

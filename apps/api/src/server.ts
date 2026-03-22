@@ -8,6 +8,7 @@ import { registerShoppingRoutes } from './routes/shopping.js'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerPreferencesRoutes } from './routes/preferences.js'
+import { registerInternalDiscordRoutes } from './routes/internalDiscord.js'
 import { startWeeklyEmailJob } from './jobs/weeklyEmailJob.js'
 
 const envPort = process.env['API_PORT']
@@ -29,6 +30,7 @@ async function buildApp() {
   await registerHealthRoutes(app)
   await registerAuthRoutes(app)
   await registerPreferencesRoutes(app)
+  await registerInternalDiscordRoutes(app)
   await registerRecipeRoutes(app)
   await registerWeeklyMenuRoutes(app)
   await registerConsultationRoutes(app)

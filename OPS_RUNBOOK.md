@@ -14,6 +14,7 @@
 
 - `web`: 静的 frontend 配信
 - `api`: Fastify API と定期ジョブ
+- `discord-bot`: Discord slash command / thread workflow
 - `postgres`: 永続 DB
 - `nginx`: 公開 reverse proxy / TLS 終端
 
@@ -30,11 +31,13 @@
 
 1. `.env` を `env.example` から作る
 2. `APP_DOMAIN`, `FRONTEND_URL`, `DATABASE_URL`, `DB_PASSWORD`, `JWT_SECRET` を設定する
-3. `mkdir -p backups ssl`
-4. `bash scripts/ops/kitchenctl.sh up`
-5. 初回 `up` で self-signed 証明書が自動生成される
-6. 初回 TLS 発行後に `bash scripts/ops/kitchenctl.sh sync-cert`
-7. `bash scripts/ops/kitchenctl.sh health`
+3. Discord を使う場合は `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`, `DISCORD_GUILD_ID`, `DISCORD_INTERNAL_API_TOKEN` も設定する
+4. `mkdir -p backups ssl`
+5. `bash scripts/ops/kitchenctl.sh up`
+6. 初回 `up` で self-signed 証明書が自動生成される
+7. 初回 TLS 発行後に `bash scripts/ops/kitchenctl.sh sync-cert`
+8. `bash scripts/ops/kitchenctl.sh health`
+9. Discord 上の各チャンネルで `/bind-channel` を実行して workflow を紐付ける
 
 ## 日常運用コマンド
 
@@ -80,5 +83,6 @@ bash /path/to/repo/scripts/ops/sync-letsencrypt.sh
 ## 既知の制約
 
 - `api` の weekly email job は単一インスタンス前提
+- `discord-bot` は `DISCORD_GUILD_ID` を使った guild command 前提
 - Docker 実行環境がないと Compose 実起動検証はできない
 - 監視通知は別途 Uptime Kuma / Hetzner monitoring / external alerting を追加するとさらに安定する

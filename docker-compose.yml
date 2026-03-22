@@ -50,6 +50,27 @@ services:
     networks:
       - kitchen-net
 
+  discord-bot:
+    build:
+      context: .
+      dockerfile: apps/discord-bot/Dockerfile
+    init: true
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Tokyo
+      KITCHEN_API_BASE_URL: http://api:3001
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - kitchen-net
+
   postgres:
     image: postgres:17-alpine
     init: true
