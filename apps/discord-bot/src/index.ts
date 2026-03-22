@@ -13,6 +13,7 @@ import {
   ThreadAutoArchiveDuration,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
+  type Message,
   type ModalSubmitInteraction,
 } from 'discord.js'
 import { z } from 'zod'
@@ -77,6 +78,14 @@ function getRequiredEnv(name: string): string {
   return value
 }
 
+function logBotEvent(event: string, data: Record<string, unknown>): void {
+  console.log(JSON.stringify({
+    scope: 'discord-bot',
+    event,
+    ...data,
+  }))
+}
+
 function buildCommands() {
   return [
     new SlashCommandBuilder()
@@ -136,6 +145,13 @@ async function ensureWorkflowChannel(interaction: ChatInputCommandInteraction, w
 
   const boundChannelId = await getWorkflowChannel({ guildId, workflow })
   if (!boundChannelId) {
+    logBotEvent('workflow_channel_missing', {
+      workflow,
+      guildId,
+      channelId,
+      commandName: interaction.commandName,
+      userId: interaction.user.id,
+    })
     await interaction.reply({
       content: `この workflow はまだチャンネル未設定です。対象チャンネルで \`/bind-channel workflow:${workflow}\` を先に実行してください。`,
       ephemeral: true,
@@ -144,6 +160,14 @@ async function ensureWorkflowChannel(interaction: ChatInputCommandInteraction, w
   }
 
   if (boundChannelId !== channelId) {
+    logBotEvent('workflow_channel_mismatch', {
+      workflow,
+      guildId,
+      channelId,
+      boundChannelId,
+      commandName: interaction.commandName,
+      userId: interaction.user.id,
+    })
     await interaction.reply({
       content: `このコマンドは紐付け済みチャンネルでのみ使えます。現在の workflow チャンネル: <#${boundChannelId}>`,
       ephemeral: true,
@@ -152,6 +176,60 @@ async function ensureWorkflowChannel(interaction: ChatInputCommandInteraction, w
   }
 
   return true
+}
+
+function parseTextWeeklyPlanRequest(content: string): { servings?: number } | null {
+  const normalized = content.trim()
+  if (!normalized.startsWith('/plan-week')) return null
+
+  const servingsMatch = normalized.match(/servings\s*[:=]\s*(\d{1,2})/i)
+  if (!servingsMatch) return {}
+
+  const servings = Number.parseInt(servingsMatch[1] ?? '', 10)
+  if (!Number.isInteger(servings) || servings < 1 || servings > 20) return {}
+  return { servings }
+}
+
+async function handlePlainTextWorkflowHint(message: Message): Promise<void> {
+  if (message.author.bot || !message.guildId) return
+
+  const parsed = parseTextWeeklyPlanRequest(message.content)
+  if (!parsed) return
+
+  const boundChannelId = await getWorkflowChannel({
+    guildId: message.guildId,
+    workflow: 'weekly_menu',
+  })
+  if (boundChannelId !== message.channelId) {
+    logBotEvent('plain_text_weekly_plan_wrong_channel', {
+      guildId: message.guildId,
+      channelId: message.channelId,
+      boundChannelId,
+      userId: message.author.id,
+      content: message.content,
+    })
+    return
+  }
+
+  logBotEvent('plain_text_weekly_plan_hint', {
+    guildId: message.guildId,
+    channelId: message.channelId,
+    userId: message.author.id,
+    content: message.content,
+    servings: parsed.servings ?? null,
+  })
+
+  const servingsHint = parsed.servings
+    ? `候補欄から **/plan-week** を選んで、\`servings\` に **${parsed.servings}** を入れて送信してください。`
+    : '候補欄から **/plan-week** を選んで、\`servings\` を入れて送信してください。'
+
+  await message.reply({
+    content: [
+      'これは slash command ではなく通常メッセージとして送信されています。',
+      servingsHint,
+      'モバイルでは、入力欄で `/plan-week` を選んでから送信すると実行されます。',
+    ].join('\n'),
+  })
 }
 
 async function handleBindChannel(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -353,18 +431,28 @@ async function handleRecipeImportModal(interaction: ModalSubmitInteraction): Pro
 async function main(): Promise<void> {
   const token = getRequiredEnv('DISCORD_BOT_TOKEN')
   const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+    ],
   })
 
   client.once('clientReady', async (readyClient) => {
     await registerCommands()
     readyClient.user.setActivity('Kitchen workflows')
-    console.log(`Discord bot ready: ${readyClient.user.tag}`)
+    logBotEvent('ready', { userTag: readyClient.user.tag })
   })
 
   client.on('interactionCreate', async (interaction) => {
     try {
       if (interaction.isChatInputCommand()) {
+        logBotEvent('slash_command_received', {
+          commandName: interaction.commandName,
+          guildId: interaction.guildId ?? null,
+          channelId: interaction.channelId,
+          userId: interaction.user.id,
+        })
         if (interaction.commandName === 'bind-channel') {
           await handleBindChannel(interaction)
           return
@@ -407,6 +495,15 @@ async function main(): Promise<void> {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      logBotEvent('interaction_error', {
+        interactionType: interaction.type,
+        commandName: interaction.isChatInputCommand() ? interaction.commandName : null,
+        customId: 'customId' in interaction ? interaction.customId : null,
+        guildId: interaction.guildId ?? null,
+        channelId: interaction.channelId,
+        userId: interaction.user?.id ?? null,
+        error: message,
+      })
       if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
         await interaction.reply({ content: `処理に失敗しました: ${message}`, ephemeral: true })
         return
@@ -415,6 +512,20 @@ async function main(): Promise<void> {
       if (interaction.isRepliable()) {
         await interaction.followUp({ content: `処理に失敗しました: ${message}`, ephemeral: true })
       }
+    }
+  })
+
+  client.on('messageCreate', async (message) => {
+    try {
+      await handlePlainTextWorkflowHint(message)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logBotEvent('message_fallback_error', {
+        guildId: message.guildId ?? null,
+        channelId: message.channelId,
+        userId: message.author.id,
+        error: errorMessage,
+      })
     }
   })
 
