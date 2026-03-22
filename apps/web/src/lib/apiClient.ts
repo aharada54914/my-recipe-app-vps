@@ -82,6 +82,17 @@ export class ApiError extends Error {
   }
 }
 
+export function resolveRequestUrl(baseUrl: string, path: string): string {
+  const trimmedBase = baseUrl.replace(/\/+$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+
+  if (trimmedBase.endsWith('/api') && normalizedPath.startsWith('/api/')) {
+    return `${trimmedBase}${normalizedPath.slice(4)}`
+  }
+
+  return `${trimmedBase}${normalizedPath}`
+}
+
 async function request<T>(
   path: string,
   options: {
@@ -91,7 +102,7 @@ async function request<T>(
     skipAuth?: boolean
   } = {},
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path}`
+  const url = resolveRequestUrl(API_BASE_URL, path)
   const token = options.skipAuth ? null : (options.token ?? getToken())
 
   const headers: Record<string, string> = {
