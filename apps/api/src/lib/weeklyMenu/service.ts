@@ -65,7 +65,11 @@ function selectRecipeForDay(params: {
   dayIndex: number
   notes?: string
 }): RecipeRecordLite {
-  const ranked = params.recipes
+  const availablePool = params.recipes.some((recipe) => !params.selectedRecipeIds.has(recipe.id))
+    ? params.recipes.filter((recipe) => !params.selectedRecipeIds.has(recipe.id))
+    : params.recipes
+
+  const ranked = availablePool
     .map((recipe) => ({
       recipe,
       score: buildWeeklyMenuDayScore({
@@ -90,7 +94,7 @@ function selectRecipeForDay(params: {
 async function loadWeeklyCandidateRecipes(): Promise<RecipeRecordLite[]> {
   return prisma.recipe.findMany({
     where: {
-      category: { in: ['主菜', '一品料理', '副菜'] },
+      category: { in: ['主菜', '一品料理'] },
     },
     select: {
       id: true,

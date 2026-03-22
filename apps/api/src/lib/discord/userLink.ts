@@ -16,26 +16,20 @@ function buildSyntheticEmail(input: EnsureDiscordAppUserInput): string {
 export async function ensureDiscordAppUser(input: EnsureDiscordAppUserInput): Promise<{
   userId: string
 }> {
-  const existingLink = await prisma.discordUserLink.findFirst({
+  const existingLink = await prisma.discordUserLink.findUnique({
     where: {
       discordUserId: input.discordUserId,
-      OR: [
-        { guildId: input.guildId },
-        { guildId: null },
-      ],
     },
-    select: { userId: true },
-    orderBy: { createdAt: 'asc' },
+    select: { id: true, userId: true, guildId: true },
   })
 
   if (existingLink) {
-    await prisma.discordUserLink.updateMany({
-      where: {
-        discordUserId: input.discordUserId,
-        guildId: null,
-      },
-      data: { guildId: input.guildId },
-    })
+    if (existingLink.guildId !== input.guildId) {
+      await prisma.discordUserLink.update({
+        where: { id: existingLink.id },
+        data: { guildId: input.guildId },
+      })
+    }
     return { userId: existingLink.userId }
   }
 
