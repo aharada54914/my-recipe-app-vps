@@ -13,7 +13,6 @@ import {
   ThreadAutoArchiveDuration,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
-  type Message,
   type ModalSubmitInteraction,
 } from 'discord.js'
 import { z } from 'zod'
@@ -176,60 +175,6 @@ async function ensureWorkflowChannel(interaction: ChatInputCommandInteraction, w
   }
 
   return true
-}
-
-function parseTextWeeklyPlanRequest(content: string): { servings?: number } | null {
-  const normalized = content.trim()
-  if (!normalized.startsWith('/plan-week')) return null
-
-  const servingsMatch = normalized.match(/servings\s*[:=]\s*(\d{1,2})/i)
-  if (!servingsMatch) return {}
-
-  const servings = Number.parseInt(servingsMatch[1] ?? '', 10)
-  if (!Number.isInteger(servings) || servings < 1 || servings > 20) return {}
-  return { servings }
-}
-
-async function handlePlainTextWorkflowHint(message: Message): Promise<void> {
-  if (message.author.bot || !message.guildId) return
-
-  const parsed = parseTextWeeklyPlanRequest(message.content)
-  if (!parsed) return
-
-  const boundChannelId = await getWorkflowChannel({
-    guildId: message.guildId,
-    workflow: 'weekly_menu',
-  })
-  if (boundChannelId !== message.channelId) {
-    logBotEvent('plain_text_weekly_plan_wrong_channel', {
-      guildId: message.guildId,
-      channelId: message.channelId,
-      boundChannelId,
-      userId: message.author.id,
-      content: message.content,
-    })
-    return
-  }
-
-  logBotEvent('plain_text_weekly_plan_hint', {
-    guildId: message.guildId,
-    channelId: message.channelId,
-    userId: message.author.id,
-    content: message.content,
-    servings: parsed.servings ?? null,
-  })
-
-  const servingsHint = parsed.servings
-    ? `候補欄から **/plan-week** を選んで、\`servings\` に **${parsed.servings}** を入れて送信してください。`
-    : '候補欄から **/plan-week** を選んで、\`servings\` を入れて送信してください。'
-
-  await message.reply({
-    content: [
-      'これは slash command ではなく通常メッセージとして送信されています。',
-      servingsHint,
-      'モバイルでは、入力欄で `/plan-week` を選んでから送信すると実行されます。',
-    ].join('\n'),
-  })
 }
 
 async function handleBindChannel(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -431,11 +376,7 @@ async function handleRecipeImportModal(interaction: ModalSubmitInteraction): Pro
 async function main(): Promise<void> {
   const token = getRequiredEnv('DISCORD_BOT_TOKEN')
   const client = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.MessageContent,
-    ],
+    intents: [GatewayIntentBits.Guilds],
   })
 
   client.once('clientReady', async (readyClient) => {
@@ -512,20 +453,6 @@ async function main(): Promise<void> {
       if (interaction.isRepliable()) {
         await interaction.followUp({ content: `処理に失敗しました: ${message}`, ephemeral: true })
       }
-    }
-  })
-
-  client.on('messageCreate', async (message) => {
-    try {
-      await handlePlainTextWorkflowHint(message)
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logBotEvent('message_fallback_error', {
-        guildId: message.guildId ?? null,
-        channelId: message.channelId,
-        userId: message.author.id,
-        error: errorMessage,
-      })
     }
   })
 
