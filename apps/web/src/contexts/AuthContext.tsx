@@ -3,6 +3,13 @@ import { useGoogleLogin } from '@react-oauth/google'
 import { AuthContext } from './authContextDef'
 import type { GoogleUser, AuthContextValue } from './authContextDef'
 import {
+  clearToken,
+  exchangeGoogleSession,
+  fetchCurrentUser,
+  getToken as getSessionToken,
+  refreshToken,
+} from '../lib/apiClient'
+import {
   getQaGoogleModeEventName,
   getQaGoogleMockToken,
   getQaGoogleMockUser,
@@ -17,11 +24,29 @@ const TOKEN_KEY = 'google_access_token'
 const TOKEN_EXPIRY_KEY = 'google_token_expiry'
 const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 
-function clearAuthStorage() {
+function clearGoogleAuthStorage() {
   try {
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(TOKEN_EXPIRY_KEY)
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function clearAuthStorage() {
+  clearGoogleAuthStorage()
+  clearToken()
+}
+
+function persistGoogleUser(user: GoogleUser | null) {
+  try {
+    if (!user) {
+      localStorage.removeItem(USER_KEY)
+      return
+    }
+
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
   } catch {
     // ignore storage errors
   }
@@ -71,17 +96,36 @@ function loadStoredUser(): GoogleUser | null {
   }
 }
 
+function toGoogleUser(input: {
+  sub: string
+  email: string
+  name: string | null
+  picture?: string
+}): GoogleUser {
+  return {
+    sub: input.sub,
+    email: input.email,
+    name: input.name ?? input.email,
+    picture: input.picture,
+  }
+}
+
+function mergeStoredPicture(nextUser: GoogleUser, previousUser: GoogleUser | null): GoogleUser {
+  return {
+    ...nextUser,
+    picture: nextUser.picture ?? previousUser?.picture,
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [qaEnabled, setQaEnabled] = useState(() => isQaGoogleModeEnabled())
   const [user, setUser] = useState<GoogleUser | null>(() => loadStoredUser())
   const [loading, setLoading] = useState(false)
   const [providerToken, setProviderToken] = useState<string | null>(() => loadStoredToken())
-  // Use state for client ID to allow dynamic updates from settings
   const [clientId, setClientId] = useState<string | undefined>(() => {
     return (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || undefined
   })
 
-  // Listen for local storage changes from other tabs/components
   useEffect(() => {
     const handleStorage = () => {
       const stored = localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || undefined
@@ -90,7 +134,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     window.addEventListener('storage', handleStorage)
-    // Also poll occasionally in case of same-window manual changes
     const interval = setInterval(handleStorage, 1000)
     return () => {
       window.removeEventListener('storage', handleStorage)
@@ -112,12 +155,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const storeToken = useCallback((token: string, expiresIn: number) => {
+  const storeProviderToken = useCallback((token: string, expiresIn: number) => {
     const expiry = new Date(Date.now() + expiresIn * 1000).toISOString()
     try {
       localStorage.setItem(TOKEN_KEY, token)
       localStorage.setItem(TOKEN_EXPIRY_KEY, expiry)
-    } catch { /* ignore storage errors */ }
+    } catch {
+      // ignore storage errors
+    }
     setProviderToken(token)
   }, [])
 
@@ -181,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       providerToken={providerToken}
       setLoading={setLoading}
       setUser={setUser}
-      storeToken={storeToken}
+      storeProviderToken={storeProviderToken}
       setProviderToken={setProviderToken}
     >
       {children}
@@ -195,7 +240,7 @@ interface OAuthEnabledAuthProviderProps {
   providerToken: string | null
   setLoading: (value: boolean) => void
   setUser: (value: GoogleUser | null) => void
-  storeToken: (token: string, expiresIn: number) => void
+  storeProviderToken: (token: string, expiresIn: number) => void
   setProviderToken: (value: string | null) => void
   children: ReactNode
 }
@@ -206,40 +251,63 @@ function OAuthEnabledAuthProvider({
   providerToken,
   setLoading,
   setUser,
-  storeToken,
+  storeProviderToken,
   setProviderToken,
   children,
 }: OAuthEnabledAuthProviderProps) {
-  // Silent refresh: no UI prompt, uses existing Google session cookie
+  const updateUser = useCallback((nextUser: GoogleUser | null) => {
+    setUser(nextUser)
+    persistGoogleUser(nextUser)
+  }, [setUser])
+
+  const clearSession = useCallback(() => {
+    updateUser(null)
+    setProviderToken(null)
+    clearAuthStorage()
+  }, [setProviderToken, updateUser])
+
+  const syncServerSession = useCallback(async (
+    accessToken: string,
+    expiresIn?: number,
+  ): Promise<GoogleUser> => {
+    const response = await exchangeGoogleSession({ accessToken, expiresIn })
+    const nextUser = mergeStoredPicture(toGoogleUser(response.user), loadStoredUser())
+    updateUser(nextUser)
+
+    if (response.providerToken && expiresIn) {
+      storeProviderToken(response.providerToken, expiresIn)
+    }
+
+    return nextUser
+  }, [storeProviderToken, updateUser])
+
   const silentGoogleLogin = useGoogleLogin({
     scope: SCOPES,
     prompt: 'none',
-    onSuccess: (tokenResponse) => {
-      storeToken(tokenResponse.access_token, tokenResponse.expires_in)
+    onSuccess: async (tokenResponse) => {
+      try {
+        storeProviderToken(tokenResponse.access_token, tokenResponse.expires_in)
+        await syncServerSession(tokenResponse.access_token, tokenResponse.expires_in)
+      } catch {
+        clearSession()
+      }
     },
     onError: () => {
-      // Silent refresh failed (Google session expired) — clear auth state so login UI reappears
-      setUser(null)
-      setProviderToken(null)
-      clearAuthStorage()
+      clearSession()
     },
   })
 
   const googleLogin = useGoogleLogin({
     scope: SCOPES,
     onSuccess: async (tokenResponse) => {
-      storeToken(tokenResponse.access_token, tokenResponse.expires_in)
       try {
-        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-        })
-        if (res.ok) {
-          const userInfo = (await res.json()) as GoogleUser
-          setUser(userInfo)
-          localStorage.setItem(USER_KEY, JSON.stringify(userInfo))
-        }
-      } catch { /* ignore fetch errors */ }
-      setLoading(false)
+        storeProviderToken(tokenResponse.access_token, tokenResponse.expires_in)
+        await syncServerSession(tokenResponse.access_token, tokenResponse.expires_in)
+      } catch {
+        clearSession()
+      } finally {
+        setLoading(false)
+      }
     },
     onError: () => {
       setLoading(false)
@@ -252,19 +320,72 @@ function OAuthEnabledAuthProvider({
   }, [googleLogin, setLoading])
 
   const signOut = useCallback(() => {
-    setUser(null)
-    setProviderToken(null)
-    clearAuthStorage()
-  }, [setProviderToken, setUser])
+    clearSession()
+  }, [clearSession])
 
-  // On mount and whenever token disappears: attempt silent refresh if user is known
+  useEffect(() => {
+    let cancelled = false
+
+    const hydrateFromServer = async () => {
+      const sessionToken = getSessionToken()
+      if (!sessionToken) return
+
+      setLoading(true)
+      try {
+        const refreshedToken = await refreshToken()
+        if (!refreshedToken) {
+          if (!cancelled) clearSession()
+          return
+        }
+
+        const currentUser = await fetchCurrentUser()
+        if (!cancelled && currentUser) {
+          const nextUser = mergeStoredPicture(toGoogleUser(currentUser), loadStoredUser())
+          updateUser(nextUser)
+        }
+      } catch {
+        if (!cancelled) clearSession()
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void hydrateFromServer()
+
+    return () => {
+      cancelled = true
+    }
+  }, [clearSession, setLoading, updateUser])
+
+  useEffect(() => {
+    if (!user || !providerToken || getSessionToken()) return
+
+    let cancelled = false
+
+    const backfillServerSession = async () => {
+      setLoading(true)
+      try {
+        await syncServerSession(providerToken)
+      } catch {
+        if (!cancelled) clearSession()
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void backfillServerSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [clearSession, providerToken, setLoading, syncServerSession, user])
+
   useEffect(() => {
     if (user && !providerToken) {
       silentGoogleLogin()
     }
   }, [user, providerToken, silentGoogleLogin])
 
-  // Schedule silent refresh 5 minutes before token expires
   useEffect(() => {
     if (!providerToken) return
     const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
@@ -278,19 +399,25 @@ function OAuthEnabledAuthProvider({
     return () => clearTimeout(timer)
   }, [providerToken, silentGoogleLogin])
 
-  // iOS PWA: refresh when app comes back to foreground after being backgrounded
   useEffect(() => {
     if (!user) return
+
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
+
+      if (getSessionToken()) {
+        void refreshToken()
+      }
+
       const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
       if (!expiry || new Date(expiry) <= new Date()) {
         silentGoogleLogin()
       }
     }
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [user, silentGoogleLogin])
+  }, [silentGoogleLogin, user])
 
   return (
     <AuthContext.Provider value={{

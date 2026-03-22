@@ -8,6 +8,18 @@ const GoogleTokenSchema = z.object({
   code: z.string().min(1),
 })
 
+const GoogleSessionSchema = z.object({
+  accessToken: z.string().min(1),
+  expiresIn: z.number().int().positive().optional(),
+})
+
+type GoogleProfile = {
+  id: string
+  email: string
+  name: string | null
+  picture?: string | null
+}
+
 function getOAuth2Client() {
   const clientId = process.env['GOOGLE_CLIENT_ID']
   const clientSecret = process.env['GOOGLE_CLIENT_SECRET']
@@ -20,6 +32,80 @@ function getOAuth2Client() {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
 }
 
+async function getGoogleProfileFromAccessToken(accessToken: string): Promise<GoogleProfile> {
+  const oauth2Client = new google.auth.OAuth2()
+  oauth2Client.setCredentials({ access_token: accessToken })
+
+  const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
+  const { data: userInfo } = await oauth2.userinfo.get()
+
+  if (!userInfo.id || !userInfo.email) {
+    throw new Error('Failed to retrieve user information from Google')
+  }
+
+  return {
+    id: userInfo.id,
+    email: userInfo.email,
+    name: userInfo.name ?? null,
+    picture: userInfo.picture ?? null,
+  }
+}
+
+async function upsertGoogleUserSession(input: {
+  profile: GoogleProfile
+  accessToken?: string
+  refreshToken?: string
+}) {
+  const { profile, accessToken, refreshToken } = input
+
+  return prisma.user.upsert({
+    where: { id: profile.id },
+    update: {
+      email: profile.email,
+      name: profile.name ?? undefined,
+      googleAccessToken: accessToken ?? undefined,
+      googleRefreshToken: refreshToken ?? undefined,
+    },
+    create: {
+      id: profile.id,
+      email: profile.email,
+      name: profile.name ?? undefined,
+      googleAccessToken: accessToken ?? undefined,
+      googleRefreshToken: refreshToken ?? undefined,
+    },
+  })
+}
+
+function buildAuthResponse(
+  app: FastifyInstance,
+  user: {
+    id: string
+    email: string
+    name: string | null
+  },
+  profile: GoogleProfile,
+  providerToken?: string,
+  providerTokenExpiry?: string,
+) {
+  const jwt = app.jwt.sign({
+    sub: user.id,
+    email: user.email,
+    name: user.name ?? undefined,
+  })
+
+  return {
+    token: jwt,
+    user: {
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      picture: profile.picture ?? undefined,
+    },
+    providerToken,
+    providerTokenExpiry,
+  }
+}
+
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   // Exchange Google auth code for JWT
   app.post('/api/auth/google', async (request, reply) => {
@@ -30,53 +116,27 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const { tokens } = await oauth2Client.getToken(code)
       oauth2Client.setCredentials(tokens)
 
-      // Get user info from Google
-      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
-      const { data: userInfo } = await oauth2.userinfo.get()
-
-      if (!userInfo.id || !userInfo.email) {
+      if (!tokens.access_token) {
         reply.status(400).send({
           success: false,
-          error: 'Failed to retrieve user information from Google',
+          error: 'Failed to retrieve Google access token',
         })
         return
       }
 
-      // Upsert user in database
-      const user = await prisma.user.upsert({
-        where: { id: userInfo.id },
-        update: {
-          email: userInfo.email,
-          name: userInfo.name ?? undefined,
-          googleAccessToken: tokens.access_token ?? undefined,
-          googleRefreshToken: tokens.refresh_token ?? undefined,
-        },
-        create: {
-          id: userInfo.id,
-          email: userInfo.email,
-          name: userInfo.name ?? undefined,
-          googleAccessToken: tokens.access_token ?? undefined,
-          googleRefreshToken: tokens.refresh_token ?? undefined,
-        },
+      const profile = await getGoogleProfileFromAccessToken(tokens.access_token)
+      const user = await upsertGoogleUserSession({
+        profile,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? undefined,
       })
-
-      // Generate JWT
-      const jwt = app.jwt.sign({
-        sub: user.id,
-        email: user.email,
-        name: user.name ?? undefined,
-      })
+      const providerTokenExpiry = typeof tokens.expiry_date === 'number'
+        ? new Date(tokens.expiry_date).toISOString()
+        : undefined
 
       reply.send({
         success: true,
-        data: {
-          token: jwt,
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-          },
-        },
+        data: buildAuthResponse(app, user, profile, tokens.access_token, providerTokenExpiry),
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -84,6 +144,33 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       reply.status(500).send({
         success: false,
         error: `Authentication failed: ${message}`,
+      })
+    }
+  })
+
+  app.post('/api/auth/google/session', async (request, reply) => {
+    try {
+      const { accessToken, expiresIn } = GoogleSessionSchema.parse(request.body)
+      const profile = await getGoogleProfileFromAccessToken(accessToken)
+      const user = await upsertGoogleUserSession({
+        profile,
+        accessToken,
+      })
+
+      const providerTokenExpiry = expiresIn
+        ? new Date(Date.now() + expiresIn * 1000).toISOString()
+        : undefined
+
+      reply.send({
+        success: true,
+        data: buildAuthResponse(app, user, profile, accessToken, providerTokenExpiry),
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      app.log.error({ err }, 'Google session sync error')
+      reply.status(500).send({
+        success: false,
+        error: `Google session sync failed: ${message}`,
       })
     }
   })

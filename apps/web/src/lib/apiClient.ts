@@ -23,6 +23,20 @@ const API_BASE_URL = resolveApiBaseUrl()
 
 const TOKEN_KEY = 'kitchen_jwt'
 
+export interface AuthenticatedUser {
+  sub: string
+  email: string
+  name: string | null
+  picture?: string
+}
+
+export interface GoogleAuthExchangeResponse {
+  token: string
+  user: AuthenticatedUser
+  providerToken?: string
+  providerTokenExpiry?: string
+}
+
 // --- Token management ---
 
 export function getToken(): string | null {
@@ -133,17 +147,36 @@ export async function apiDelete<T>(path: string): Promise<T> {
 
 export async function exchangeGoogleCode(code: string): Promise<{
   token: string
-  user: { id: string; email: string; name: string | null }
+  user: AuthenticatedUser
+  providerToken?: string
+  providerTokenExpiry?: string
 }> {
   const result = await request<{
     success: boolean
-    data: {
-      token: string
-      user: { id: string; email: string; name: string | null }
-    }
+    data: GoogleAuthExchangeResponse
   }>('/api/auth/google', {
     method: 'POST',
     body: { code },
+    skipAuth: true,
+  })
+
+  if (result.data?.token) {
+    setToken(result.data.token)
+  }
+
+  return result.data
+}
+
+export async function exchangeGoogleSession(input: {
+  accessToken: string
+  expiresIn?: number
+}): Promise<GoogleAuthExchangeResponse> {
+  const result = await request<{
+    success: boolean
+    data: GoogleAuthExchangeResponse
+  }>('/api/auth/google/session', {
+    method: 'POST',
+    body: input,
     skipAuth: true,
   })
 
@@ -169,6 +202,27 @@ export async function refreshToken(): Promise<string | null> {
   } catch {
     clearToken()
     return null
+  }
+}
+
+export async function fetchCurrentUser(): Promise<AuthenticatedUser | null> {
+  const result = await request<{
+    success: boolean
+    data: {
+      id: string
+      email: string
+      name: string | null
+    }
+  }>('/api/auth/me')
+
+  if (!result.data?.id || !result.data?.email) {
+    return null
+  }
+
+  return {
+    sub: result.data.id,
+    email: result.data.email,
+    name: result.data.name,
   }
 }
 
