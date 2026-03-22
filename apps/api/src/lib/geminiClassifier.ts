@@ -6,12 +6,14 @@ const VALID_CATEGORIES: readonly ShoppingCategory[] = [
   '調味料', '冷凍食品', '乾物・缶詰', '豆腐・大豆製品', 'その他',
 ] as const
 
+const DEFAULT_GEMINI_CLASSIFIER_MODEL = 'gemini-2.0-flash-lite'
+
 export async function askGeminiClassification(ingredientName: string): Promise<ShoppingCategory> {
   const apiKey = process.env['GEMINI_API_KEY']
   if (!apiKey) return 'その他'
 
   const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: DEFAULT_GEMINI_CLASSIFIER_MODEL })
 
   const prompt = `食材「${ingredientName}」をスーパーマーケットの売り場に分類してください。
 以下のカテゴリの中から1つだけ選んで、カテゴリ名のみを回答してください:

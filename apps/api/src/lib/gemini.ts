@@ -2,6 +2,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 let genAI: GoogleGenerativeAI | null = null
 
+const DEFAULT_GEMINI_TEXT_MODEL = 'gemini-2.0-flash-lite'
+const DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-2.0-flash'
+
 function getGenAI(): GoogleGenerativeAI {
   if (genAI) return genAI
 
@@ -24,7 +27,10 @@ export function extractJsonObjectText(text: string): string {
   return match ? match[0] : stripped
 }
 
-export async function generateGeminiText(prompt: string, modelName = 'gemini-2.0-flash-lite'): Promise<string> {
+export async function generateGeminiText(
+  prompt: string,
+  modelName = DEFAULT_GEMINI_TEXT_MODEL,
+): Promise<string> {
   const ai = getGenAI()
   const model = ai.getGenerativeModel({ model: modelName })
   const result = await model.generateContent(prompt)
@@ -46,7 +52,7 @@ export async function askGeminiConsultation(
   context: ConsultationContext,
 ): Promise<string> {
   const ai = getGenAI()
-  const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = ai.getGenerativeModel({ model: DEFAULT_GEMINI_TEXT_MODEL })
 
   const systemParts: string[] = [
     'あなたは家庭料理のアドバイザーです。ホットクックやヘルシオを使った料理について相談を受けます。',
@@ -101,7 +107,7 @@ export interface InlineImagePart {
 export async function generateGeminiTextFromImageAndPrompt(
   prompt: string,
   image: InlineImagePart,
-  modelName = 'gemini-2.0-flash',
+  modelName = DEFAULT_GEMINI_IMAGE_MODEL,
 ): Promise<string> {
   const ai = getGenAI()
   const model = ai.getGenerativeModel({ model: modelName })
