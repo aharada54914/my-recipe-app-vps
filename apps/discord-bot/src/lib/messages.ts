@@ -82,7 +82,12 @@ export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSumma
       ...(proposal.notes ? [`**メモ**: ${proposal.notes}`] : []),
       '',
       ...proposal.items.map((item, index) =>
-        `**${index + 1}日目 ${item.date}** ${item.recipeTitle} / ${item.category} / ${item.device} / 今回${item.servings}人分 (元${item.baseServings}人分) / 天気:${item.weatherText} ${item.maxTempC}℃ 雨${item.precipitationMm}mm`,
+        [
+          `**${index + 1}日目 ${item.date}** 主菜: ${item.recipeTitle} / ${item.category} / ${item.device}`,
+          item.sideRecipeTitle ? `副菜: ${item.sideRecipeTitle} / ${item.sideCategory} / ${item.sideDevice}` : '副菜: なし',
+          `人数: 今回${item.servings}人分 (元${item.baseServings}人分) / 天気:${item.weatherText} ${item.maxTempC}℃ 雨${item.precipitationMm}mm`,
+          item.scoreSummary ? `選定理由: ${item.scoreSummary}` : '',
+        ].filter(Boolean).join('\n'),
       ),
     ].join('\n'))
 

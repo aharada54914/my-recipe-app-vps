@@ -50,8 +50,8 @@ export function CalendarSettings() {
     loading,
     error,
     calendarCount: calendars.length,
-    selectedCalendarIdPresent: !!preferences.defaultCalendarId,
-  }), [calendars.length, error, isOAuthAvailable, isQaGoogleMode, loading, preferences.defaultCalendarId, providerToken, user])
+    selectedCalendarIdPresent: !!(preferences.defaultCalendarId || preferences.familyCalendarId),
+  }), [calendars.length, error, isOAuthAvailable, isQaGoogleMode, loading, preferences.defaultCalendarId, preferences.familyCalendarId, providerToken, user])
 
   const handleStatusAction = () => {
     switch (calendarStatus.actionId) {
@@ -115,22 +115,6 @@ export function CalendarSettings() {
       ) : error ? null : (
         <div ref={selectorRef} className="space-y-4">
           <div>
-            <label className="ui-field-label">デフォルト登録先カレンダー</label>
-            <select
-              value={preferences.defaultCalendarId ?? ''}
-              onChange={(e) => updatePreference('defaultCalendarId', e.target.value || undefined)}
-              className="ui-input"
-            >
-              <option value="">選択してください</option>
-              {calendars.map((cal) => (
-                <option key={cal.id} value={cal.id}>
-                  {cal.summary}{cal.primary ? ' (メイン)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
             <label className="ui-field-label">家族カレンダー</label>
             <select
               value={preferences.familyCalendarId ?? ''}
@@ -145,7 +129,26 @@ export function CalendarSettings() {
               ))}
             </select>
             <p className="mt-1 text-xs text-text-secondary">
-              家族の予定から献立を提案します
+              Discord の週間献立保存後や Web の「家族カレンダーに登録」は、この登録先を使います。
+            </p>
+          </div>
+
+          <div>
+            <label className="ui-field-label">個人のデフォルト登録先</label>
+            <select
+              value={preferences.defaultCalendarId ?? ''}
+              onChange={(e) => updatePreference('defaultCalendarId', e.target.value || undefined)}
+              className="ui-input"
+            >
+              <option value="">選択してください</option>
+              {calendars.map((cal) => (
+                <option key={cal.id} value={cal.id}>
+                  {cal.summary}{cal.primary ? ' (メイン)' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-text-secondary">
+              単品レシピの登録先として使います。未設定でも週間献立の家族カレンダー登録には影響しません。
             </p>
           </div>
 

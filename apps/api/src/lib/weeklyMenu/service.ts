@@ -1,14 +1,22 @@
 import type { InputJsonValue } from '@prisma/client/runtime/library'
 import type {
   ReplaceDiscordWeeklyMenuItemRequest,
-  WeeklyMenuItem,
   WeeklyMenuProposalItem,
+  WeeklyMenuProposalItem as WeeklyMenuProposalItemType,
+  WeeklyMenuItem,
   WeeklyMenuProposalSummary,
 } from '@kitchen/shared-types'
 import { prisma } from '../../db/client.js'
 import { ensureDiscordAppUser } from '../discord/userLink.js'
-import { buildWeeklyMenuDayScore, type RecipeRecordLite } from '../discord/recipeMatchers.js'
+import { normalizeUserPreferences } from '../userPreferences.js'
 import { getTokyoWeekForecast } from './tokyoWeather.js'
+import { ensureRecipeCatalogLoaded } from '../recipeCatalog.js'
+import {
+  buildWeeklyMenuProposalItems,
+  type PlannerForecastDay,
+  type PlannerRecipeRecord,
+} from './planner.js'
+import { WeeklyMenuProposalItemSchema } from '@kitchen/shared-types'
 
 function toJsonValue<T>(value: T): InputJsonValue {
   return value as InputJsonValue
@@ -25,6 +33,10 @@ function normalizeProposal(record: {
   approvedWeeklyMenuId: number | null
   session: { threadId: string | null }
 }): WeeklyMenuProposalSummary {
+  const items = Array.isArray(record.items)
+    ? WeeklyMenuProposalItemSchema.array().parse(record.items)
+    : []
+
   return {
     id: record.id,
     sessionId: record.sessionId,
@@ -32,7 +44,7 @@ function normalizeProposal(record: {
     status: record.status as WeeklyMenuProposalSummary['status'],
     requestedServings: record.requestedServings,
     weekStartDate: record.weekStartDate,
-    items: Array.isArray(record.items) ? (record.items as WeeklyMenuProposalItem[]) : [],
+    items,
     ...(record.notes ? { notes: record.notes } : {}),
     ...(record.approvedWeeklyMenuId ? { approvedWeeklyMenuId: record.approvedWeeklyMenuId } : {}),
   }
@@ -56,107 +68,65 @@ async function appendConversationTurn(params: {
   })
 }
 
-function selectRecipeForDay(params: {
-  recipes: RecipeRecordLite[]
-  selectedRecipeIds: Set<number>
-  weatherText: string
-  maxTempC: number
-  precipitationMm: number
-  dayIndex: number
-  notes?: string
-}): RecipeRecordLite {
-  const availablePool = params.recipes.some((recipe) => !params.selectedRecipeIds.has(recipe.id))
-    ? params.recipes.filter((recipe) => !params.selectedRecipeIds.has(recipe.id))
-    : params.recipes
+async function loadWeeklyPlanningContext(userId: string): Promise<{
+  recipes: PlannerRecipeRecord[]
+  preferences: ReturnType<typeof normalizeUserPreferences>
+  stockNames: Set<string>
+  recentRecipeIds: Set<number>
+  favoriteRecipeIds: Set<number>
+}> {
+  await ensureRecipeCatalogLoaded()
 
-  const ranked = availablePool
-    .map((recipe) => ({
-      recipe,
-      score: buildWeeklyMenuDayScore({
-        recipe,
-        selectedRecipeIds: params.selectedRecipeIds,
-        weatherText: params.weatherText,
-        maxTempC: params.maxTempC,
-        precipitationMm: params.precipitationMm,
-        dayIndex: params.dayIndex,
-        notes: params.notes,
-      }),
-    }))
-    .sort((left, right) => right.score - left.score)
+  const [user, recipes, stocks, favorites, recentMenus] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { preferences: true },
+    }),
+    prisma.recipe.findMany({
+      select: {
+        id: true,
+        title: true,
+        device: true,
+        category: true,
+        baseServings: true,
+        totalTimeMinutes: true,
+        ingredients: true,
+      },
+    }),
+    prisma.stock.findMany({
+      where: { userId, inStock: true },
+      select: { name: true },
+    }),
+    prisma.favorite.findMany({
+      where: { userId },
+      select: { recipeId: true },
+    }),
+    prisma.weeklyMenu.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      take: 4,
+      select: { items: true },
+    }),
+  ])
 
-  const selected = ranked[0]?.recipe
-  if (!selected) {
-    throw new Error('献立候補に使えるレシピがありません。')
-  }
-  return selected
-}
-
-async function loadWeeklyCandidateRecipes(): Promise<RecipeRecordLite[]> {
-  return prisma.recipe.findMany({
-    where: {
-      category: { in: ['主菜', '一品料理'] },
-    },
-    select: {
-      id: true,
-      title: true,
-      device: true,
-      category: true,
-      baseServings: true,
-      ingredients: true,
-    },
-    take: 400,
-  })
-}
-
-function buildProposalItems(params: {
-  requestedServings: number
-  recipes: RecipeRecordLite[]
-  forecastDays: Awaited<ReturnType<typeof getTokyoWeekForecast>>['days']
-  notes?: string
-  existingItems?: WeeklyMenuProposalItem[]
-  replaceDayIndex?: number
-}): WeeklyMenuProposalItem[] {
-  const selected = new Set<number>()
-  const items: WeeklyMenuProposalItem[] = []
-
-  params.forecastDays.forEach((day, index) => {
-    if (params.existingItems && params.replaceDayIndex !== index) {
-      const existing = params.existingItems[index]
-      if (existing) {
-        selected.add(existing.recipeId)
-        items.push(existing)
-        return
+  const recentRecipeIds = new Set<number>()
+  for (const menu of recentMenus) {
+    if (!Array.isArray(menu.items)) continue
+    for (const item of menu.items as WeeklyMenuItem[]) {
+      recentRecipeIds.add(item.recipeId)
+      if (item.sideRecipeId != null) {
+        recentRecipeIds.add(item.sideRecipeId)
       }
     }
+  }
 
-    const recipe = selectRecipeForDay({
-      recipes: params.recipes,
-      selectedRecipeIds: selected,
-      weatherText: day.weatherText,
-      maxTempC: day.maxTempC,
-      precipitationMm: day.precipitationMm,
-      dayIndex: index,
-      notes: params.notes,
-    })
-    selected.add(recipe.id)
-    items.push({
-      date: day.date,
-      weatherText: day.weatherText,
-      maxTempC: day.maxTempC,
-      precipitationMm: day.precipitationMm,
-      recipeId: recipe.id,
-      recipeTitle: recipe.title,
-      device: recipe.device as WeeklyMenuProposalItem['device'],
-      category: (recipe.category === '主菜' || recipe.category === '副菜' || recipe.category === 'スープ' || recipe.category === '一品料理' || recipe.category === 'スイーツ')
-        ? recipe.category
-        : '一品料理',
-      servings: params.requestedServings,
-      baseServings: recipe.baseServings,
-      ...(params.notes && params.replaceDayIndex === index ? { replacementNotes: params.notes } : {}),
-    })
-  })
-
-  return items
+  return {
+    recipes,
+    preferences: normalizeUserPreferences(user?.preferences),
+    stockNames: new Set(stocks.map((stock) => stock.name)),
+    recentRecipeIds,
+    favoriteRecipeIds: new Set(favorites.map((favorite) => favorite.recipeId)),
+  }
 }
 
 export async function createWeeklyMenuProposal(input: {
@@ -172,15 +142,19 @@ export async function createWeeklyMenuProposal(input: {
     guildId: input.guildId,
   })
 
-  const [forecast, recipes] = await Promise.all([
+  const [forecast, planning] = await Promise.all([
     getTokyoWeekForecast(),
-    loadWeeklyCandidateRecipes(),
+    loadWeeklyPlanningContext(userId),
   ])
 
-  const items = buildProposalItems({
+  const items = buildWeeklyMenuProposalItems({
     requestedServings: input.requestedServings,
-    recipes,
-    forecastDays: forecast.days,
+    recipes: planning.recipes,
+    forecastDays: forecast.days as PlannerForecastDay[],
+    preferences: planning.preferences,
+    stockNames: planning.stockNames,
+    recentRecipeIds: planning.recentRecipeIds,
+    favoriteRecipeIds: planning.favoriteRecipeIds,
     notes: input.notes,
   })
 
@@ -259,16 +233,22 @@ export async function replaceWeeklyMenuProposalItem(
     throw new Error('この献立案を更新できるのは作成したユーザーのみです。')
   }
 
-  const recipes = await loadWeeklyCandidateRecipes()
+  const planning = await loadWeeklyPlanningContext(existing.userId)
   const forecastDays = Array.isArray(existing.weatherSummary)
-    ? (existing.weatherSummary as unknown as Awaited<ReturnType<typeof getTokyoWeekForecast>>['days'])
+    ? (existing.weatherSummary as unknown as PlannerForecastDay[])
     : (await getTokyoWeekForecast()).days
-  const currentItems = Array.isArray(existing.items) ? (existing.items as WeeklyMenuProposalItem[]) : []
+  const currentItems: WeeklyMenuProposalItemType[] = Array.isArray(existing.items)
+    ? WeeklyMenuProposalItemSchema.array().parse(existing.items)
+    : []
 
-  const items = buildProposalItems({
+  const items = buildWeeklyMenuProposalItems({
     requestedServings: existing.requestedServings,
-    recipes,
+    recipes: planning.recipes,
     forecastDays,
+    preferences: planning.preferences,
+    stockNames: planning.stockNames,
+    recentRecipeIds: planning.recentRecipeIds,
+    favoriteRecipeIds: planning.favoriteRecipeIds,
     notes: input.notes,
     existingItems: currentItems,
     replaceDayIndex: input.dayIndex,
@@ -313,10 +293,14 @@ export async function approveWeeklyMenuProposal(id: number, discordUserId: strin
     throw new Error('この献立案を承認できるのは作成したユーザーのみです。')
   }
 
-  const items = Array.isArray(existing.items) ? (existing.items as WeeklyMenuProposalItem[]) : []
+  const items: WeeklyMenuProposalItem[] = Array.isArray(existing.items)
+    ? WeeklyMenuProposalItemSchema.array().parse(existing.items)
+    : []
   const weeklyItems: WeeklyMenuItem[] = items.map((item) => ({
     recipeId: item.recipeId,
+    ...(item.sideRecipeId ? { sideRecipeId: item.sideRecipeId } : {}),
     mainServings: item.servings,
+    ...(item.sideRecipeId ? { sideServings: item.servings } : {}),
     date: item.date,
     mealType: 'dinner',
     locked: true,

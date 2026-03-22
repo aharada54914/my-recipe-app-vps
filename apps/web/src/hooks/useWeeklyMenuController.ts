@@ -378,6 +378,14 @@ export function useWeeklyMenuController() {
       signInWithGoogle()
       return
     }
+    if (!preferences.familyCalendarId) {
+      addToast({
+        type: 'error',
+        message: '家族カレンダーが未設定です。設定 → カレンダー で「家族カレンダー」を先に選んでください',
+        durationMs: 5000,
+      })
+      return
+    }
 
     setRegistering(true)
     try {
@@ -398,11 +406,11 @@ export function useWeeklyMenuController() {
       if (result.errors.length > 0) {
         addToast({
           type: 'error',
-          message: `カレンダー登録: ${result.registered}件成功 / ${result.errors.length}件失敗`,
+          message: `家族カレンダー登録: ${result.registered}件成功 / ${result.errors.length}件失敗`,
           durationMs: 5000,
         })
       } else {
-        addToast({ type: 'success', message: `カレンダー登録が完了しました（${result.registered}件）`, durationMs: 4000 })
+        addToast({ type: 'success', message: `家族カレンダー登録が完了しました（${result.registered}件）`, durationMs: 4000 })
       }
 
       void learnTOptFromHistory(preferences.tOpt).then((updatedTOpt) => {

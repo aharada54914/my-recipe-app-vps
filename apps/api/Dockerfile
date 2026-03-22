@@ -16,6 +16,7 @@ RUN npm ci --workspace=apps/api --workspace=packages/shared-types
 # Copy source code
 COPY packages/shared-types/ packages/shared-types/
 COPY apps/api/ apps/api/
+COPY apps/web/public/seed/ apps/api/seed/
 
 # Build shared package and API
 RUN npm --workspace packages/shared-types run build
@@ -39,6 +40,7 @@ RUN npm ci --workspace=apps/api --workspace=packages/shared-types --omit=dev
 # Copy built output
 COPY --from=builder /app/apps/api/dist apps/api/dist/
 COPY --from=builder /app/apps/api/prisma apps/api/prisma/
+COPY --from=builder /app/apps/api/seed apps/api/seed/
 COPY --from=builder /app/node_modules/.prisma node_modules/.prisma/
 COPY --from=builder /app/packages/shared-types/ packages/shared-types/
 

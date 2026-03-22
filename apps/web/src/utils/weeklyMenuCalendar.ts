@@ -17,6 +17,14 @@ interface RegistrationResult {
   errors: string[]
 }
 
+export function resolveFamilyCalendarTarget(preferences: UserPreferences): string {
+  const familyCalendarId = preferences.familyCalendarId?.trim()
+  if (!familyCalendarId) {
+    throw new Error('家族カレンダーが未設定です。設定 → カレンダー で登録先を選んでください。')
+  }
+  return familyCalendarId
+}
+
 /**
  * Register all weekly menu items to Google Calendar.
  * Also creates cooking start reminders if enabled.
@@ -29,7 +37,7 @@ export async function registerWeeklyMenuToCalendar(
 ): Promise<RegistrationResult> {
   const result: RegistrationResult = { registered: 0, errors: [] }
 
-  const calendarId = preferences.defaultCalendarId ?? 'primary'
+  const calendarId = resolveFamilyCalendarTarget(preferences)
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
   const recipeMap = new Map(recipes.map(r => [r.id!, r]))
@@ -152,7 +160,7 @@ export async function registerShoppingListToCalendar(
   menu?: WeeklyMenu,
   recipeMap?: Map<number, Recipe>,
 ): Promise<string | null> {
-  const calendarId = preferences.defaultCalendarId ?? 'primary'
+  const calendarId = resolveFamilyCalendarTarget(preferences)
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
   const startTime = setMinutes(setHours(date, preferences.shoppingListHour), preferences.shoppingListMinute)

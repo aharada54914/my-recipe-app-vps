@@ -451,8 +451,13 @@ export const WeeklyMenuProposalItemSchema = z.object({
   recipeTitle: z.string().min(1),
   device: DeviceTypeSchema,
   category: EditableRecipeCategorySchema,
+  sideRecipeId: z.number().int().positive().optional(),
+  sideRecipeTitle: z.string().min(1).optional(),
+  sideDevice: DeviceTypeSchema.optional(),
+  sideCategory: EditableRecipeCategorySchema.optional(),
   servings: z.number().int().positive(),
   baseServings: z.number().int().positive(),
+  scoreSummary: z.string().min(1).optional(),
   replacementNotes: z.string().optional(),
 })
 export type WeeklyMenuProposalItem = z.infer<typeof WeeklyMenuProposalItemSchema>

@@ -730,9 +730,12 @@ export function WeeklyMenuPage() {
                 className="ui-btn ui-btn-primary flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Calendar className="h-4 w-4" />
-                {registering ? '登録中...' : providerToken ? 'カレンダー登録' : 'ログインして登録'}
+                {registering ? '登録中...' : providerToken ? '家族カレンダーに登録' : 'ログインして登録'}
               </button>
             </div>
+            <p className="px-4 pb-4 text-xs text-text-secondary">
+              週間献立と買い物リストは、設定した家族カレンダーにまとめて登録します。
+            </p>
           </div>
         </div>,
         document.body,
