@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   userUpdateMock: vi.fn(),
   recipeFindManyMock: vi.fn(),
   eventInsertMock: vi.fn(),
+  ensureFreshGoogleAccessTokenForUserMock: vi.fn(),
 }))
 
 vi.mock('../../db/client.js', () => ({
@@ -41,6 +42,10 @@ vi.mock('googleapis', () => {
   }
 })
 
+vi.mock('../googleAuth.js', () => ({
+  ensureFreshGoogleAccessTokenForUser: mocks.ensureFreshGoogleAccessTokenForUserMock,
+}))
+
 import { registerWeeklyMenuToFamilyCalendar } from '../googleCalendar.js'
 
 describe('registerWeeklyMenuToFamilyCalendar', () => {
@@ -50,14 +55,27 @@ describe('registerWeeklyMenuToFamilyCalendar', () => {
     mocks.userUpdateMock.mockReset()
     mocks.recipeFindManyMock.mockReset()
     mocks.eventInsertMock.mockReset()
+    mocks.ensureFreshGoogleAccessTokenForUserMock.mockReset()
 
     process.env['GOOGLE_CLIENT_ID'] = 'client-id'
     process.env['GOOGLE_CLIENT_SECRET'] = 'client-secret'
     process.env['GOOGLE_REDIRECT_URI'] = 'http://localhost:3000'
+    mocks.ensureFreshGoogleAccessTokenForUserMock.mockResolvedValue({
+      userId: 'google-user-1',
+      accessToken: 'google-access-token',
+      accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      connection: {
+        hasGoogleAccessToken: true,
+        hasRefreshToken: true,
+        canRefresh: true,
+        familyCalendarConfigured: true,
+      },
+    })
   })
 
   it('registers weekly menu events to the configured family calendar', async () => {
     mocks.userFindUniqueMock.mockResolvedValue({
+      id: 'google-user-1',
       googleAccessToken: 'google-access-token',
       googleRefreshToken: 'google-refresh-token',
       preferences: {
@@ -134,6 +152,7 @@ describe('registerWeeklyMenuToFamilyCalendar', () => {
 
   it('throws when family calendar is not configured', async () => {
     mocks.userFindUniqueMock.mockResolvedValue({
+      id: 'google-user-1',
       googleAccessToken: 'google-access-token',
       googleRefreshToken: null,
       preferences: {},
@@ -154,6 +173,17 @@ describe('registerWeeklyMenuToFamilyCalendar', () => {
         googleRefreshToken: null,
         preferences: {},
       })
+    mocks.ensureFreshGoogleAccessTokenForUserMock.mockResolvedValueOnce({
+      userId: 'google-user-1',
+      accessToken: 'google-access-token',
+      accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      connection: {
+        hasGoogleAccessToken: true,
+        hasRefreshToken: true,
+        canRefresh: true,
+        familyCalendarConfigured: true,
+      },
+    })
     mocks.userFindManyMock.mockResolvedValue([
       {
         id: 'google-user-1',

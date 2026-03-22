@@ -11,6 +11,7 @@ const signInWithGoogle = vi.fn()
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
     providerToken: null,
+    googleConnection: null,
     isQaGoogleMode: false,
     signInWithGoogle,
   }),

@@ -1,11 +1,13 @@
 import { useState, useCallback, useEffect, type ReactNode } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { AuthContext } from './authContextDef'
-import type { GoogleUser, AuthContextValue } from './authContextDef'
+import type { GoogleConnectionState, GoogleUser, AuthContextValue } from './authContextDef'
 import {
   clearToken,
+  exchangeGoogleCode,
   exchangeGoogleSession,
-  fetchCurrentUser,
+  fetchCurrentUserSession,
+  fetchProviderToken,
   getToken as getSessionToken,
   refreshToken,
 } from '../lib/apiClient'
@@ -27,6 +29,15 @@ const GOOGLE_CLIENT_ID_KEY = 'google_client_id'
 function clearGoogleAuthStorage() {
   try {
     localStorage.removeItem(USER_KEY)
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_EXPIRY_KEY)
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function clearProviderTokenStorage() {
+  try {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(TOKEN_EXPIRY_KEY)
   } catch {
@@ -122,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<GoogleUser | null>(() => loadStoredUser())
   const [loading, setLoading] = useState(false)
   const [providerToken, setProviderToken] = useState<string | null>(() => loadStoredToken())
+  const [googleConnection, setGoogleConnection] = useState<GoogleConnectionState | null>(null)
   const [clientId, setClientId] = useState<string | undefined>(() => {
     return (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || undefined
   })
@@ -186,6 +198,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading: false,
         isOAuthAvailable: true,
         providerToken: getQaGoogleMockToken(),
+        googleConnection: {
+          hasGoogleAccessToken: true,
+          hasRefreshToken: false,
+          canRefresh: true,
+          familyCalendarConfigured: true,
+        },
         isQaGoogleMode: true,
         signInWithGoogle,
         signOut,
@@ -210,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading: false,
         isOAuthAvailable: false,
         providerToken,
+        googleConnection,
         isQaGoogleMode: false,
         signInWithGoogle,
         signOut,
@@ -224,10 +243,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user={user}
       loading={loading}
       providerToken={providerToken}
+      googleConnection={googleConnection}
       setLoading={setLoading}
       setUser={setUser}
       storeProviderToken={storeProviderToken}
       setProviderToken={setProviderToken}
+      setGoogleConnection={setGoogleConnection}
     >
       {children}
     </OAuthEnabledAuthProvider>
@@ -238,10 +259,12 @@ interface OAuthEnabledAuthProviderProps {
   user: GoogleUser | null
   loading: boolean
   providerToken: string | null
+  googleConnection: GoogleConnectionState | null
   setLoading: (value: boolean) => void
   setUser: (value: GoogleUser | null) => void
   storeProviderToken: (token: string, expiresIn: number) => void
   setProviderToken: (value: string | null) => void
+  setGoogleConnection: (value: GoogleConnectionState | null) => void
   children: ReactNode
 }
 
@@ -249,10 +272,12 @@ function OAuthEnabledAuthProvider({
   user,
   loading,
   providerToken,
+  googleConnection,
   setLoading,
   setUser,
   storeProviderToken,
   setProviderToken,
+  setGoogleConnection,
   children,
 }: OAuthEnabledAuthProviderProps) {
   const updateUser = useCallback((nextUser: GoogleUser | null) => {
@@ -263,23 +288,53 @@ function OAuthEnabledAuthProvider({
   const clearSession = useCallback(() => {
     updateUser(null)
     setProviderToken(null)
+    setGoogleConnection(null)
     clearAuthStorage()
-  }, [setProviderToken, updateUser])
+  }, [setGoogleConnection, setProviderToken, updateUser])
 
-  const syncServerSession = useCallback(async (
+  const clearProviderToken = useCallback(() => {
+    clearProviderTokenStorage()
+    setProviderToken(null)
+  }, [setProviderToken])
+
+  const syncServerSessionFromAccessToken = useCallback(async (
     accessToken: string,
     expiresIn?: number,
   ): Promise<GoogleUser> => {
     const response = await exchangeGoogleSession({ accessToken, expiresIn })
     const nextUser = mergeStoredPicture(toGoogleUser(response.user), loadStoredUser())
     updateUser(nextUser)
+    setGoogleConnection(response.googleConnection ?? null)
 
     if (response.providerToken && expiresIn) {
       storeProviderToken(response.providerToken, expiresIn)
     }
 
     return nextUser
-  }, [storeProviderToken, updateUser])
+  }, [setGoogleConnection, storeProviderToken, updateUser])
+
+  const syncServerSessionFromCode = useCallback(async (code: string): Promise<GoogleUser> => {
+    const response = await exchangeGoogleCode(code)
+    const nextUser = mergeStoredPicture(toGoogleUser(response.user), loadStoredUser())
+    updateUser(nextUser)
+    setGoogleConnection(response.googleConnection ?? null)
+
+    if (response.providerToken && response.providerTokenExpiry) {
+      const seconds = Math.max(1, Math.floor((new Date(response.providerTokenExpiry).getTime() - Date.now()) / 1000))
+      storeProviderToken(response.providerToken, seconds)
+    }
+
+    return nextUser
+  }, [setGoogleConnection, storeProviderToken, updateUser])
+
+  const hydrateProviderTokenFromServer = useCallback(async () => {
+    const response = await fetchProviderToken()
+    setGoogleConnection(response.googleConnection ?? null)
+    if (response.providerToken && response.providerTokenExpiry) {
+      const seconds = Math.max(1, Math.floor((new Date(response.providerTokenExpiry).getTime() - Date.now()) / 1000))
+      storeProviderToken(response.providerToken, seconds)
+    }
+  }, [setGoogleConnection, storeProviderToken])
 
   const silentGoogleLogin = useGoogleLogin({
     scope: SCOPES,
@@ -287,22 +342,23 @@ function OAuthEnabledAuthProvider({
     onSuccess: async (tokenResponse) => {
       try {
         storeProviderToken(tokenResponse.access_token, tokenResponse.expires_in)
-        await syncServerSession(tokenResponse.access_token, tokenResponse.expires_in)
+        await syncServerSessionFromAccessToken(tokenResponse.access_token, tokenResponse.expires_in)
       } catch {
-        clearSession()
+        clearProviderToken()
       }
     },
     onError: () => {
-      clearSession()
+      clearProviderToken()
     },
   })
 
   const googleLogin = useGoogleLogin({
+    flow: 'auth-code',
+    select_account: true,
     scope: SCOPES,
-    onSuccess: async (tokenResponse) => {
+    onSuccess: async (codeResponse) => {
       try {
-        storeProviderToken(tokenResponse.access_token, tokenResponse.expires_in)
-        await syncServerSession(tokenResponse.access_token, tokenResponse.expires_in)
+        await syncServerSessionFromCode(codeResponse.code)
       } catch {
         clearSession()
       } finally {
@@ -338,10 +394,23 @@ function OAuthEnabledAuthProvider({
           return
         }
 
-        const currentUser = await fetchCurrentUser()
-        if (!cancelled && currentUser) {
-          const nextUser = mergeStoredPicture(toGoogleUser(currentUser), loadStoredUser())
+        const currentSession = await fetchCurrentUserSession()
+        if (!cancelled && currentSession) {
+          setGoogleConnection(currentSession.googleConnection)
+          const nextUser = mergeStoredPicture(toGoogleUser(currentSession.user), loadStoredUser())
           updateUser(nextUser)
+
+          const expiry = getPersistedAuthItem(TOKEN_EXPIRY_KEY)
+          const needsProviderToken = !expiry || new Date(expiry).getTime() - Date.now() <= 5 * 60 * 1000
+          if (needsProviderToken && currentSession.googleConnection?.hasGoogleAccessToken) {
+            try {
+              await hydrateProviderTokenFromServer()
+            } catch {
+              if (!currentSession.googleConnection.hasRefreshToken) {
+                silentGoogleLogin()
+              }
+            }
+          }
         }
       } catch {
         if (!cancelled) clearSession()
@@ -355,7 +424,7 @@ function OAuthEnabledAuthProvider({
     return () => {
       cancelled = true
     }
-  }, [clearSession, setLoading, updateUser])
+  }, [clearSession, hydrateProviderTokenFromServer, setGoogleConnection, setLoading, silentGoogleLogin, updateUser])
 
   useEffect(() => {
     if (!user || !providerToken || getSessionToken()) return
@@ -365,7 +434,7 @@ function OAuthEnabledAuthProvider({
     const backfillServerSession = async () => {
       setLoading(true)
       try {
-        await syncServerSession(providerToken)
+        await syncServerSessionFromAccessToken(providerToken)
       } catch {
         if (!cancelled) clearSession()
       } finally {
@@ -378,13 +447,13 @@ function OAuthEnabledAuthProvider({
     return () => {
       cancelled = true
     }
-  }, [clearSession, providerToken, setLoading, syncServerSession, user])
+  }, [clearSession, providerToken, setLoading, syncServerSessionFromAccessToken, user])
 
   useEffect(() => {
-    if (user && !providerToken) {
+    if (user && !providerToken && !googleConnection?.hasRefreshToken) {
       silentGoogleLogin()
     }
-  }, [user, providerToken, silentGoogleLogin])
+  }, [googleConnection?.hasRefreshToken, providerToken, silentGoogleLogin, user])
 
   useEffect(() => {
     if (!providerToken) return
@@ -392,12 +461,26 @@ function OAuthEnabledAuthProvider({
     if (!expiry) return
     const msUntilRefresh = new Date(expiry).getTime() - Date.now() - 5 * 60 * 1000
     if (msUntilRefresh <= 0) {
-      silentGoogleLogin()
+      if (googleConnection?.hasRefreshToken) {
+        void hydrateProviderTokenFromServer().catch(() => {
+          silentGoogleLogin()
+        })
+      } else {
+        silentGoogleLogin()
+      }
       return
     }
-    const timer = setTimeout(silentGoogleLogin, msUntilRefresh)
+    const timer = setTimeout(() => {
+      if (googleConnection?.hasRefreshToken) {
+        void hydrateProviderTokenFromServer().catch(() => {
+          silentGoogleLogin()
+        })
+      } else {
+        silentGoogleLogin()
+      }
+    }, msUntilRefresh)
     return () => clearTimeout(timer)
-  }, [providerToken, silentGoogleLogin])
+  }, [googleConnection?.hasRefreshToken, hydrateProviderTokenFromServer, providerToken, silentGoogleLogin])
 
   useEffect(() => {
     if (!user) return
@@ -411,13 +494,21 @@ function OAuthEnabledAuthProvider({
 
       const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
       if (!expiry || new Date(expiry) <= new Date()) {
-        silentGoogleLogin()
+        if (googleConnection?.hasRefreshToken) {
+          void hydrateProviderTokenFromServer().catch(() => {
+            if (!googleConnection.hasRefreshToken) {
+              silentGoogleLogin()
+            }
+          })
+        } else {
+          silentGoogleLogin()
+        }
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [silentGoogleLogin, user])
+  }, [googleConnection, hydrateProviderTokenFromServer, silentGoogleLogin, user])
 
   return (
     <AuthContext.Provider value={{
@@ -425,6 +516,7 @@ function OAuthEnabledAuthProvider({
       loading,
       isOAuthAvailable: true,
       providerToken,
+      googleConnection,
       isQaGoogleMode: false,
       signInWithGoogle,
       signOut,

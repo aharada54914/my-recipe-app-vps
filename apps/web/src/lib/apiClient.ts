@@ -30,11 +30,20 @@ export interface AuthenticatedUser {
   picture?: string
 }
 
+export interface GoogleConnectionState {
+  hasGoogleAccessToken: boolean
+  hasRefreshToken: boolean
+  accessTokenExpiresAt?: string
+  canRefresh: boolean
+  familyCalendarConfigured: boolean
+}
+
 export interface GoogleAuthExchangeResponse {
   token: string
   user: AuthenticatedUser
   providerToken?: string
   providerTokenExpiry?: string
+  googleConnection?: GoogleConnectionState
 }
 
 // --- Token management ---
@@ -161,6 +170,7 @@ export async function exchangeGoogleCode(code: string): Promise<{
   user: AuthenticatedUser
   providerToken?: string
   providerTokenExpiry?: string
+  googleConnection?: GoogleConnectionState
 }> {
   const result = await request<{
     success: boolean
@@ -223,6 +233,7 @@ export async function fetchCurrentUser(): Promise<AuthenticatedUser | null> {
       id: string
       email: string
       name: string | null
+      googleConnection?: GoogleConnectionState
     }
   }>('/api/auth/me')
 
@@ -235,6 +246,51 @@ export async function fetchCurrentUser(): Promise<AuthenticatedUser | null> {
     email: result.data.email,
     name: result.data.name,
   }
+}
+
+export async function fetchCurrentUserSession(): Promise<{
+  user: AuthenticatedUser
+  googleConnection: GoogleConnectionState | null
+} | null> {
+  const result = await request<{
+    success: boolean
+    data: {
+      id: string
+      email: string
+      name: string | null
+      googleConnection?: GoogleConnectionState
+    }
+  }>('/api/auth/me')
+
+  if (!result.data?.id || !result.data?.email) {
+    return null
+  }
+
+  return {
+    user: {
+      sub: result.data.id,
+      email: result.data.email,
+      name: result.data.name,
+    },
+    googleConnection: result.data.googleConnection ?? null,
+  }
+}
+
+export async function fetchProviderToken(): Promise<{
+  providerToken: string
+  providerTokenExpiry?: string
+  googleConnection?: GoogleConnectionState
+}> {
+  const result = await request<{
+    success: boolean
+    data: {
+      providerToken: string
+      providerTokenExpiry?: string
+      googleConnection?: GoogleConnectionState
+    }
+  }>('/api/auth/google/provider-token', { method: 'POST' })
+
+  return result.data
 }
 
 // --- Online mode detection ---

@@ -6,6 +6,7 @@ import {
   type WeeklyMenuItem,
 } from '@kitchen/shared-types'
 import { normalizeUserPreferences } from './userPreferences.js'
+import { ensureFreshGoogleAccessTokenForUser } from './googleAuth.js'
 
 function buildCalendarOAuth2Client() {
   const clientId = process.env['GOOGLE_CLIENT_ID']
@@ -18,10 +19,11 @@ function buildCalendarOAuth2Client() {
 
 async function getAuthenticatedCalendar(userId: string) {
   const user = await resolveCalendarUser(userId)
+  const tokenState = await ensureFreshGoogleAccessTokenForUser(user.id)
 
   const oauth2Client = buildCalendarOAuth2Client()
   oauth2Client.setCredentials({
-    access_token: user.googleAccessToken,
+    access_token: tokenState.accessToken,
     refresh_token: user.googleRefreshToken ?? undefined,
   })
 

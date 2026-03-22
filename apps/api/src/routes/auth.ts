@@ -1,8 +1,15 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { google } from 'googleapis'
 import { prisma } from '../db/client.js'
 import { normalizeUserPreferences } from '../lib/userPreferences.js'
+import {
+  buildGoogleConnectionState,
+  type GoogleConnectionState,
+  ensureFreshGoogleAccessTokenForUser,
+  exchangeGoogleCodeForTokens,
+  getGoogleProfileFromAccessToken,
+  upsertGoogleUserSession,
+} from '../lib/googleAuth.js'
 
 const GoogleTokenSchema = z.object({
   code: z.string().min(1),
@@ -20,62 +27,6 @@ type GoogleProfile = {
   picture?: string | null
 }
 
-function getOAuth2Client() {
-  const clientId = process.env['GOOGLE_CLIENT_ID']
-  const clientSecret = process.env['GOOGLE_CLIENT_SECRET']
-  const redirectUri = process.env['GOOGLE_REDIRECT_URI']
-
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error('Google OAuth environment variables are not configured')
-  }
-
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
-}
-
-async function getGoogleProfileFromAccessToken(accessToken: string): Promise<GoogleProfile> {
-  const oauth2Client = new google.auth.OAuth2()
-  oauth2Client.setCredentials({ access_token: accessToken })
-
-  const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
-  const { data: userInfo } = await oauth2.userinfo.get()
-
-  if (!userInfo.id || !userInfo.email) {
-    throw new Error('Failed to retrieve user information from Google')
-  }
-
-  return {
-    id: userInfo.id,
-    email: userInfo.email,
-    name: userInfo.name ?? null,
-    picture: userInfo.picture ?? null,
-  }
-}
-
-async function upsertGoogleUserSession(input: {
-  profile: GoogleProfile
-  accessToken?: string
-  refreshToken?: string
-}) {
-  const { profile, accessToken, refreshToken } = input
-
-  return prisma.user.upsert({
-    where: { id: profile.id },
-    update: {
-      email: profile.email,
-      name: profile.name ?? undefined,
-      googleAccessToken: accessToken ?? undefined,
-      googleRefreshToken: refreshToken ?? undefined,
-    },
-    create: {
-      id: profile.id,
-      email: profile.email,
-      name: profile.name ?? undefined,
-      googleAccessToken: accessToken ?? undefined,
-      googleRefreshToken: refreshToken ?? undefined,
-    },
-  })
-}
-
 function buildAuthResponse(
   app: FastifyInstance,
   user: {
@@ -86,6 +37,7 @@ function buildAuthResponse(
   profile: GoogleProfile,
   providerToken?: string,
   providerTokenExpiry?: string,
+  googleConnection?: GoogleConnectionState,
 ) {
   const jwt = app.jwt.sign({
     sub: user.id,
@@ -103,6 +55,7 @@ function buildAuthResponse(
     },
     providerToken,
     providerTokenExpiry,
+    googleConnection,
   }
 }
 
@@ -111,10 +64,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/auth/google', async (request, reply) => {
     try {
       const { code } = GoogleTokenSchema.parse(request.body)
-      const oauth2Client = getOAuth2Client()
-
-      const { tokens } = await oauth2Client.getToken(code)
-      oauth2Client.setCredentials(tokens)
+      const tokens = await exchangeGoogleCodeForTokens(code)
 
       if (!tokens.access_token) {
         reply.status(400).send({
@@ -129,6 +79,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         profile,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token ?? undefined,
+        expiryDate: typeof tokens.expiry_date === 'number' ? tokens.expiry_date : null,
       })
       const providerTokenExpiry = typeof tokens.expiry_date === 'number'
         ? new Date(tokens.expiry_date).toISOString()
@@ -136,7 +87,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       reply.send({
         success: true,
-        data: buildAuthResponse(app, user, profile, tokens.access_token, providerTokenExpiry),
+        data: buildAuthResponse(
+          app,
+          user,
+          profile,
+          tokens.access_token,
+          providerTokenExpiry,
+          buildGoogleConnectionState(user),
+        ),
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -155,6 +113,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const user = await upsertGoogleUserSession({
         profile,
         accessToken,
+        expiresIn,
       })
 
       const providerTokenExpiry = expiresIn
@@ -163,7 +122,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       reply.send({
         success: true,
-        data: buildAuthResponse(app, user, profile, accessToken, providerTokenExpiry),
+        data: buildAuthResponse(
+          app,
+          user,
+          profile,
+          accessToken,
+          providerTokenExpiry,
+          buildGoogleConnectionState(user),
+        ),
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -171,6 +137,28 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       reply.status(500).send({
         success: false,
         error: `Google session sync failed: ${message}`,
+      })
+    }
+  })
+
+  app.post('/api/auth/google/provider-token', {
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
+    try {
+      const tokenState = await ensureFreshGoogleAccessTokenForUser(request.user.sub)
+      reply.send({
+        success: true,
+        data: {
+          providerToken: tokenState.accessToken,
+          providerTokenExpiry: tokenState.accessTokenExpiresAt,
+          googleConnection: tokenState.connection,
+        },
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      reply.status(409).send({
+        success: false,
+        error: `Google provider token unavailable: ${message}`,
       })
     }
   })
@@ -208,6 +196,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           email: true,
           name: true,
           preferences: true,
+          googleAccessToken: true,
+          googleAccessTokenExpiresAt: true,
+          googleRefreshToken: true,
           createdAt: true,
         },
       })
@@ -225,6 +216,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         data: {
           ...user,
           preferences: normalizeUserPreferences(user.preferences),
+          googleConnection: buildGoogleConnectionState(user),
         },
       })
     } catch (err) {

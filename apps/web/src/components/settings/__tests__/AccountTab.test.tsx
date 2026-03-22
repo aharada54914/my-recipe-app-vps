@@ -20,6 +20,7 @@ vi.mock('../../../hooks/useAuth', () => ({
     loading: false,
     isOAuthAvailable: true,
     providerToken: null,
+    googleConnection: null,
     isQaGoogleMode: false,
     signInWithGoogle,
     signOut: vi.fn(),
