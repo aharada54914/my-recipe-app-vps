@@ -24,6 +24,11 @@ jobs:
           env -u npm_config_http_proxy npm install --package-lock-only --ignore-scripts
           env -u npm_config_http_proxy npm ci
 
+      - name: Prepare (build shared-types + prisma generate)
+        run: |
+          env -u npm_config_http_proxy npm run build:shared
+          env -u npm_config_http_proxy npm --workspace apps/api run db:generate
+
       - name: Lint
         run: env -u npm_config_http_proxy npm run lint
 
