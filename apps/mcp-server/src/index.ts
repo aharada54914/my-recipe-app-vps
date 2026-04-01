@@ -1,5 +1,6 @@
+import http from 'node:http'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -217,5 +218,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 })
 
-const transport = new StdioServerTransport()
-await server.connect(transport)
+const MCP_AUTH_TOKEN = process.env.MCP_AUTH_TOKEN
+const PORT = Number(process.env.MCP_PORT ?? 3002)
+
+const transports = new Map<string, SSEServerTransport>()
+
+function checkAuth(req: http.IncomingMessage): boolean {
+  const auth = req.headers.authorization ?? ''
+  return auth === `Bearer ${MCP_AUTH_TOKEN}`
+}
+
+const httpServer = http.createServer(async (req, res) => {
+  if (!MCP_AUTH_TOKEN || !checkAuth(req)) {
+    res.writeHead(401, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'Unauthorized' }))
+    return
+  }
+
+  const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
+
+  if (req.method === 'GET' && url.pathname === '/mcp/sse') {
+    const transport = new SSEServerTransport('/mcp/message', res)
+    transports.set(transport.sessionId, transport)
+    transport.onclose = () => transports.delete(transport.sessionId)
+    await server.connect(transport)
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/mcp/message') {
+    const sessionId = url.searchParams.get('sessionId') ?? ''
+    const transport = transports.get(sessionId)
+    if (!transport) {
+      res.writeHead(404)
+      res.end('Session not found')
+      return
+    }
+    await transport.handlePostMessage(req, res)
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ status: 'ok' }))
+    return
+  }
+
+  res.writeHead(404)
+  res.end('Not found')
+})
+
+httpServer.listen(PORT, () => {
+  console.log(`MCP server listening on port ${PORT}`)
+})
