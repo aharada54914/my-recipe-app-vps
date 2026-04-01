@@ -232,7 +232,7 @@ const httpServer = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
 
   // Health check is public (used by docker-compose healthcheck)
-  if (req.method === 'GET' && url.pathname === '/health') {
+  if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/mcp/health')) {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ status: 'ok' }))
     return
