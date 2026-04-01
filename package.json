@@ -32,7 +32,8 @@
     "ui:class-audit": "npm --workspace apps/web run ui:class-audit",
     "ops:ps": "bash scripts/ops/kitchenctl.sh ps",
     "ops:health": "bash scripts/ops/kitchenctl.sh health",
-    "ops:logs": "bash scripts/ops/kitchenctl.sh logs"
+    "ops:logs": "bash scripts/ops/kitchenctl.sh logs",
+    "mcp-server": "node apps/mcp-server/dist/index.js"
   },
   "overrides": {
     "serialize-javascript": "7.0.3"
