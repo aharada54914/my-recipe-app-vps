@@ -1,9 +1,11 @@
 import type { InputJsonValue } from '@prisma/client/runtime/library'
 import type {
   ReplaceDiscordWeeklyMenuItemRequest,
+  WeeklyMenuCandidate,
   WeeklyMenuProposalItem,
   WeeklyMenuProposalItem as WeeklyMenuProposalItemType,
   WeeklyMenuItem,
+  WeeklyMenuPreset,
   WeeklyMenuProposalSummary,
 } from '@kitchen/shared-types'
 import { prisma } from '../../db/client.js'
@@ -37,10 +39,11 @@ function normalizeProposal(record: {
     metadata?: unknown
   }
 }): WeeklyMenuProposalSummary {
-  const items = Array.isArray(record.items)
-    ? WeeklyMenuProposalItemSchema.array().parse(record.items)
-    : []
+  const items = normalizeStoredProposalItems(record.items)
   const metadata = isRecord(record.session.metadata) ? record.session.metadata : {}
+  const excludedRecipeIds = Array.isArray(metadata.excludedRecipeIds)
+    ? metadata.excludedRecipeIds.filter((value): value is number => typeof value === 'number')
+    : []
   const calendarSync = isRecord(metadata.calendarSync)
     ? {
       status: normalizeCalendarSyncStatus(metadata.calendarSync.status),
@@ -55,6 +58,9 @@ function normalizeProposal(record: {
         : {}),
     }
     : undefined
+  const preset = metadata.preset === 'washoku_focus' || metadata.preset === 'budget_saver' || metadata.preset === 'fish_more'
+    ? metadata.preset as WeeklyMenuPreset
+    : undefined
 
   return {
     id: record.id,
@@ -64,8 +70,10 @@ function normalizeProposal(record: {
     requestedServings: record.requestedServings,
     weekStartDate: record.weekStartDate,
     items,
+    ...(preset ? { preset } : {}),
     ...(record.notes ? { notes: record.notes } : {}),
     ...(record.approvedWeeklyMenuId ? { approvedWeeklyMenuId: record.approvedWeeklyMenuId } : {}),
+    excludedRecipeIds,
     ...(calendarSync ? { calendarSync } : {}),
   }
 }
@@ -76,6 +84,130 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeCalendarSyncStatus(value: unknown): 'not_started' | 'registered' | 'failed' {
   return value === 'registered' || value === 'failed' ? value : 'not_started'
+}
+
+function normalizeStoredProposalItems(value: unknown): WeeklyMenuProposalItem[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((entry) => {
+      const parsed = WeeklyMenuProposalItemSchema.safeParse(entry)
+      if (parsed.success) return parsed.data
+      if (!isRecord(entry)) return null
+
+      const recipeId = typeof entry.recipeId === 'number' ? entry.recipeId : undefined
+      const recipeTitle = typeof entry.recipeTitle === 'string' ? entry.recipeTitle : undefined
+      const device = entry.device
+      const category = entry.category
+      const baseServings = typeof entry.baseServings === 'number' ? entry.baseServings : undefined
+      if (
+        recipeId == null ||
+        recipeTitle == null ||
+        baseServings == null ||
+        (device !== 'manual' && device !== 'hotcook' && device !== 'healsio') ||
+        (category !== '主菜' && category !== '副菜' && category !== 'スープ' && category !== '一品料理' && category !== 'スイーツ')
+      ) {
+        return null
+      }
+
+      const mainCandidate: WeeklyMenuCandidate = {
+        recipeId,
+        title: recipeTitle,
+        device,
+        category,
+        baseServings,
+        score: 0,
+        ...(typeof entry.scoreSummary === 'string' ? { scoreSummary: entry.scoreSummary } : {}),
+      }
+      const sideCandidate =
+        typeof entry.sideRecipeId === 'number' &&
+        typeof entry.sideRecipeTitle === 'string' &&
+        typeof entry.sideDevice === 'string' &&
+        typeof entry.sideCategory === 'string'
+          ? {
+            recipeId: entry.sideRecipeId,
+            title: entry.sideRecipeTitle,
+            device: entry.sideDevice,
+            category: entry.sideCategory,
+            baseServings,
+            score: 0,
+          }
+          : undefined
+
+      return WeeklyMenuProposalItemSchema.parse({
+        ...entry,
+        mainCandidates: [mainCandidate],
+        currentMainCandidateIndex: 0,
+        ...(sideCandidate ? { sideCandidates: [sideCandidate], currentSideCandidateIndex: 0 } : {}),
+        excludedRecipeIds: [],
+        replacementHistory: [],
+      })
+    })
+    .filter((entry): entry is WeeklyMenuProposalItem => entry != null)
+}
+
+function materializeProposalCandidateUpdate(params: {
+  item: WeeklyMenuProposalItem
+  target: 'main' | 'side'
+  nextIndex: number
+  notes?: string
+}): WeeklyMenuProposalItem {
+  const historyLabel = params.target === 'main' ? '主菜' : '副菜'
+  if (params.target === 'main') {
+    const candidate = params.item.mainCandidates[params.nextIndex]
+    return {
+      ...params.item,
+      recipeId: candidate.recipeId,
+      recipeTitle: candidate.title,
+      device: candidate.device,
+      category: candidate.category,
+      baseServings: candidate.baseServings,
+      scoreSummary: candidate.scoreSummary ?? params.item.scoreSummary,
+      currentMainCandidateIndex: params.nextIndex,
+      replacementHistory: [
+        ...params.item.replacementHistory,
+        `${historyLabel}を次候補へ: ${candidate.title}`,
+      ],
+      ...(params.notes ? { replacementNotes: params.notes } : {}),
+    }
+  }
+
+  const candidate = params.item.sideCandidates?.[params.nextIndex]
+  return {
+    ...params.item,
+    sideRecipeId: candidate?.recipeId,
+    sideRecipeTitle: candidate?.title,
+    sideDevice: candidate?.device,
+    sideCategory: candidate?.category,
+    currentSideCandidateIndex: params.nextIndex,
+    replacementHistory: [
+      ...params.item.replacementHistory,
+      `${historyLabel}を次候補へ: ${candidate?.title ?? 'なし'}`,
+    ],
+    ...(params.notes ? { replacementNotes: params.notes } : {}),
+  }
+}
+
+function findNextCandidateIndex(params: {
+  item: WeeklyMenuProposalItem
+  target: 'main' | 'side'
+  globalExcludedRecipeIds: Set<number>
+  avoidProteinGroups?: Set<WeeklyMenuCandidate['proteinGroup']>
+}): number | null {
+  const candidates = params.target === 'main'
+    ? params.item.mainCandidates
+    : (params.item.sideCandidates ?? [])
+  const currentIndex = params.target === 'main'
+    ? params.item.currentMainCandidateIndex
+    : (params.item.currentSideCandidateIndex ?? -1)
+
+  for (let index = currentIndex + 1; index < candidates.length; index += 1) {
+    const candidate = candidates[index]
+    if (params.globalExcludedRecipeIds.has(candidate.recipeId)) continue
+    if (params.item.excludedRecipeIds.includes(candidate.recipeId)) continue
+    if (params.avoidProteinGroups?.has(candidate.proteinGroup)) continue
+    return index
+  }
+  return null
 }
 
 async function appendConversationTurn(params: {
@@ -100,6 +232,7 @@ async function loadWeeklyPlanningContext(userId: string): Promise<{
   recipes: PlannerRecipeRecord[]
   preferences: ReturnType<typeof normalizeUserPreferences>
   stockNames: Set<string>
+  expiringStockNames: Set<string>
   recentRecipeIds: Set<number>
   favoriteRecipeIds: Set<number>
 }> {
@@ -123,7 +256,7 @@ async function loadWeeklyPlanningContext(userId: string): Promise<{
     }),
     prisma.stock.findMany({
       where: { userId, inStock: true },
-      select: { name: true },
+      select: { name: true, expiresAt: true },
     }),
     prisma.favorite.findMany({
       where: { userId },
@@ -152,6 +285,11 @@ async function loadWeeklyPlanningContext(userId: string): Promise<{
     recipes,
     preferences: normalizeUserPreferences(user?.preferences),
     stockNames: new Set(stocks.map((stock) => stock.name)),
+    expiringStockNames: new Set(
+      stocks
+        .filter((stock) => stock.expiresAt && stock.expiresAt.getTime() <= Date.now() + (1000 * 60 * 60 * 24 * 3))
+        .map((stock) => stock.name),
+    ),
     recentRecipeIds,
     favoriteRecipeIds: new Set(favorites.map((favorite) => favorite.recipeId)),
   }
@@ -163,6 +301,7 @@ export async function createWeeklyMenuProposal(input: {
   threadId?: string
   discordUserId: string
   requestedServings: number
+  preset?: WeeklyMenuPreset
   notes?: string
 }): Promise<WeeklyMenuProposalSummary> {
   const { userId } = await ensureDiscordAppUser({
@@ -181,8 +320,10 @@ export async function createWeeklyMenuProposal(input: {
     forecastDays: forecast.days as PlannerForecastDay[],
     preferences: planning.preferences,
     stockNames: planning.stockNames,
+    expiringStockNames: planning.expiringStockNames,
     recentRecipeIds: planning.recentRecipeIds,
     favoriteRecipeIds: planning.favoriteRecipeIds,
+    ...(input.preset ? { preset: input.preset } : {}),
     notes: input.notes,
   })
 
@@ -197,6 +338,8 @@ export async function createWeeklyMenuProposal(input: {
       requestedServings: input.requestedServings,
       metadata: toJsonValue({
         weekStartDate: forecast.weekStartDate,
+        excludedRecipeIds: [],
+        ...(input.preset ? { preset: input.preset } : {}),
       }),
     },
   })
@@ -226,6 +369,7 @@ export async function createWeeklyMenuProposal(input: {
     eventType: 'weekly_menu_created',
     payload: {
       requestedServings: input.requestedServings,
+      ...(input.preset ? { preset: input.preset } : {}),
       notes: input.notes,
     },
   })
@@ -265,28 +409,100 @@ export async function replaceWeeklyMenuProposalItem(
   const forecastDays = Array.isArray(existing.weatherSummary)
     ? (existing.weatherSummary as unknown as PlannerForecastDay[])
     : (await getTokyoWeekForecast()).days
-  const currentItems: WeeklyMenuProposalItemType[] = Array.isArray(existing.items)
-    ? WeeklyMenuProposalItemSchema.array().parse(existing.items)
-    : []
+  const currentItems: WeeklyMenuProposalItemType[] = normalizeStoredProposalItems(existing.items)
+  const metadata = isRecord(existing.session.metadata) ? existing.session.metadata : {}
+  const globalExcludedRecipeIds = new Set<number>(
+    Array.isArray(metadata.excludedRecipeIds)
+      ? metadata.excludedRecipeIds.filter((value): value is number => typeof value === 'number')
+      : [],
+  )
+  const replaceTarget = input.target ?? 'main'
+  const replaceStrategy = input.strategy ?? 'next_candidate'
+  const nextItems = [...currentItems]
+  const currentItem = nextItems[input.dayIndex]
+  if (!currentItem) {
+    throw new Error('差し替える日が見つかりません。')
+  }
 
-  const items = buildWeeklyMenuProposalItems({
-    requestedServings: existing.requestedServings,
-    recipes: planning.recipes,
-    forecastDays,
-    preferences: planning.preferences,
-    stockNames: planning.stockNames,
-    recentRecipeIds: planning.recentRecipeIds,
-    favoriteRecipeIds: planning.favoriteRecipeIds,
-    notes: input.notes,
-    existingItems: currentItems,
-    replaceDayIndex: input.dayIndex,
-  })
+  if (replaceStrategy === 'blacklist_current') {
+    const recipeIdToExclude = replaceTarget === 'main' ? currentItem.recipeId : currentItem.sideRecipeId
+    if (recipeIdToExclude != null) {
+      globalExcludedRecipeIds.add(recipeIdToExclude)
+    }
+    nextItems[input.dayIndex] = {
+      ...currentItem,
+      excludedRecipeIds: Array.from(new Set([
+        ...currentItem.excludedRecipeIds,
+        ...(recipeIdToExclude != null ? [recipeIdToExclude] : []),
+      ])),
+      replacementHistory: [
+        ...currentItem.replacementHistory,
+        `${replaceTarget === 'main' ? '主菜' : '副菜'}候補を今週から除外`,
+      ],
+      ...(input.notes ? { replacementNotes: input.notes } : {}),
+    }
+  }
+
+  let items = nextItems
+  const sourceItem = items[input.dayIndex]
+  const avoidProteinGroups =
+    input.avoidSameMainIngredient && replaceTarget === 'main'
+      ? new Set<WeeklyMenuCandidate['proteinGroup']>([
+        sourceItem.mainCandidates[sourceItem.currentMainCandidateIndex]?.proteinGroup,
+      ])
+      : undefined
+  const nextCandidateIndex =
+    replaceStrategy === 'rebuild_stock_priority'
+      ? null
+      : findNextCandidateIndex({
+        item: sourceItem,
+        target: replaceTarget,
+        globalExcludedRecipeIds,
+        ...(avoidProteinGroups ? { avoidProteinGroups } : {}),
+      })
+
+  if (nextCandidateIndex != null) {
+    items[input.dayIndex] = materializeProposalCandidateUpdate({
+      item: sourceItem,
+      target: replaceTarget,
+      nextIndex: nextCandidateIndex,
+      ...(input.notes ? { notes: input.notes } : {}),
+    })
+  } else {
+    items = buildWeeklyMenuProposalItems({
+      requestedServings: existing.requestedServings,
+      recipes: planning.recipes,
+      forecastDays,
+      preferences: planning.preferences,
+      stockNames: planning.stockNames,
+      expiringStockNames: planning.expiringStockNames,
+      recentRecipeIds: planning.recentRecipeIds,
+      favoriteRecipeIds: planning.favoriteRecipeIds,
+      ...(metadata.preset === 'washoku_focus' || metadata.preset === 'budget_saver' || metadata.preset === 'fish_more'
+        ? { preset: metadata.preset as WeeklyMenuPreset }
+        : {}),
+      notes: input.notes,
+      existingItems: nextItems,
+      replaceDayIndex: input.dayIndex,
+      replaceTarget,
+      globalExcludedRecipeIds,
+      ...(avoidProteinGroups ? { avoidProteinGroups } : {}),
+    })
+  }
 
   const proposal = await prisma.weeklyMenuProposal.update({
     where: { id },
     data: {
       items: toJsonValue(items),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      session: {
+        update: {
+          metadata: toJsonValue({
+            ...metadata,
+            excludedRecipeIds: Array.from(globalExcludedRecipeIds),
+          }),
+        },
+      },
     },
     include: {
       session: {
@@ -302,6 +518,9 @@ export async function replaceWeeklyMenuProposalItem(
     eventType: 'weekly_menu_replaced',
     payload: {
       dayIndex: input.dayIndex,
+      target: replaceTarget,
+      strategy: replaceStrategy,
+      avoidSameMainIngredient: input.avoidSameMainIngredient ?? false,
       notes: input.notes,
     },
   })

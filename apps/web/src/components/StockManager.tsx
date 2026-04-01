@@ -8,6 +8,7 @@ import { SEASONING_MASTER, SEASONING_PRESETS } from '../data/seasoningPresets'
 import {
   deleteStockItem,
   getAllStockItems,
+  updateStockItemMetadata,
   upsertStockBatch,
   upsertStockItem,
 } from '../repositories/stockRepository'
@@ -43,23 +44,35 @@ function formatQuantity(quantity?: number): string {
   return typeof quantity === 'number' && quantity > 0 ? String(quantity) : ''
 }
 
+function formatDateInput(value?: Date): string {
+  return value ? value.toISOString().slice(0, 10) : ''
+}
+
 function StockRow({
   name,
   unit,
   quantity,
+  purchasedAt,
+  expiresAt,
   onCommitQuantity,
+  onUpdateDates,
   onStep,
   onDelete,
 }: {
   name: string
   unit: string
   quantity: number
+  purchasedAt?: Date
+  expiresAt?: Date
   onCommitQuantity: (quantity: number) => void
+  onUpdateDates: (patch: { purchasedAt?: Date; expiresAt?: Date }) => void
   onStep: (delta: number) => void
   onDelete: () => void
 }) {
   const [draft, setDraft] = useState(formatQuantity(quantity))
   const [isEditing, setIsEditing] = useState(false)
+  const [purchasedAtDraft, setPurchasedAtDraft] = useState(formatDateInput(purchasedAt))
+  const [expiresAtDraft, setExpiresAtDraft] = useState(formatDateInput(expiresAt))
   const inputValue = isEditing ? draft : formatQuantity(quantity)
 
   const commit = () => {
@@ -149,6 +162,34 @@ function StockRow({
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <label className="text-xs text-text-secondary">
+          購入日
+          <input
+            type="date"
+            value={purchasedAtDraft}
+            onChange={(e) => setPurchasedAtDraft(e.target.value)}
+            onBlur={() => onUpdateDates({
+              purchasedAt: purchasedAtDraft ? new Date(`${purchasedAtDraft}T00:00:00`) : undefined,
+              expiresAt: expiresAtDraft ? new Date(`${expiresAtDraft}T00:00:00`) : undefined,
+            })}
+            className="ui-input mt-1 rounded-xl py-2 text-sm"
+          />
+        </label>
+        <label className="text-xs text-text-secondary">
+          賞味期限
+          <input
+            type="date"
+            value={expiresAtDraft}
+            onChange={(e) => setExpiresAtDraft(e.target.value)}
+            onBlur={() => onUpdateDates({
+              purchasedAt: purchasedAtDraft ? new Date(`${purchasedAtDraft}T00:00:00`) : undefined,
+              expiresAt: expiresAtDraft ? new Date(`${expiresAtDraft}T00:00:00`) : undefined,
+            })}
+            className="ui-input mt-1 rounded-xl py-2 text-sm"
+          />
+        </label>
       </div>
     </div>
   )
@@ -318,6 +359,11 @@ export function StockManager() {
     rememberRecent(name)
   }
 
+  const handleUpdateDates = async (name: string, patch: { purchasedAt?: Date; expiresAt?: Date }) => {
+    await updateStockItemMetadata(name, patch)
+    rememberRecent(name)
+  }
+
   const inStockItems = useMemo(
     () =>
       INGREDIENT_INDEX.filter((ingredient) => {
@@ -327,6 +373,8 @@ export function StockManager() {
         ...ingredient,
         quantity: stockMap.get(ingredient.name)?.quantity ?? 0,
         unit: stockMap.get(ingredient.name)?.unit || ingredient.defaultUnit,
+        purchasedAt: stockMap.get(ingredient.name)?.purchasedAt,
+        expiresAt: stockMap.get(ingredient.name)?.expiresAt,
       })),
     [stockMap]
   )
@@ -480,8 +528,13 @@ export function StockManager() {
                     name={item.name}
                     unit={item.unit}
                     quantity={item.quantity}
+                    purchasedAt={item.purchasedAt}
+                    expiresAt={item.expiresAt}
                     onCommitQuantity={(quantity) => {
                       void handleUpdateQuantity(item.name, item.unit, quantity)
+                    }}
+                    onUpdateDates={(patch) => {
+                      void handleUpdateDates(item.name, patch)
                     }}
                     onStep={(delta) => {
                       void handleUpdateQuantity(item.name, item.unit, Math.max(1, item.quantity + delta))
@@ -503,8 +556,13 @@ export function StockManager() {
                   name={item.name}
                   unit={item.unit}
                   quantity={item.quantity}
+                  purchasedAt={item.purchasedAt}
+                  expiresAt={item.expiresAt}
                   onCommitQuantity={(quantity) => {
                     void handleUpdateQuantity(item.name, item.unit, quantity)
+                  }}
+                  onUpdateDates={(patch) => {
+                    void handleUpdateDates(item.name, patch)
                   }}
                   onStep={(delta) => {
                     void handleUpdateQuantity(item.name, item.unit, Math.max(1, item.quantity + delta))

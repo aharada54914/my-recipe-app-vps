@@ -24,14 +24,19 @@ import {
 } from '@kitchen/shared-types'
 import {
   approveRecipeImportDraft,
+  acknowledgeStockExpiryAlerts,
   bindWorkflowChannel,
   cancelRecipeImportDraft,
   createRecipeImportDraft,
+  getPendingStockExpiryAlerts,
   getRecipeImportDraft,
   getWorkflowChannel,
   updateRecipeImportDraft,
 } from './lib/apiClient.js'
-import { buildRecipeImportDraftMessage } from './lib/messages.js'
+import {
+  buildRecipeImportDraftMessage,
+  buildStockExpiryAlertMessage,
+} from './lib/messages.js'
 import {
   buildWeeklyMenuCommand,
   handlePlanWeekCommand,
@@ -49,6 +54,13 @@ import {
   handleKitchenAdviceButton,
   handleKitchenAdviceCommand,
 } from './workflows/kitchenAdvice.js'
+import {
+  buildHelpCommand,
+  buildSyncHelpCommand,
+  handleHelpCommand,
+  handleSyncHelpCommand,
+  syncHelpResources,
+} from './lib/help.js'
 
 const WORKFLOW_CHOICES = [
   ['URLレシピ取込', 'recipe_import'],
@@ -68,6 +80,8 @@ const RecipeImportModalSchema = z.object({
   draftId: z.coerce.number().int().positive(),
   messageId: z.string().min(1),
 })
+
+const STOCK_EXPIRY_ALERT_INTERVAL_MS = 1000 * 60 * 60 * 6
 
 function getRequiredEnv(name: string): string {
   const value = process.env[name]
@@ -107,6 +121,8 @@ function buildCommands() {
       .addIntegerOption((option) =>
         option.setName('servings').setDescription('今回は何人分か').setRequired(true).setMinValue(1).setMaxValue(20),
       ),
+    buildHelpCommand(),
+    buildSyncHelpCommand(),
     buildWeeklyMenuCommand(),
     buildStockPhotoCommand(),
     buildKitchenAdviceCommand(),
@@ -190,8 +206,10 @@ async function handleBindChannel(interaction: ChatInputCommandInteraction): Prom
     channelId: interaction.channelId,
   })
 
+  await syncHelpResources(interaction.client, interaction.guildId)
+
   await interaction.reply({
-    content: `このチャンネルを \`${workflow}\` 用に紐付けました。`,
+    content: `このチャンネルを \`${workflow}\` 用に紐付けました。案内メッセージも更新しました。`,
     ephemeral: true,
   })
 }
@@ -373,6 +391,34 @@ async function handleRecipeImportModal(interaction: ModalSubmitInteraction): Pro
   })
 }
 
+async function dispatchStockExpiryAlerts(client: Client): Promise<void> {
+  const guildId = process.env['DISCORD_GUILD_ID']
+  if (!guildId) return
+
+  const batch = await getPendingStockExpiryAlerts(guildId)
+  if (batch.items.length === 0) return
+
+  const channelId = await getWorkflowChannel({ guildId, workflow: 'stock_photo' })
+  if (!channelId) {
+    logBotEvent('stock_expiry_alert_channel_missing', { guildId })
+    return
+  }
+
+  const channel = await client.channels.fetch(channelId)
+  if (!channel || !('send' in channel)) {
+    logBotEvent('stock_expiry_alert_channel_unavailable', { guildId, channelId })
+    return
+  }
+
+  await channel.send(buildStockExpiryAlertMessage(batch))
+  await acknowledgeStockExpiryAlerts(batch.items.map((item) => item.stockId))
+  logBotEvent('stock_expiry_alert_sent', {
+    guildId,
+    channelId,
+    count: batch.items.length,
+  })
+}
+
 async function main(): Promise<void> {
   const token = getRequiredEnv('DISCORD_BOT_TOKEN')
   const client = new Client({
@@ -383,6 +429,18 @@ async function main(): Promise<void> {
     await registerCommands()
     readyClient.user.setActivity('Kitchen workflows')
     logBotEvent('ready', { userTag: readyClient.user.tag })
+    void dispatchStockExpiryAlerts(readyClient).catch((error) => {
+      logBotEvent('stock_expiry_alert_error', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
+    setInterval(() => {
+      void dispatchStockExpiryAlerts(readyClient).catch((error) => {
+        logBotEvent('stock_expiry_alert_error', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }, STOCK_EXPIRY_ALERT_INTERVAL_MS)
   })
 
   client.on('interactionCreate', async (interaction) => {
@@ -400,6 +458,14 @@ async function main(): Promise<void> {
         }
         if (interaction.commandName === 'import-url') {
           await handleImportUrl(interaction)
+          return
+        }
+        if (interaction.commandName === 'help') {
+          await handleHelpCommand(interaction)
+          return
+        }
+        if (interaction.commandName === 'sync-help') {
+          await handleSyncHelpCommand(interaction)
           return
         }
         if (interaction.commandName === 'plan-week') {

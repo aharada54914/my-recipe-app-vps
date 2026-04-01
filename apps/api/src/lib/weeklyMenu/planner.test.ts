@@ -83,11 +83,94 @@ describe('buildWeeklyMenuProposalItems', () => {
       requestedServings: 3,
       preferences: { ...USER_PREFERENCES_DEFAULTS, updatedAt: new Date() },
       stockNames: new Set(['鶏もも肉', 'トマト缶', '豆腐']),
+      expiringStockNames: new Set(['豆腐']),
       recentRecipeIds: new Set<number>(),
       favoriteRecipeIds: new Set<number>([4]),
     })
 
     expect(new Set(items.map((item) => item.recipeId)).size).toBe(5)
     expect(items.filter((item) => item.sideRecipeId != null).length).toBeGreaterThanOrEqual(2)
+    expect(items.every((item) => item.mainCandidates.length >= 1)).toBe(true)
+    expect(items.some((item) => item.mainCandidates.length >= 2)).toBe(true)
+  })
+
+  it('respects globally excluded recipes when rebuilding a day', () => {
+    const initial = buildWeeklyMenuProposalItems({
+      recipes: RECIPES,
+      forecastDays: FORECAST,
+      requestedServings: 3,
+      preferences: { ...USER_PREFERENCES_DEFAULTS, updatedAt: new Date() },
+      stockNames: new Set(['鶏もも肉', 'トマト缶', '豆腐']),
+      expiringStockNames: new Set(['豆腐']),
+      recentRecipeIds: new Set<number>(),
+      favoriteRecipeIds: new Set<number>([4]),
+    })
+
+    const excludedRecipeId = initial[0]?.recipeId
+    const rebuilt = buildWeeklyMenuProposalItems({
+      recipes: RECIPES,
+      forecastDays: FORECAST,
+      requestedServings: 3,
+      preferences: { ...USER_PREFERENCES_DEFAULTS, updatedAt: new Date() },
+      stockNames: new Set(['鶏もも肉', 'トマト缶', '豆腐']),
+      expiringStockNames: new Set(['豆腐']),
+      recentRecipeIds: new Set<number>(),
+      favoriteRecipeIds: new Set<number>([4]),
+      existingItems: initial,
+      replaceDayIndex: 0,
+      globalExcludedRecipeIds: new Set<number>([excludedRecipeId]),
+    })
+
+    expect(rebuilt[0]?.recipeId).not.toBe(excludedRecipeId)
+    expect(rebuilt[0]?.excludedRecipeIds).toContain(excludedRecipeId)
+  })
+
+  it('prioritizes fish recipes when fish_more preset is requested', () => {
+    const items = buildWeeklyMenuProposalItems({
+      recipes: RECIPES,
+      forecastDays: FORECAST,
+      requestedServings: 3,
+      preferences: { ...USER_PREFERENCES_DEFAULTS, updatedAt: new Date() },
+      stockNames: new Set(['鮭', 'きのこ']),
+      expiringStockNames: new Set<string>(),
+      recentRecipeIds: new Set<number>(),
+      favoriteRecipeIds: new Set<number>(),
+      preset: 'fish_more',
+    })
+
+    expect(items[0]?.mainCandidates[0]?.proteinGroup).toBe('fish')
+    expect(items.some((item) => item.recipeTitle.includes('鮭'))).toBe(true)
+  })
+
+  it('can avoid the same main protein when rebuilding a day', () => {
+    const initial = buildWeeklyMenuProposalItems({
+      recipes: RECIPES,
+      forecastDays: FORECAST,
+      requestedServings: 3,
+      preferences: { ...USER_PREFERENCES_DEFAULTS, updatedAt: new Date() },
+      stockNames: new Set(['鶏もも肉', 'トマト缶', '豆腐']),
+      expiringStockNames: new Set<string>(),
+      recentRecipeIds: new Set<number>(),
+      favoriteRecipeIds: new Set<number>(),
+    })
+
+    const rebuilt = buildWeeklyMenuProposalItems({
+      recipes: RECIPES,
+      forecastDays: FORECAST,
+      requestedServings: 3,
+      preferences: { ...USER_PREFERENCES_DEFAULTS, updatedAt: new Date() },
+      stockNames: new Set(['鶏もも肉', 'トマト缶', '豆腐']),
+      expiringStockNames: new Set<string>(),
+      recentRecipeIds: new Set<number>(),
+      favoriteRecipeIds: new Set<number>(),
+      existingItems: initial,
+      replaceDayIndex: 0,
+      replaceTarget: 'main',
+      avoidProteinGroups: new Set([initial[0]?.mainCandidates[0]?.proteinGroup]),
+    })
+
+    expect(rebuilt[0]?.mainCandidates[rebuilt[0]?.currentMainCandidateIndex ?? 0]?.proteinGroup).not.toBe(
+      initial[0]?.mainCandidates[0]?.proteinGroup,
+    )
   })
 })

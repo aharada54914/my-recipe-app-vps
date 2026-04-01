@@ -61,11 +61,18 @@ model WeeklyMenu {
 }
 
 model Stock {
-  id      Int     @id @default(autoincrement())
-  userId  String
-  name    String
-  inStock Boolean @default(true)
-  user    User    @relation(fields: [userId], references: [id])
+  id                  Int       @id @default(autoincrement())
+  userId              String
+  name                String
+  inStock             Boolean   @default(true)
+  quantity            Float?
+  unit                String?
+  purchasedAt         DateTime?
+  expiresAt           DateTime?
+  lastDetectedAt      DateTime?
+  lastExpiryAlertAt   DateTime?
+  detectionConfidence Float?
+  user                User      @relation(fields: [userId], references: [id])
 
   @@unique([userId, name])
 }

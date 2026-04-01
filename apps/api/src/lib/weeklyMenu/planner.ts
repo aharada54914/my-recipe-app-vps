@@ -1,5 +1,12 @@
 import type { JsonValue } from '@prisma/client/runtime/library'
-import type { DeviceType, EditableRecipeCategory, UserPreferences, WeeklyMenuProposalItem } from '@kitchen/shared-types'
+import type {
+  DeviceType,
+  EditableRecipeCategory,
+  UserPreferences,
+  WeeklyMenuCandidate,
+  WeeklyMenuPreset,
+  WeeklyMenuProposalItem,
+} from '@kitchen/shared-types'
 
 export interface PlannerRecipeRecord {
   id: number
@@ -21,8 +28,10 @@ export interface PlannerForecastDay {
 interface PlannerContext {
   requestedServings: number
   notes?: string
+  preset?: WeeklyMenuPreset
   preferences: UserPreferences
   stockNames: Set<string>
+  expiringStockNames: Set<string>
   recentRecipeIds: Set<number>
   favoriteRecipeIds: Set<number>
 }
@@ -59,6 +68,16 @@ function extractIngredientNames(ingredients: JsonValue): string[] {
 }
 
 function countStockMatches(recipe: PlannerRecipeRecord, stockNames: Set<string>): number {
+  const ingredientNames = extractIngredientNames(recipe.ingredients)
+  return ingredientNames.reduce((count, ingredient) => {
+    const normalized = normalizeText(ingredient)
+    return [...stockNames].some((stock) => normalizeText(stock).includes(normalized) || normalized.includes(normalizeText(stock)))
+      ? count + 1
+      : count
+  }, 0)
+}
+
+function countUrgentStockMatches(recipe: PlannerRecipeRecord, stockNames: Set<string>): number {
   const ingredientNames = extractIngredientNames(recipe.ingredients)
   return ingredientNames.reduce((count, ingredient) => {
     const normalized = normalizeText(ingredient)
@@ -120,6 +139,32 @@ function noteScore(recipe: PlannerRecipeRecord, notes?: string): number {
   if (/魚以外/.test(normalizedNotes) && /魚|鮭|さば|鯖|ぶり|えび|海老/.test(normalizedTitle)) score -= 20
   if (/揚げ物以外/.test(normalizedNotes) && /揚げ|フライ|唐揚げ/.test(normalizedTitle)) score -= 18
   return score
+}
+
+function presetScore(recipe: PlannerRecipeRecord, preset?: WeeklyMenuPreset): number {
+  if (!preset) return 0
+  const normalizedTitle = normalizeText(recipe.title)
+  const proteinGroup = inferProteinGroup(recipe)
+
+  if (preset === 'budget_saver') {
+    if (/(牛|うなぎ|蟹|かに|いくら|帆立|ステーキ|ローストビーフ)/.test(normalizedTitle)) return -12
+    if (proteinGroup === 'chicken' || proteinGroup === 'soy' || proteinGroup === 'egg') return 8
+    return 2
+  }
+
+  if (preset === 'fish_more') {
+    if (proteinGroup === 'fish') return 14
+    if (proteinGroup === 'beef' || proteinGroup === 'pork') return -4
+    return 0
+  }
+
+  if (preset === 'washoku_focus') {
+    if (/(煮|焼き|蒸し|和え|汁|みそ|味噌|だし|炊き|照り焼き|おひたし)/.test(normalizedTitle)) return 10
+    if (/(パスタ|グラタン|ドリア|シチュー|チリ|ガパオ|トムヤム|ラザニア)/.test(normalizedTitle)) return -8
+    return 1
+  }
+
+  return 0
 }
 
 function costScore(recipe: PlannerRecipeRecord, preferences: UserPreferences): number {
@@ -201,19 +246,19 @@ function scoreMainRecipe(params: {
   if (params.excludeRecipeIds?.has(recipe.id)) {
     return { score: -1_000_000, reason: '除外候補' }
   }
-  if (params.selectedRecipeIds.has(recipe.id)) {
-    return { score: -1_000_000, reason: '同一レシピ回避' }
-  }
 
   const category = toCategory(recipe.category)
   const device = toDevice(recipe.device)
   const stockMatches = countStockMatches(recipe, params.context.stockNames)
+  const urgentStockMatches = countUrgentStockMatches(recipe, params.context.expiringStockNames)
   const weather = weatherScore(recipe, params.forecast)
   const season = seasonScore(recipe)
   const note = noteScore(recipe, params.context.notes)
+  const preset = presetScore(recipe, params.context.preset)
   const cost = costScore(recipe, params.context.preferences)
   const favorite = params.context.favoriteRecipeIds.has(recipe.id) ? 4 : 0
   const recentPenalty = params.context.recentRecipeIds.has(recipe.id) ? -16 : 0
+  const selectedPenalty = params.selectedRecipeIds.has(recipe.id) ? -28 : 0
   const proteinGroup = inferProteinGroup(recipe)
   const proteinPenalty = params.selectedProteinGroups.includes(proteinGroup) ? -10 : 0
   const categoryPenalty = params.selectedCategories.includes(category) ? -2 : 0
@@ -226,10 +271,13 @@ function scoreMainRecipe(params: {
   score += weather
   score += season
   score += stockMatches * 3
+  score += urgentStockMatches * 5
   score += note
+  score += preset
   score += cost
   score += favorite
   score += recentPenalty
+  score += selectedPenalty
   score += proteinPenalty
   score += categoryPenalty
   score += deviceBonus
@@ -246,6 +294,9 @@ function scoreMainRecipe(params: {
     favorite,
     device: deviceBonus,
   })
+  if (urgentStockMatches > 0) reasons.push(`期限近い在庫${urgentStockMatches}件`)
+  if (preset > 0) reasons.push('テンプレ条件')
+  if (selectedPenalty < 0) reasons.push('今週の重複を抑制')
 
   return {
     score,
@@ -260,7 +311,9 @@ function scoreSideRecipe(params: {
   usedSideRecipeIds: Set<number>
   usedSideCategories: EditableRecipeCategory[]
   requestedServings: number
+  excludeRecipeIds?: Set<number>
 }): number {
+  if (params.excludeRecipeIds?.has(params.recipe.id)) return -1_000_000
   if (params.usedSideRecipeIds.has(params.recipe.id)) return -1_000_000
   if (params.recipe.id === params.mainRecipe.id) return -1_000_000
 
@@ -276,17 +329,96 @@ function scoreSideRecipe(params: {
   return score
 }
 
+function toCandidate(recipe: PlannerRecipeRecord, score: number, scoreSummary?: string): WeeklyMenuCandidate {
+  return {
+    recipeId: recipe.id,
+    title: recipe.title,
+    device: toDevice(recipe.device),
+    category: toCategory(recipe.category),
+    baseServings: recipe.baseServings,
+    proteinGroup: inferProteinGroup(recipe),
+    score,
+    ...(scoreSummary ? { scoreSummary } : {}),
+  }
+}
+
+function uniqueCandidates(candidates: WeeklyMenuCandidate[], limit: number): WeeklyMenuCandidate[] {
+  const seen = new Set<number>()
+  const next: WeeklyMenuCandidate[] = []
+  for (const candidate of candidates) {
+    if (seen.has(candidate.recipeId)) continue
+    seen.add(candidate.recipeId)
+    next.push(candidate)
+    if (next.length >= limit) break
+  }
+  return next
+}
+
+function applyCandidateSelection(params: {
+  base: Omit<
+    WeeklyMenuProposalItem,
+    | 'recipeId'
+    | 'recipeTitle'
+    | 'device'
+    | 'category'
+    | 'baseServings'
+    | 'sideRecipeId'
+    | 'sideRecipeTitle'
+    | 'sideDevice'
+    | 'sideCategory'
+    | 'scoreSummary'
+  >
+  mainCandidate: WeeklyMenuCandidate
+  currentMainCandidateIndex: number
+  sideCandidates?: WeeklyMenuCandidate[]
+  currentSideCandidateIndex?: number
+  replacementNotes?: string
+}): WeeklyMenuProposalItem {
+  const activeSideCandidate =
+    params.sideCandidates && params.currentSideCandidateIndex != null
+      ? params.sideCandidates[params.currentSideCandidateIndex]
+      : undefined
+
+  return {
+    ...params.base,
+    recipeId: params.mainCandidate.recipeId,
+    recipeTitle: params.mainCandidate.title,
+    device: params.mainCandidate.device,
+    category: params.mainCandidate.category,
+    baseServings: params.mainCandidate.baseServings,
+    scoreSummary: params.mainCandidate.scoreSummary,
+    mainCandidates: params.base.mainCandidates,
+    currentMainCandidateIndex: params.currentMainCandidateIndex,
+    ...(params.sideCandidates && params.sideCandidates.length > 0 ? { sideCandidates: params.sideCandidates } : {}),
+    ...(params.currentSideCandidateIndex != null ? { currentSideCandidateIndex: params.currentSideCandidateIndex } : {}),
+    ...(activeSideCandidate
+      ? {
+        sideRecipeId: activeSideCandidate.recipeId,
+        sideRecipeTitle: activeSideCandidate.title,
+        sideDevice: activeSideCandidate.device,
+        sideCategory: activeSideCandidate.category,
+      }
+      : {}),
+    ...(params.replacementNotes ? { replacementNotes: params.replacementNotes } : {}),
+  }
+}
+
 export function buildWeeklyMenuProposalItems(params: {
   recipes: PlannerRecipeRecord[]
   forecastDays: PlannerForecastDay[]
   requestedServings: number
   preferences: UserPreferences
   stockNames: Set<string>
+  expiringStockNames: Set<string>
   recentRecipeIds: Set<number>
   favoriteRecipeIds: Set<number>
+  preset?: WeeklyMenuPreset
   notes?: string
   existingItems?: WeeklyMenuProposalItem[]
   replaceDayIndex?: number
+  replaceTarget?: 'main' | 'side'
+  globalExcludedRecipeIds?: Set<number>
+  avoidProteinGroups?: Set<WeeklyMenuCandidate['proteinGroup']>
 }): WeeklyMenuProposalItem[] {
   const mains = params.recipes.filter((recipe) => {
     const category = toCategory(recipe.category)
@@ -309,9 +441,13 @@ export function buildWeeklyMenuProposalItems(params: {
   for (let index = 0; index < params.forecastDays.length; index += 1) {
     const day = params.forecastDays[index]
     const preserveCurrent = params.existingItems && params.replaceDayIndex !== index
+    const existing = params.existingItems?.[index]
+    const dayExcludedRecipeIds = new Set<number>([
+      ...(params.globalExcludedRecipeIds ?? new Set<number>()),
+      ...(existing?.excludedRecipeIds ?? []),
+    ])
 
     if (preserveCurrent) {
-      const existing = params.existingItems?.[index]
       if (existing) {
         items.push(existing)
         selectedRecipeIds.add(existing.recipeId)
@@ -334,6 +470,94 @@ export function buildWeeklyMenuProposalItems(params: {
       }
     }
 
+    if (params.replaceDayIndex === index && params.replaceTarget === 'side' && existing) {
+      selectedRecipeIds.add(existing.recipeId)
+      selectedProteinGroups.push(inferProteinGroup({
+        id: existing.recipeId,
+        title: existing.recipeTitle,
+        device: existing.device,
+        category: existing.category,
+        baseServings: existing.baseServings,
+        totalTimeMinutes: 30,
+        ingredients: [],
+      }))
+      selectedDevices.push(existing.device)
+      selectedCategories.push(existing.category)
+
+      const sideCandidates = uniqueCandidates(
+        sides
+          .map((recipe) => ({
+            recipe,
+            score: scoreSideRecipe({
+              recipe,
+              mainRecipe: {
+                id: existing.recipeId,
+                title: existing.recipeTitle,
+                device: existing.device,
+                category: existing.category,
+                baseServings: existing.baseServings,
+                totalTimeMinutes: 30,
+                ingredients: [],
+              },
+              forecast: day,
+              usedSideRecipeIds,
+              usedSideCategories,
+              requestedServings: params.requestedServings,
+              excludeRecipeIds: dayExcludedRecipeIds,
+            }),
+          }))
+          .filter((entry) => entry.score > 0)
+          .sort((left, right) => right.score - left.score)
+          .map((entry) => toCandidate(entry.recipe, entry.score)),
+        6,
+      )
+
+      const nextSideIndex = sideCandidates.length > 0 ? 0 : undefined
+      const nextItem = applyCandidateSelection({
+        base: {
+          ...existing,
+          mainCandidates: existing.mainCandidates.length > 0 ? existing.mainCandidates : [
+            toCandidate({
+              id: existing.recipeId,
+              title: existing.recipeTitle,
+              device: existing.device,
+              category: existing.category,
+              baseServings: existing.baseServings,
+              totalTimeMinutes: 30,
+              ingredients: [],
+            }, 0, existing.scoreSummary),
+          ],
+          excludedRecipeIds: Array.from(dayExcludedRecipeIds),
+          replacementHistory: [
+            ...existing.replacementHistory,
+            `副菜を再探索: ${params.notes ?? '条件指定なし'}`,
+          ],
+        },
+        mainCandidate:
+          existing.mainCandidates[existing.currentMainCandidateIndex] ??
+          toCandidate({
+            id: existing.recipeId,
+            title: existing.recipeTitle,
+            device: existing.device,
+            category: existing.category,
+            baseServings: existing.baseServings,
+            totalTimeMinutes: 30,
+            ingredients: [],
+          }, 0, existing.scoreSummary),
+        currentMainCandidateIndex: existing.currentMainCandidateIndex ?? 0,
+        sideCandidates,
+        currentSideCandidateIndex: nextSideIndex,
+        ...(params.notes ? { replacementNotes: params.notes } : {}),
+      })
+
+      if (nextItem.sideRecipeId) {
+        usedSideRecipeIds.add(nextItem.sideRecipeId)
+        if (nextItem.sideCategory) usedSideCategories.push(nextItem.sideCategory)
+      }
+      items.push(nextItem)
+      continue
+    }
+
     const scoredMains = mains
       .map((recipe) => ({
         recipe,
@@ -343,9 +567,11 @@ export function buildWeeklyMenuProposalItems(params: {
           forecast: day,
           context: {
             requestedServings: params.requestedServings,
+            preset: params.preset,
             notes: params.notes,
             preferences: params.preferences,
             stockNames: params.stockNames,
+            expiringStockNames: params.expiringStockNames,
             recentRecipeIds: params.recentRecipeIds,
             favoriteRecipeIds: params.favoriteRecipeIds,
           },
@@ -354,12 +580,19 @@ export function buildWeeklyMenuProposalItems(params: {
           selectedDevices,
           selectedCategories,
           deviceTargets,
+          excludeRecipeIds: dayExcludedRecipeIds,
         }),
       }))
+      .filter((entry) => !params.avoidProteinGroups?.has(inferProteinGroup(entry.recipe)))
+      .filter((entry) => entry.score > -100_000)
       .sort((left, right) => right.score - left.score)
 
+    const mainCandidates = uniqueCandidates(
+      scoredMains.map((entry) => toCandidate(entry.recipe, entry.score, entry.reason)),
+      8,
+    )
     const bestMain = scoredMains[0]
-    if (!bestMain) {
+    if (!bestMain || mainCandidates.length === 0) {
       throw new Error('週間献立に使える主菜候補がありません。')
     }
 
@@ -368,7 +601,8 @@ export function buildWeeklyMenuProposalItems(params: {
     selectedDevices.push(toDevice(bestMain.recipe.device))
     selectedCategories.push(toCategory(bestMain.recipe.category))
 
-    const bestSide = sides
+    const sideCandidates = uniqueCandidates(
+      sides
       .map((recipe) => ({
         recipe,
         score: scoreSideRecipe({
@@ -378,13 +612,19 @@ export function buildWeeklyMenuProposalItems(params: {
           usedSideRecipeIds,
           usedSideCategories,
           requestedServings: params.requestedServings,
+          excludeRecipeIds: dayExcludedRecipeIds,
         }),
       }))
-      .sort((left, right) => right.score - left.score)[0]
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .map((entry) => toCandidate(entry.recipe, entry.score)),
+      6,
+    )
+    const bestSide = sideCandidates[0]
 
-    if (bestSide && bestSide.score > 0) {
-      usedSideRecipeIds.add(bestSide.recipe.id)
-      usedSideCategories.push(toCategory(bestSide.recipe.category))
+    if (bestSide) {
+      usedSideRecipeIds.add(bestSide.recipeId)
+      usedSideCategories.push(bestSide.category)
     }
 
     items.push({
@@ -396,15 +636,23 @@ export function buildWeeklyMenuProposalItems(params: {
       recipeTitle: bestMain.recipe.title,
       device: toDevice(bestMain.recipe.device),
       category: toCategory(bestMain.recipe.category),
-      ...(bestSide && bestSide.score > 0 ? {
-        sideRecipeId: bestSide.recipe.id,
-        sideRecipeTitle: bestSide.recipe.title,
-        sideDevice: toDevice(bestSide.recipe.device),
-        sideCategory: toCategory(bestSide.recipe.category),
+      ...(bestSide ? {
+        sideRecipeId: bestSide.recipeId,
+        sideRecipeTitle: bestSide.title,
+        sideDevice: bestSide.device,
+        sideCategory: bestSide.category,
       } : {}),
       servings: params.requestedServings,
       baseServings: bestMain.recipe.baseServings,
       scoreSummary: bestMain.reason,
+      mainCandidates,
+      currentMainCandidateIndex: 0,
+      ...(sideCandidates.length > 0 ? {
+        sideCandidates,
+        currentSideCandidateIndex: 0,
+      } : {}),
+      excludedRecipeIds: Array.from(dayExcludedRecipeIds),
+      replacementHistory: [],
       ...(params.notes && params.replaceDayIndex === index ? { replacementNotes: params.notes } : {}),
     })
   }

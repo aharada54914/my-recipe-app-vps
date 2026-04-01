@@ -5,6 +5,7 @@ import {
   EmbedBuilder,
 } from 'discord.js'
 import type {
+  DiscordStockExpiryAlertBatch,
   KitchenAdviceSessionSummary,
   PhotoAnalysisDraftSummary,
   RecipeImportDraftSummary,
@@ -73,6 +74,13 @@ export function buildRecipeImportDraftMessage(
 }
 
 export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSummary) {
+  const presetLabel = proposal.preset === 'washoku_focus'
+    ? '和食多め'
+    : proposal.preset === 'budget_saver'
+      ? '節約重視'
+      : proposal.preset === 'fish_more'
+        ? '魚多め'
+        : undefined
   const calendarSyncLines = proposal.calendarSync
     ? [
       '',
@@ -91,7 +99,11 @@ export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSumma
       `**対象週**: ${proposal.weekStartDate}`,
       `**人数**: ${proposal.requestedServings}人分`,
       `**状態**: ${proposal.status}`,
+      ...(presetLabel ? [`**テンプレ条件**: ${presetLabel}`] : []),
       ...(proposal.notes ? [`**メモ**: ${proposal.notes}`] : []),
+      ...(proposal.excludedRecipeIds.length > 0
+        ? [`**今週は除外**: ${proposal.excludedRecipeIds.length}件`]
+        : []),
       '',
       ...proposal.items.map((item, index) =>
         [
@@ -99,21 +111,36 @@ export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSumma
           item.sideRecipeTitle ? `副菜: ${item.sideRecipeTitle} / ${item.sideCategory} / ${item.sideDevice}` : '副菜: なし',
           `人数: 今回${item.servings}人分 (元${item.baseServings}人分) / 天気:${item.weatherText} ${item.maxTempC}℃ 雨${item.precipitationMm}mm`,
           item.scoreSummary ? `選定理由: ${item.scoreSummary}` : '',
+          item.mainCandidates[item.currentMainCandidateIndex + 1]
+            ? `次点主菜: ${item.mainCandidates[item.currentMainCandidateIndex + 1]?.title}`
+            : '次点主菜: なし',
+          item.sideCandidates?.[item.currentSideCandidateIndex != null ? item.currentSideCandidateIndex + 1 : 0]
+            ? `次点副菜: ${item.sideCandidates[item.currentSideCandidateIndex != null ? item.currentSideCandidateIndex + 1 : 0]?.title}`
+            : '次点副菜: なし',
+          item.excludedRecipeIds.length > 0 ? `この日で除外中: ${item.excludedRecipeIds.length}件` : '',
         ].filter(Boolean).join('\n'),
       ),
       ...calendarSyncLines,
     ].join('\n'))
 
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const replaceRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`weekly-menu:replace:${proposal.id}`)
-      .setLabel('気に入らない日を差し替え')
+      .setCustomId(`weekly-menu:next:${proposal.id}`)
+      .setLabel('次点候補へ')
       .setStyle(ButtonStyle.Primary)
       .setDisabled(proposal.status === 'persisted' || proposal.status === 'cancelled'),
     new ButtonBuilder()
+      .setCustomId(`weekly-menu:blacklist:${proposal.id}`)
+      .setLabel('今週はもう出さない')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(proposal.status === 'persisted' || proposal.status === 'cancelled'),
+    new ButtonBuilder()
       .setCustomId(`weekly-menu:refresh:${proposal.id}`)
-      .setLabel('再読込')
+      .setLabel('在庫優先で再探索')
       .setStyle(ButtonStyle.Secondary),
+  )
+
+  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`weekly-menu:approve:${proposal.id}`)
       .setLabel('保存して家族カレンダーへ登録')
@@ -128,7 +155,7 @@ export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSumma
 
   return {
     embeds: [embed],
-    components: [actionRow],
+    components: [replaceRow, actionRow],
   }
 }
 
@@ -138,11 +165,17 @@ export function buildPhotoAnalysisMessage(draft: PhotoAnalysisDraftSummary) {
     .setDescription([
       `**人数**: ${draft.requestedServings}人分`,
       `**状態**: ${draft.status}`,
-      `**抽出食材**: ${draft.detectedIngredients.join('、') || 'なし'}`,
+      `**抽出食材**: ${draft.detectedIngredients.length > 0 ? '' : 'なし'}`,
+      ...draft.detectedIngredients.map((ingredient) =>
+        `- ${ingredient.name} (${Math.round(ingredient.confidence * 100)}%)${ingredient.isUncertain ? ' 要確認' : ''}${ingredient.visionHint ? ` / ${ingredient.visionHint}` : ''}${ingredient.matchedStockName ? ` / 既存在庫:${ingredient.matchedStockName}` : ''}${ingredient.suggestedStockAction ? ` / 提案:${ingredient.suggestedStockAction === 'merge' ? '既存在庫へ加算' : '新規追加'}` : ''}`,
+      ),
       '',
       ...draft.candidates.map((candidate, index) =>
         `**候補${index + 1}** ${candidate.title} / ${candidate.category} / ${candidate.device} / 今回${candidate.requestedServings}人分 (元${candidate.baseServings}人分)\n一致: ${candidate.matchedIngredients.join('、')}${candidate.missingIngredients.length > 0 ? `\n不足: ${candidate.missingIngredients.slice(0, 5).join('、')}` : ''}`,
       ),
+      ...(draft.stockSaveSummary
+        ? ['', `**在庫保存**: ${draft.stockSaveSummary.savedCount}件`, `保存対象: ${draft.stockSaveSummary.names.join('、')}`]
+        : []),
     ].join('\n'))
     .setImage(draft.imageUrl)
 
@@ -170,6 +203,11 @@ export function buildPhotoAnalysisMessage(draft: PhotoAnalysisDraftSummary) {
       .setLabel('食材を編集')
       .setStyle(ButtonStyle.Primary)
       .setDisabled(draft.status === 'approved' || draft.status === 'cancelled'),
+    new ButtonBuilder()
+      .setCustomId(`stock-photo:save-stock:${draft.id}`)
+      .setLabel('在庫に保存')
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(draft.status === 'cancelled'),
     new ButtonBuilder()
       .setCustomId(`stock-photo:refresh:${draft.id}`)
       .setLabel('別候補を出す')
@@ -230,4 +268,26 @@ export function buildKitchenAdviceMessage(session: KitchenAdviceSessionSummary) 
     embeds: [embed],
     components: [row],
   }
+}
+
+export function buildStockExpiryAlertMessage(batch: DiscordStockExpiryAlertBatch) {
+  const embed = new EmbedBuilder()
+    .setTitle('在庫の期限アラート')
+    .setDescription(
+      batch.items.length === 0
+        ? '期限が近い在庫はありません。'
+        : batch.items
+          .slice(0, 20)
+          .map((item) => {
+            const status = item.daysUntilExpiry < 0
+              ? `${Math.abs(item.daysUntilExpiry)}日前に期限切れ`
+              : item.daysUntilExpiry === 0
+                ? '今日まで'
+                : `あと${item.daysUntilExpiry}日`
+            return `- **${item.stockName}** (${item.userLabel}) / ${status} / 期限: ${item.expiresAt.toISOString().slice(0, 10)}`
+          })
+          .join('\n'),
+    )
+
+  return { embeds: [embed] }
 }

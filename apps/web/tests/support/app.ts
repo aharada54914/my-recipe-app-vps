@@ -80,6 +80,14 @@ export async function applyTheme(page: Page, theme: 'light' | 'dark') {
   await page.addInitScript((nextTheme: 'light' | 'dark') => {
     localStorage.setItem('appearance_mode_v1', nextTheme)
   }, theme)
+
+  await waitForRouteReady(page, '/settings/appearance', page.getByTestId('appearance-settings'))
+  const themeButton = page.getByTestId(`appearance-mode-${theme}`)
+  if ((await themeButton.getAttribute('aria-pressed')) !== 'true') {
+    await themeButton.click()
+  }
+  await expect(themeButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
 }
 
 export async function applyDeterministicRandom(page: Page, seed = 12345) {

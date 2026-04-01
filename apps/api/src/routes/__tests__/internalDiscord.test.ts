@@ -21,7 +21,10 @@ const mocks = vi.hoisted(() => ({
   getPhotoAnalysisDraftByIdMock: vi.fn(),
   updatePhotoAnalysisDraftMock: vi.fn(),
   selectPhotoCandidateMock: vi.fn(),
+  savePhotoDetectedStocksMock: vi.fn(),
   cancelPhotoAnalysisDraftMock: vi.fn(),
+  listPendingStockExpiryAlertsMock: vi.fn(),
+  markStockExpiryAlertsSentMock: vi.fn(),
 
   createKitchenAdviceSessionMock: vi.fn(),
   getKitchenAdviceSessionByIdMock: vi.fn(),
@@ -52,7 +55,13 @@ vi.mock('../../lib/stockPhoto/service.js', () => ({
   getPhotoAnalysisDraftById: mocks.getPhotoAnalysisDraftByIdMock,
   updatePhotoAnalysisDraft: mocks.updatePhotoAnalysisDraftMock,
   selectPhotoCandidate: mocks.selectPhotoCandidateMock,
+  savePhotoDetectedStocks: mocks.savePhotoDetectedStocksMock,
   cancelPhotoAnalysisDraft: mocks.cancelPhotoAnalysisDraftMock,
+}))
+
+vi.mock('../../lib/discord/stockExpiry.js', () => ({
+  listPendingStockExpiryAlerts: mocks.listPendingStockExpiryAlertsMock,
+  markStockExpiryAlertsSent: mocks.markStockExpiryAlertsSentMock,
 }))
 
 vi.mock('../../lib/kitchenAdvice/service.js', () => ({
@@ -124,7 +133,10 @@ function resetServiceMocks(): void {
   mocks.getPhotoAnalysisDraftByIdMock.mockResolvedValue(photoAnalysisDraft)
   mocks.updatePhotoAnalysisDraftMock.mockResolvedValue(photoAnalysisDraft)
   mocks.selectPhotoCandidateMock.mockResolvedValue(photoAnalysisDraft)
+  mocks.savePhotoDetectedStocksMock.mockResolvedValue(photoAnalysisDraft)
   mocks.cancelPhotoAnalysisDraftMock.mockResolvedValue(photoAnalysisDraft)
+  mocks.listPendingStockExpiryAlertsMock.mockResolvedValue({ guildId: 'guild-1', items: [] })
+  mocks.markStockExpiryAlertsSentMock.mockResolvedValue(undefined)
 
   mocks.createKitchenAdviceSessionMock.mockResolvedValue(kitchenAdviceSession)
   mocks.getKitchenAdviceSessionByIdMock.mockResolvedValue(kitchenAdviceSession)
@@ -239,6 +251,7 @@ const endpointCases: EndpointCase[] = [
       threadId: 'thread-1',
       discordUserId: 'discord-user-1',
       requestedServings: 4,
+      preset: 'fish_more',
       notes: '雨の日向け',
     },
     expectedStatus: 201,
@@ -249,6 +262,7 @@ const endpointCases: EndpointCase[] = [
         threadId: 'thread-1',
         discordUserId: 'discord-user-1',
         requestedServings: 4,
+        preset: 'fish_more',
         notes: '雨の日向け',
       })
     },
@@ -266,12 +280,13 @@ const endpointCases: EndpointCase[] = [
     name: 'weekly menu replace',
     method: 'POST',
     url: '/api/internal/discord/weekly-menu-proposals/21/replace',
-    payload: { dayIndex: 2, discordUserId: 'discord-user-1', notes: 'もっと軽め' },
+    payload: { dayIndex: 2, discordUserId: 'discord-user-1', avoidSameMainIngredient: true, notes: 'もっと軽め' },
     expectedStatus: 200,
     verify: () => {
       expect(mocks.replaceWeeklyMenuProposalItemMock).toHaveBeenCalledWith(21, {
         dayIndex: 2,
         discordUserId: 'discord-user-1',
+        avoidSameMainIngredient: true,
         notes: 'もっと軽め',
       })
     },
@@ -355,6 +370,47 @@ const endpointCases: EndpointCase[] = [
     expectedStatus: 200,
     verify: () => {
       expect(mocks.selectPhotoCandidateMock).toHaveBeenCalledWith(31, 'discord-user-1', 91)
+    },
+  },
+  {
+    name: 'photo analysis save stock',
+    method: 'POST',
+    url: '/api/internal/discord/photo-analysis/31/save-stock',
+    payload: {
+      discordUserId: 'discord-user-1',
+      items: [
+        { name: '卵', quantity: 6, unit: '個' },
+        { action: 'merge', name: 'トマト', existingStockName: 'トマト', quantity: 2, unit: '個', purchasedAt: '2026-03-27T00:00:00.000Z' },
+      ],
+    },
+    expectedStatus: 200,
+    verify: () => {
+      expect(mocks.savePhotoDetectedStocksMock).toHaveBeenCalledWith(31, {
+        discordUserId: 'discord-user-1',
+        items: [
+          { action: 'create', name: '卵', quantity: 6, unit: '個' },
+          { action: 'merge', name: 'トマト', existingStockName: 'トマト', quantity: 2, unit: '個', purchasedAt: new Date('2026-03-27T00:00:00.000Z') },
+        ],
+      })
+    },
+  },
+  {
+    name: 'stock expiry alerts fetch',
+    method: 'GET',
+    url: '/api/internal/discord/stock-expiry-alerts?guildId=guild-1',
+    expectedStatus: 200,
+    verify: () => {
+      expect(mocks.listPendingStockExpiryAlertsMock).toHaveBeenCalledWith('guild-1')
+    },
+  },
+  {
+    name: 'stock expiry alerts ack',
+    method: 'POST',
+    url: '/api/internal/discord/stock-expiry-alerts/ack',
+    payload: { stockIds: [1, 2] },
+    expectedStatus: 200,
+    verify: () => {
+      expect(mocks.markStockExpiryAlertsSentMock).toHaveBeenCalledWith([1, 2])
     },
   },
   {
