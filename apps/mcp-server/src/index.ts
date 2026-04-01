@@ -229,13 +229,20 @@ function checkAuth(req: http.IncomingMessage): boolean {
 }
 
 const httpServer = http.createServer(async (req, res) => {
+  const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
+
+  // Health check is public (used by docker-compose healthcheck)
+  if (req.method === 'GET' && url.pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ status: 'ok' }))
+    return
+  }
+
   if (!MCP_AUTH_TOKEN || !checkAuth(req)) {
     res.writeHead(401, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ error: 'Unauthorized' }))
     return
   }
-
-  const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
 
   if (req.method === 'GET' && url.pathname === '/mcp/sse') {
     const transport = new SSEServerTransport('/mcp/message', res)
@@ -254,12 +261,6 @@ const httpServer = http.createServer(async (req, res) => {
       return
     }
     await transport.handlePostMessage(req, res)
-    return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ status: 'ok' }))
     return
   }
 

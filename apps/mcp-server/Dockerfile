@@ -11,7 +11,7 @@ COPY packages/shared-types/package.json packages/shared-types/
 COPY apps/mcp-server/package.json apps/mcp-server/
 
 # Install dependencies
-RUN npm ci --workspace=apps/mcp-server --workspace=packages/shared-types
+RUN npm ci --workspace=apps/mcp-server --workspace=packages/shared-types --ignore-scripts
 
 # Copy source code
 COPY packages/shared-types/ packages/shared-types/
@@ -35,7 +35,7 @@ COPY packages/shared-types/package.json packages/shared-types/
 COPY apps/mcp-server/package.json apps/mcp-server/
 
 # Install production dependencies only
-RUN npm ci --workspace=apps/mcp-server --workspace=packages/shared-types --omit=dev
+RUN npm ci --workspace=apps/mcp-server --workspace=packages/shared-types --omit=dev --ignore-scripts
 
 # Copy built output
 COPY --from=builder /app/apps/mcp-server/dist apps/mcp-server/dist/
