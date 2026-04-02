@@ -2,10 +2,10 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 
 export const searchRecipesInputSchema = z.object({
-  query: z.string().optional(),
-  category: z.string().optional(),
-  device: z.string().optional(),
-  limit: z.number().int().min(1).max(50).default(20),
+  query: z.string().optional().describe('Title keyword to search for (case-insensitive partial match)'),
+  category: z.string().optional().describe('Recipe category to filter by'),
+  device: z.string().optional().describe('Cooking device to filter by: hotcook, healsio, or manual'),
+  limit: z.number().int().min(1).max(50).default(20).describe('Maximum number of results to return'),
 })
 
 export type SearchRecipesInput = z.infer<typeof searchRecipesInputSchema>
