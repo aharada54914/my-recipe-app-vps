@@ -7,7 +7,7 @@ COPY package.json package-lock.json ./
 COPY packages/shared-types/package.json packages/shared-types/
 COPY apps/discord-bot/package.json apps/discord-bot/
 
-RUN npm ci --workspace=apps/discord-bot --workspace=packages/shared-types
+RUN npm ci --workspace=apps/discord-bot --workspace=packages/shared-types --ignore-scripts
 
 COPY packages/shared-types/ packages/shared-types/
 COPY apps/discord-bot/ apps/discord-bot/
@@ -24,7 +24,7 @@ COPY package.json package-lock.json ./
 COPY packages/shared-types/package.json packages/shared-types/
 COPY apps/discord-bot/package.json apps/discord-bot/
 
-RUN npm ci --workspace=apps/discord-bot --workspace=packages/shared-types --omit=dev
+RUN npm ci --workspace=apps/discord-bot --workspace=packages/shared-types --omit=dev --ignore-scripts
 
 COPY --from=builder /app/apps/discord-bot/dist apps/discord-bot/dist/
 COPY --from=builder /app/packages/shared-types/ packages/shared-types/

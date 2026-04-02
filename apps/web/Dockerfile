@@ -11,7 +11,7 @@ COPY packages/shared-types/package.json packages/shared-types/
 COPY apps/web/package.json apps/web/
 
 # Install dependencies
-RUN npm ci --workspace=apps/web --workspace=packages/shared-types
+RUN npm ci --workspace=apps/web --workspace=packages/shared-types --ignore-scripts
 
 # Copy source code
 COPY packages/shared-types/ packages/shared-types/
