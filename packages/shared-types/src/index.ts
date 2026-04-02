@@ -110,6 +110,23 @@ export const StockItemSchema = z.object({
   inStock: z.boolean(),
   quantity: z.number().optional(),
   unit: z.string().optional(),
+  purchasedAt: z.preprocess((value) => {
+    if (value == null || value === '') return undefined
+    return value
+  }, z.coerce.date().optional()),
+  expiresAt: z.preprocess((value) => {
+    if (value == null || value === '') return undefined
+    return value
+  }, z.coerce.date().optional()),
+  lastDetectedAt: z.preprocess((value) => {
+    if (value == null || value === '') return undefined
+    return value
+  }, z.coerce.date().optional()),
+  lastExpiryAlertAt: z.preprocess((value) => {
+    if (value == null || value === '') return undefined
+    return value
+  }, z.coerce.date().optional()),
+  detectionConfidence: z.number().min(0).max(1).optional(),
 })
 export type StockItem = z.infer<typeof StockItemSchema>
 
@@ -442,6 +459,25 @@ export const WeeklyMenuProposalStatusSchema = z.enum([
 ])
 export type WeeklyMenuProposalStatus = z.infer<typeof WeeklyMenuProposalStatusSchema>
 
+export const WeeklyMenuCandidateSchema = z.object({
+  recipeId: z.number().int().positive(),
+  title: z.string().min(1),
+  device: DeviceTypeSchema,
+  category: EditableRecipeCategorySchema,
+  baseServings: z.number().int().positive(),
+  proteinGroup: z.enum(['chicken', 'pork', 'beef', 'fish', 'soy', 'egg', 'vegetable', 'other']).optional(),
+  score: z.number(),
+  scoreSummary: z.string().min(1).optional(),
+})
+export type WeeklyMenuCandidate = z.infer<typeof WeeklyMenuCandidateSchema>
+
+export const WeeklyMenuPresetSchema = z.enum([
+  'washoku_focus',
+  'budget_saver',
+  'fish_more',
+])
+export type WeeklyMenuPreset = z.infer<typeof WeeklyMenuPresetSchema>
+
 export const WeeklyMenuProposalItemSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   weatherText: z.string().min(1),
@@ -459,6 +495,12 @@ export const WeeklyMenuProposalItemSchema = z.object({
   baseServings: z.number().int().positive(),
   scoreSummary: z.string().min(1).optional(),
   replacementNotes: z.string().optional(),
+  mainCandidates: z.array(WeeklyMenuCandidateSchema).min(1).max(8),
+  currentMainCandidateIndex: z.number().int().min(0),
+  sideCandidates: z.array(WeeklyMenuCandidateSchema).max(6).optional(),
+  currentSideCandidateIndex: z.number().int().min(0).optional(),
+  excludedRecipeIds: z.array(z.number().int().positive()).default([]),
+  replacementHistory: z.array(z.string().min(1)).default([]),
 })
 export type WeeklyMenuProposalItem = z.infer<typeof WeeklyMenuProposalItemSchema>
 
@@ -470,8 +512,10 @@ export const WeeklyMenuProposalSummarySchema = z.object({
   requestedServings: z.number().int().positive(),
   weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   items: z.array(WeeklyMenuProposalItemSchema).length(7),
+  preset: WeeklyMenuPresetSchema.optional(),
   notes: z.string().optional(),
   approvedWeeklyMenuId: z.number().int().positive().optional(),
+  excludedRecipeIds: z.array(z.number().int().positive()).default([]),
   calendarSync: z.object({
     status: z.enum(['not_started', 'registered', 'failed']),
     calendarId: z.string().min(1).optional(),
@@ -487,6 +531,7 @@ export const CreateDiscordWeeklyMenuProposalRequestSchema = z.object({
   threadId: z.string().min(1).optional(),
   discordUserId: z.string().min(1),
   requestedServings: z.number().int().positive().min(1).max(20),
+  preset: WeeklyMenuPresetSchema.optional(),
   notes: z.string().max(400).optional(),
 })
 export type CreateDiscordWeeklyMenuProposalRequest =
@@ -495,10 +540,23 @@ export type CreateDiscordWeeklyMenuProposalRequest =
 export const ReplaceDiscordWeeklyMenuItemRequestSchema = z.object({
   dayIndex: z.number().int().min(0).max(6),
   discordUserId: z.string().min(1),
+  target: z.enum(['main', 'side']).optional(),
+  strategy: z.enum(['next_candidate', 'blacklist_current', 'rebuild_stock_priority']).optional(),
+  avoidSameMainIngredient: z.boolean().optional(),
   notes: z.string().max(300).optional(),
 })
 export type ReplaceDiscordWeeklyMenuItemRequest =
   z.infer<typeof ReplaceDiscordWeeklyMenuItemRequestSchema>
+
+export const DetectedIngredientSchema = z.object({
+  name: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  isUncertain: z.boolean().default(false),
+  visionHint: z.string().min(1).optional(),
+  matchedStockName: z.string().min(1).optional(),
+  suggestedStockAction: z.enum(['merge', 'create']).optional(),
+})
+export type DetectedIngredient = z.infer<typeof DetectedIngredientSchema>
 
 export const PhotoRecipeCandidateSchema = z.object({
   recipeId: z.number().int().positive(),
@@ -528,9 +586,13 @@ export const PhotoAnalysisDraftSummarySchema = z.object({
   status: PhotoAnalysisDraftStatusSchema,
   imageUrl: z.string().url(),
   requestedServings: z.number().int().positive(),
-  detectedIngredients: z.array(z.string().min(1)),
+  detectedIngredients: z.array(DetectedIngredientSchema),
   candidates: z.array(PhotoRecipeCandidateSchema).max(3),
   selectedRecipeId: z.number().int().positive().optional(),
+  stockSaveSummary: z.object({
+    savedCount: z.number().int().min(0),
+    names: z.array(z.string().min(1)).max(30),
+  }).optional(),
 })
 export type PhotoAnalysisDraftSummary = z.infer<typeof PhotoAnalysisDraftSummarySchema>
 
@@ -552,6 +614,48 @@ export const UpdateDiscordPhotoAnalysisRequestSchema = z.object({
 })
 export type UpdateDiscordPhotoAnalysisRequest =
   z.infer<typeof UpdateDiscordPhotoAnalysisRequestSchema>
+
+export const PhotoStockSaveItemSchema = z.object({
+  action: z.enum(['merge', 'replace', 'create', 'skip']).default('create'),
+  name: z.string().min(1),
+  existingStockName: z.string().min(1).optional(),
+  quantity: z.number().positive().optional(),
+  unit: z.string().min(1).optional(),
+  purchasedAt: z.preprocess((value) => {
+    if (value == null || value === '') return undefined
+    return value
+  }, z.coerce.date().optional()),
+  expiresAt: z.preprocess((value) => {
+    if (value == null || value === '') return undefined
+    return value
+  }, z.coerce.date().optional()),
+  detectionConfidence: z.number().min(0).max(1).optional(),
+})
+export type PhotoStockSaveItem = z.infer<typeof PhotoStockSaveItemSchema>
+
+export const SaveDiscordPhotoStockRequestSchema = z.object({
+  discordUserId: z.string().min(1),
+  items: z.array(PhotoStockSaveItemSchema).min(1).max(30),
+})
+export type SaveDiscordPhotoStockRequest =
+  z.infer<typeof SaveDiscordPhotoStockRequestSchema>
+
+export const DiscordStockExpiryAlertItemSchema = z.object({
+  stockId: z.number().int().positive(),
+  userId: z.string().min(1),
+  userLabel: z.string().min(1),
+  stockName: z.string().min(1),
+  expiresAt: z.coerce.date(),
+  purchasedAt: z.coerce.date().optional(),
+  daysUntilExpiry: z.number().int(),
+})
+export type DiscordStockExpiryAlertItem = z.infer<typeof DiscordStockExpiryAlertItemSchema>
+
+export const DiscordStockExpiryAlertBatchSchema = z.object({
+  guildId: z.string().min(1),
+  items: z.array(DiscordStockExpiryAlertItemSchema),
+})
+export type DiscordStockExpiryAlertBatch = z.infer<typeof DiscordStockExpiryAlertBatchSchema>
 
 export const SelectDiscordPhotoCandidateRequestSchema = z.object({
   discordUserId: z.string().min(1),

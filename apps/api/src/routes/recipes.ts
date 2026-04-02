@@ -1,17 +1,23 @@
 import type { FastifyInstance } from 'fastify'
-import type { InputJsonValue } from '@prisma/client/runtime/library'
 import { z } from 'zod'
-import { prisma } from '../db/client.js'
 import {
-  type CookingStep,
   DeviceTypeSchema,
-  type Ingredient,
-  type NutritionPerServing,
   RecipeCategorySchema,
   IngredientSchema,
   CookingStepSchema,
   NutritionPerServingSchema,
 } from '@kitchen/shared-types'
+import {
+  listRecipes,
+  getRecipeById,
+  createRecipe,
+  updateRecipe,
+  deleteRecipe,
+} from '../lib/recipes/service.js'
+
+// ---------------------------------------------------------------------------
+// Validation schemas (HTTP-layer concerns)
+// ---------------------------------------------------------------------------
 
 const RecipeQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -39,53 +45,20 @@ const CreateRecipeSchema = z.object({
 
 const UpdateRecipeSchema = CreateRecipeSchema.partial()
 
-function toJsonArray<T>(value: T[]): InputJsonValue {
-  return value as InputJsonValue
-}
-
-function toJsonObject<T extends object>(value: T | undefined): InputJsonValue | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  return value as InputJsonValue
-}
+// ---------------------------------------------------------------------------
+// Route registration
+// ---------------------------------------------------------------------------
 
 export async function registerRecipeRoutes(app: FastifyInstance): Promise<void> {
   // List recipes with pagination and filters
   app.get('/api/recipes', async (request, reply) => {
     try {
       const query = RecipeQuerySchema.parse(request.query)
-      const { page, limit, category, device, search } = query
-      const skip = (page - 1) * limit
-
-      const where: Record<string, unknown> = {}
-      if (category && category !== 'すべて') where['category'] = category
-      if (device) where['device'] = device
-      if (search) {
-        where['title'] = { contains: search, mode: 'insensitive' }
-      }
-
-      const [recipes, total] = await Promise.all([
-        prisma.recipe.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { id: 'asc' },
-        }),
-        prisma.recipe.count({ where }),
-      ])
-
-      reply.send({
-        success: true,
-        data: recipes,
-        meta: { total, page, limit },
-      })
+      const { recipes, total, page, limit } = await listRecipes(query)
+      reply.send({ success: true, data: recipes, meta: { total, page, limit } })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      reply.status(500).send({
-        success: false,
-        error: `Failed to fetch recipes: ${message}`,
-      })
+      reply.status(500).send({ success: false, error: `Failed to fetch recipes: ${message}` })
     }
   })
 
@@ -93,120 +66,62 @@ export async function registerRecipeRoutes(app: FastifyInstance): Promise<void> 
   app.get('/api/recipes/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const recipe = await prisma.recipe.findUnique({
-        where: { id: Number.parseInt(id, 10) },
-      })
+      const recipe = await getRecipeById(Number.parseInt(id, 10))
 
       if (!recipe) {
-        reply.status(404).send({
-          success: false,
-          error: 'Recipe not found',
-        })
+        reply.status(404).send({ success: false, error: 'Recipe not found' })
         return
       }
 
       reply.send({ success: true, data: recipe })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      reply.status(500).send({
-        success: false,
-        error: `Failed to fetch recipe: ${message}`,
-      })
+      reply.status(500).send({ success: false, error: `Failed to fetch recipe: ${message}` })
     }
   })
 
   // Create recipe (authenticated)
-  app.post('/api/recipes', {
-    preHandler: [app.authenticate],
-  }, async (request, reply) => {
+  app.post('/api/recipes', { preHandler: [app.authenticate] }, async (request, reply) => {
     try {
       const data = CreateRecipeSchema.parse(request.body)
-      const recipe = await prisma.recipe.create({
-        data: {
-          ...data,
-          ingredients: toJsonArray<Ingredient>(data.ingredients),
-          steps: toJsonArray<CookingStep>(data.steps),
-          nutritionPerServing: toJsonObject<NutritionPerServing>(data.nutritionPerServing),
-        },
-      })
-
+      const recipe = await createRecipe(data)
       reply.status(201).send({ success: true, data: recipe })
     } catch (err) {
       if (err instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          data: err.issues,
-        })
+        reply.status(400).send({ success: false, error: 'Validation error', data: err.issues })
         return
       }
       const message = err instanceof Error ? err.message : String(err)
-      reply.status(500).send({
-        success: false,
-        error: `Failed to create recipe: ${message}`,
-      })
+      reply.status(500).send({ success: false, error: `Failed to create recipe: ${message}` })
     }
   })
 
   // Update recipe (authenticated)
-  app.put('/api/recipes/:id', {
-    preHandler: [app.authenticate],
-  }, async (request, reply) => {
+  app.put('/api/recipes/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
       const data = UpdateRecipeSchema.parse(request.body)
-
-      const updateData: Record<string, unknown> = { ...data }
-      if (data.ingredients) {
-        updateData['ingredients'] = toJsonArray<Ingredient>(data.ingredients)
-      }
-      if (data.steps) {
-        updateData['steps'] = toJsonArray<CookingStep>(data.steps)
-      }
-      if (data.nutritionPerServing !== undefined) {
-        updateData['nutritionPerServing'] = toJsonObject<NutritionPerServing>(data.nutritionPerServing)
-      }
-
-      const recipe = await prisma.recipe.update({
-        where: { id: Number.parseInt(id, 10) },
-        data: updateData,
-      })
-
+      const recipe = await updateRecipe(Number.parseInt(id, 10), data)
       reply.send({ success: true, data: recipe })
     } catch (err) {
       if (err instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          data: err.issues,
-        })
+        reply.status(400).send({ success: false, error: 'Validation error', data: err.issues })
         return
       }
       const message = err instanceof Error ? err.message : String(err)
-      reply.status(500).send({
-        success: false,
-        error: `Failed to update recipe: ${message}`,
-      })
+      reply.status(500).send({ success: false, error: `Failed to update recipe: ${message}` })
     }
   })
 
   // Delete recipe (authenticated)
-  app.delete('/api/recipes/:id', {
-    preHandler: [app.authenticate],
-  }, async (request, reply) => {
+  app.delete('/api/recipes/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      await prisma.recipe.delete({
-        where: { id: Number.parseInt(id, 10) },
-      })
-
+      await deleteRecipe(Number.parseInt(id, 10))
       reply.send({ success: true, data: null })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      reply.status(500).send({
-        success: false,
-        error: `Failed to delete recipe: ${message}`,
-      })
+      reply.status(500).send({ success: false, error: `Failed to delete recipe: ${message}` })
     }
   })
 }

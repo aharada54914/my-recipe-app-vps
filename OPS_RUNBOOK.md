@@ -32,12 +32,14 @@
 1. `.env` を `env.example` から作る
 2. `APP_DOMAIN`, `FRONTEND_URL`, `DATABASE_URL`, `DB_PASSWORD`, `JWT_SECRET` を設定する
 3. Discord を使う場合は `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`, `DISCORD_GUILD_ID`, `DISCORD_INTERNAL_API_TOKEN` も設定する
-4. `mkdir -p backups ssl`
-5. `bash scripts/ops/kitchenctl.sh up`
-6. 初回 `up` で self-signed 証明書が自動生成される
-7. 初回 TLS 発行後に `bash scripts/ops/kitchenctl.sh sync-cert`
-8. `bash scripts/ops/kitchenctl.sh health`
-9. Discord 上の各チャンネルで `/bind-channel` を実行して workflow を紐付ける
+4. Gemini を分離運用する場合は `GEMINI_PHOTO_*` と `GEMINI_ADVICE_*` を設定する
+5. 旧 `GEMINI_API_KEY` は recipe-import / shopping sort の後方互換 fallback としてだけ残す
+6. `mkdir -p backups ssl`
+7. `bash scripts/ops/kitchenctl.sh up`
+8. 初回 `up` で self-signed 証明書が自動生成される
+9. 初回 TLS 発行後に `bash scripts/ops/kitchenctl.sh sync-cert`
+10. `bash scripts/ops/kitchenctl.sh health`
+11. Discord 上の各チャンネルで `/bind-channel` を実行して workflow を紐付ける
 
 ## 日常運用コマンド
 
@@ -114,3 +116,14 @@ bash /path/to/repo/scripts/ops/sync-letsencrypt.sh
 - `discord-bot` は `DISCORD_GUILD_ID` を使った guild command 前提
 - Docker 実行環境がないと Compose 実起動検証はできない
 - 監視通知は別途 Uptime Kuma / Hetzner monitoring / external alerting を追加するとさらに安定する
+
+## Gemini 分離運用
+
+- `photo-analysis` は `GEMINI_PHOTO_API_KEY` と `GEMINI_MODEL_PHOTO_PRIMARY` を使う
+- `kitchen-advice` は `GEMINI_ADVICE_API_KEY` と `GEMINI_MODEL_ADVICE_PRIMARY` を使う
+- どちらも 429 / 一時障害では fallback model へ自動で切り替える
+- alert webhook を使う場合は `GEMINI_ALERT_WEBHOOK_URL` を設定する
+- provider ごとの失敗しきい値:
+  - `GEMINI_PHOTO_ERROR_THRESHOLD`
+  - `GEMINI_ADVICE_ERROR_THRESHOLD`
+- 集計 window は `GEMINI_RATE_LIMIT_WINDOW_MINUTES`

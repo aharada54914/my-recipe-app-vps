@@ -16,6 +16,7 @@ import {
   cancelPhotoAnalysisDraft,
   createPhotoAnalysisDraft,
   getPhotoAnalysisDraft,
+  savePhotoDetectedStocks,
   selectPhotoCandidate,
   updatePhotoAnalysisDraft,
 } from '../lib/apiClient.js'
@@ -23,12 +24,13 @@ import { buildPhotoAnalysisMessage } from '../lib/messages.js'
 
 const StockPhotoButtonSchema = z.object({
   scope: z.literal('stock-photo'),
-  action: z.enum(['pick1', 'pick2', 'pick3', 'edit', 'refresh', 'cancel']),
+  action: z.enum(['pick1', 'pick2', 'pick3', 'edit', 'save-stock', 'refresh', 'cancel']),
   draftId: z.coerce.number().int().positive(),
 })
 
 const StockPhotoModalSchema = z.object({
   scope: z.literal('stock-photo-modal'),
+  action: z.enum(['ingredients', 'save-stock']),
   draftId: z.coerce.number().int().positive(),
   messageId: z.string().min(1),
 })
@@ -51,13 +53,13 @@ function parseStockPhotoButton(customId: string) {
 }
 
 function parseStockPhotoModal(customId: string) {
-  const [scope, draftId, messageId] = customId.split(':')
-  return StockPhotoModalSchema.parse({ scope, draftId, messageId })
+  const [scope, action, draftId, messageId] = customId.split(':')
+  return StockPhotoModalSchema.parse({ scope, action, draftId, messageId })
 }
 
 async function openIngredientsModal(interaction: ButtonInteraction, draftId: number, ingredients: string[]): Promise<void> {
   const modal = new ModalBuilder()
-    .setCustomId(`stock-photo-modal:${draftId}:${interaction.message.id}`)
+    .setCustomId(`stock-photo-modal:ingredients:${draftId}:${interaction.message.id}`)
     .setTitle('抽出食材を編集')
 
   const ingredientsInput = new TextInputBuilder()
@@ -69,6 +71,34 @@ async function openIngredientsModal(interaction: ButtonInteraction, draftId: num
 
   modal.addComponents(
     new ActionRowBuilder<TextInputBuilder>().addComponents(ingredientsInput),
+  )
+
+  await interaction.showModal(modal)
+}
+
+async function openSaveStockModal(
+  interaction: ButtonInteraction,
+  draftId: number,
+  ingredients: Array<{ name: string; confidence: number; matchedStockName?: string; suggestedStockAction?: 'merge' | 'create' }>,
+): Promise<void> {
+  const modal = new ModalBuilder()
+    .setCustomId(`stock-photo-modal:save-stock:${draftId}:${interaction.message.id}`)
+    .setTitle('在庫として保存')
+
+  const stockInput = new TextInputBuilder()
+    .setCustomId('stockLines')
+    .setLabel('1行=action,食材名,既存在庫名,数量,単位,購入日,賞味期限')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setValue(
+      ingredients
+        .map((ingredient) => `${ingredient.suggestedStockAction ?? 'create'},${ingredient.name},${ingredient.matchedStockName ?? ''},1,個,,`)
+        .join('\n')
+        .slice(0, 3900),
+    )
+
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(stockInput),
   )
 
   await interaction.showModal(modal)
@@ -135,7 +165,12 @@ export async function handleStockPhotoButton(interaction: ButtonInteraction): Pr
   const draft = await getPhotoAnalysisDraft(parsed.draftId)
 
   if (parsed.action === 'edit') {
-    await openIngredientsModal(interaction, draft.id, draft.detectedIngredients)
+    await openIngredientsModal(interaction, draft.id, draft.detectedIngredients.map((item) => item.name))
+    return true
+  }
+
+  if (parsed.action === 'save-stock') {
+    await openSaveStockModal(interaction, draft.id, draft.detectedIngredients)
     return true
   }
 
@@ -181,7 +216,57 @@ export async function handleStockPhotoModal(interaction: ModalSubmitInteraction)
   await interaction.deferReply({ ephemeral: true })
 
   const ingredients = interaction.fields
-    .getTextInputValue('ingredients')
+    .getTextInputValue(parsed.action === 'save-stock' ? 'stockLines' : 'ingredients')
+
+  if (parsed.action === 'save-stock') {
+    const items = ingredients
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [actionRaw, name, existingStockNameRaw, quantityRaw, unitRaw, purchasedAtRaw, expiresAtRaw] = line.split(',').map((part) => part.trim())
+        const quantity = Number(quantityRaw || '1')
+        const action: 'merge' | 'replace' | 'create' | 'skip' = actionRaw === 'merge' || actionRaw === 'replace' || actionRaw === 'skip'
+          ? actionRaw
+          : 'create'
+        return {
+          action,
+          name,
+          ...(existingStockNameRaw ? { existingStockName: existingStockNameRaw } : {}),
+          quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+          unit: unitRaw || '個',
+          ...(purchasedAtRaw ? { purchasedAt: new Date(`${purchasedAtRaw}T00:00:00`) } : {}),
+          ...(expiresAtRaw ? { expiresAt: new Date(`${expiresAtRaw}T00:00:00`) } : {}),
+        }
+      })
+      .filter((item) => item.name.length > 0)
+
+    try {
+      const draft = await getPhotoAnalysisDraft(parsed.draftId)
+      const confidenceMap = new Map(draft.detectedIngredients.map((item) => [item.name, item.confidence]))
+      const updated = await savePhotoDetectedStocks({
+        id: parsed.draftId,
+        discordUserId: interaction.user.id,
+        items: items.map((item) => ({
+          ...item,
+          ...(confidenceMap.has(item.name) ? { detectionConfidence: confidenceMap.get(item.name) } : {}),
+        })),
+      })
+      const channel = interaction.channel
+      if (channel && 'messages' in channel) {
+        const message = await channel.messages.fetch(parsed.messageId)
+        await message.edit(buildPhotoAnalysisMessage(updated))
+      }
+      await interaction.editReply(`在庫を ${items.length} 件保存しました。`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await interaction.editReply(`在庫保存に失敗しました: ${message}`)
+    }
+
+    return true
+  }
+
+  const ingredientNames = ingredients
     .split(/[、,\n]/)
     .map((entry) => entry.trim())
     .filter(Boolean)
@@ -190,7 +275,7 @@ export async function handleStockPhotoModal(interaction: ModalSubmitInteraction)
     const updated = await updatePhotoAnalysisDraft({
       id: parsed.draftId,
       discordUserId: interaction.user.id,
-      ingredients,
+      ingredients: ingredientNames,
     })
     const channel = interaction.channel
     if (channel && 'messages' in channel) {

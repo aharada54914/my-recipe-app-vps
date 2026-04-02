@@ -100,6 +100,10 @@ export interface StockItem {
   // T-27: Quantity fields
   quantity?: number
   unit?: string
+  purchasedAt?: Date
+  expiresAt?: Date
+  lastDetectedAt?: Date
+  detectionConfidence?: number
   // Metadata fields
   updatedAt?: Date
 }

@@ -15,6 +15,8 @@ playwright-report/*
 !playwright-report/.gitkeep
 test-results/*
 !test-results/.gitkeep
+apps/discord-bot/tests/e2e/.auth/*
+!apps/discord-bot/tests/e2e/.auth/.gitkeep
 public/seed
 *.local
 .env

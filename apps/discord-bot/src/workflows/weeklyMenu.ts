@@ -11,7 +11,7 @@ import {
   type ModalSubmitInteraction,
 } from 'discord.js'
 import { z } from 'zod'
-import { type DiscordWorkflow } from '@kitchen/shared-types'
+import { type DiscordWorkflow, type WeeklyMenuPreset } from '@kitchen/shared-types'
 import {
   approveWeeklyMenuProposal,
   cancelWeeklyMenuProposal,
@@ -23,12 +23,13 @@ import { buildWeeklyMenuProposalMessage } from '../lib/messages.js'
 
 const WeeklyMenuButtonSchema = z.object({
   scope: z.literal('weekly-menu'),
-  action: z.enum(['replace', 'refresh', 'approve', 'cancel']),
+  action: z.enum(['next', 'blacklist', 'refresh', 'approve', 'cancel']),
   proposalId: z.coerce.number().int().positive(),
 })
 
 const WeeklyMenuModalSchema = z.object({
   scope: z.literal('weekly-menu-modal'),
+  action: z.enum(['next', 'blacklist', 'refresh']),
   proposalId: z.coerce.number().int().positive(),
   messageId: z.string().min(1),
 })
@@ -41,6 +42,16 @@ export function buildWeeklyMenuCommand() {
       option.setName('servings').setDescription('今回は何人分か').setRequired(true).setMinValue(1).setMaxValue(20),
     )
     .addStringOption((option) =>
+      option
+        .setName('preset')
+        .setDescription('今週のテンプレ条件')
+        .addChoices(
+          { name: '和食多め', value: 'washoku_focus' },
+          { name: '節約重視', value: 'budget_saver' },
+          { name: '魚多め', value: 'fish_more' },
+        ),
+    )
+    .addStringOption((option) =>
       option.setName('notes').setDescription('避けたい料理や希望').setMaxLength(400),
     )
 }
@@ -51,14 +62,24 @@ function parseWeeklyMenuButton(customId: string) {
 }
 
 function parseWeeklyMenuModal(customId: string) {
-  const [scope, proposalId, messageId] = customId.split(':')
-  return WeeklyMenuModalSchema.parse({ scope, proposalId, messageId })
+  const [scope, action, proposalId, messageId] = customId.split(':')
+  return WeeklyMenuModalSchema.parse({ scope, action, proposalId, messageId })
 }
 
-async function openReplaceModal(interaction: ButtonInteraction, proposalId: number): Promise<void> {
+async function openReplaceModal(
+  interaction: ButtonInteraction,
+  proposalId: number,
+  action: 'next' | 'blacklist' | 'refresh',
+): Promise<void> {
   const modal = new ModalBuilder()
-    .setCustomId(`weekly-menu-modal:${proposalId}:${interaction.message.id}`)
-    .setTitle('差し替える日を指定')
+    .setCustomId(`weekly-menu-modal:${action}:${proposalId}:${interaction.message.id}`)
+    .setTitle(
+      action === 'blacklist'
+        ? '候補を今週から除外'
+        : action === 'refresh'
+          ? '在庫優先で再探索'
+          : '次点候補に差し替え',
+    )
 
   const dayIndex = new TextInputBuilder()
     .setCustomId('dayIndex')
@@ -67,6 +88,13 @@ async function openReplaceModal(interaction: ButtonInteraction, proposalId: numb
     .setRequired(true)
     .setValue('1')
 
+  const target = new TextInputBuilder()
+    .setCustomId('target')
+    .setLabel('対象 (main / side)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder('省略時は main')
+
   const notes = new TextInputBuilder()
     .setCustomId('notes')
     .setLabel('避けたいものや希望')
@@ -74,9 +102,18 @@ async function openReplaceModal(interaction: ButtonInteraction, proposalId: numb
     .setRequired(false)
     .setPlaceholder('例: 揚げ物以外、魚以外、もっとさっぱり')
 
+  const avoidMainIngredient = new TextInputBuilder()
+    .setCustomId('avoidSameMainIngredient')
+    .setLabel('同じ主材料を避ける (yes / no)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder('主菜差し替え時だけ有効。省略時は no')
+
   modal.addComponents(
     new ActionRowBuilder<TextInputBuilder>().addComponents(dayIndex),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(target),
     new ActionRowBuilder<TextInputBuilder>().addComponents(notes),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(avoidMainIngredient),
   )
 
   await interaction.showModal(modal)
@@ -90,10 +127,14 @@ export async function handlePlanWeekCommand(
   if (!allowed) return
 
   const servings = interaction.options.getInteger('servings', true)
+  const presetRaw = interaction.options.getString('preset')
+  const preset = presetRaw === 'washoku_focus' || presetRaw === 'budget_saver' || presetRaw === 'fish_more'
+    ? presetRaw as WeeklyMenuPreset
+    : undefined
   const notes = interaction.options.getString('notes') ?? undefined
 
   await interaction.reply({
-    content: `1週間の献立案を作っています。今回は **${servings}人分** で進めます。`,
+    content: `1週間の献立案を作っています。今回は **${servings}人分** で進めます${preset ? `。テンプレ条件: **${preset === 'washoku_focus' ? '和食多め' : preset === 'budget_saver' ? '節約重視' : '魚多め'}**` : ''}。`,
   })
 
   const replyMessage = await interaction.fetchReply()
@@ -114,6 +155,7 @@ export async function handlePlanWeekCommand(
       ...(threadId ? { threadId } : {}),
       discordUserId: interaction.user.id,
       requestedServings: servings,
+      ...(preset ? { preset } : {}),
       ...(notes ? { notes } : {}),
     })
 
@@ -142,13 +184,8 @@ export async function handleWeeklyMenuButton(interaction: ButtonInteraction): Pr
   const parsed = parseWeeklyMenuButton(interaction.customId)
   const proposal = await getWeeklyMenuProposal(parsed.proposalId)
 
-  if (parsed.action === 'replace') {
-    await openReplaceModal(interaction, proposal.id)
-    return true
-  }
-
-  if (parsed.action === 'refresh') {
-    await interaction.update(buildWeeklyMenuProposalMessage(proposal))
+  if (parsed.action === 'next' || parsed.action === 'blacklist' || parsed.action === 'refresh') {
+    await openReplaceModal(interaction, proposal.id, parsed.action)
     return true
   }
 
@@ -176,6 +213,7 @@ export async function handleWeeklyMenuModal(interaction: ModalSubmitInteraction)
   await interaction.deferReply({ ephemeral: true })
 
   const dayIndexRaw = interaction.fields.getTextInputValue('dayIndex').trim()
+  const targetRaw = interaction.fields.getTextInputValue('target').trim().toLowerCase()
   const notes = interaction.fields.getTextInputValue('notes').trim()
   const dayNumber = Number.parseInt(dayIndexRaw, 10)
   if (!Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > 7) {
@@ -183,12 +221,24 @@ export async function handleWeeklyMenuModal(interaction: ModalSubmitInteraction)
     return true
   }
 
+  const target = targetRaw === 'side' ? 'side' : 'main'
+  const avoidSameMainIngredientRaw = interaction.fields.getTextInputValue('avoidSameMainIngredient').trim().toLowerCase()
+  const avoidSameMainIngredient = target === 'main' && ['yes', 'y', 'true', '1', 'はい'].includes(avoidSameMainIngredientRaw)
+  const strategy = parsed.action === 'blacklist'
+    ? 'blacklist_current'
+    : parsed.action === 'refresh'
+      ? 'rebuild_stock_priority'
+      : 'next_candidate'
+
   try {
     const updated = await replaceWeeklyMenuItem({
       id: parsed.proposalId,
       patch: {
         dayIndex: dayNumber - 1,
         discordUserId: interaction.user.id,
+        target,
+        strategy,
+        ...(avoidSameMainIngredient ? { avoidSameMainIngredient: true } : {}),
         ...(notes ? { notes } : {}),
       },
     })
@@ -197,7 +247,9 @@ export async function handleWeeklyMenuModal(interaction: ModalSubmitInteraction)
       const message = await channel.messages.fetch(parsed.messageId)
       await message.edit(buildWeeklyMenuProposalMessage(updated))
     }
-    await interaction.editReply(`${dayNumber}日目を差し替えました。`)
+    await interaction.editReply(
+      `${dayNumber}日目の${target === 'side' ? '副菜' : '主菜'}を${parsed.action === 'blacklist' ? '今週の候補から除外して更新' : parsed.action === 'refresh' ? '在庫優先で再探索' : '次点候補に更新'}しました${avoidSameMainIngredient ? '。同じ主材料は避けています。' : ''}`,
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await interaction.editReply(`差し替えに失敗しました: ${message}`)

@@ -5,9 +5,11 @@ import {
   CreateDiscordPhotoAnalysisRequestSchema,
   CreateDiscordRecipeImportDraftRequestSchema,
   CreateDiscordWeeklyMenuProposalRequestSchema,
+  DiscordStockExpiryAlertBatchSchema,
   DiscordWorkflowSchema,
   FollowUpDiscordKitchenAdviceRequestSchema,
   ReplaceDiscordWeeklyMenuItemRequestSchema,
+  SaveDiscordPhotoStockRequestSchema,
   SelectDiscordPhotoCandidateRequestSchema,
   UpdateDiscordRecipeImportDraftRequestSchema,
   UpdateDiscordPhotoAnalysisRequestSchema,
@@ -32,9 +34,14 @@ import {
   cancelPhotoAnalysisDraft,
   createPhotoAnalysisDraft,
   getPhotoAnalysisDraftById,
+  savePhotoDetectedStocks,
   selectPhotoCandidate,
   updatePhotoAnalysisDraft,
 } from '../lib/stockPhoto/service.js'
+import {
+  listPendingStockExpiryAlerts,
+  markStockExpiryAlertsSent,
+} from '../lib/discord/stockExpiry.js'
 import {
   cancelKitchenAdviceSession,
   createKitchenAdviceSession,
@@ -79,6 +86,10 @@ const DraftParamsSchema = z.object({
 
 const DraftActorBodySchema = z.object({
   discordUserId: z.string().min(1),
+})
+
+const StockAlertAckSchema = z.object({
+  stockIds: z.array(z.number().int().positive()).min(1),
 })
 
 export async function registerInternalDiscordRoutes(app: FastifyInstance): Promise<void> {
@@ -269,6 +280,32 @@ export async function registerInternalDiscordRoutes(app: FastifyInstance): Promi
     }
   })
 
+  app.get('/api/internal/discord/stock-expiry-alerts', async (request, reply) => {
+    if (!assertInternalDiscordAuth(request, reply)) return
+
+    try {
+      const query = GuildQuerySchema.parse(request.query)
+      const batch = await listPendingStockExpiryAlerts(query.guildId)
+      reply.send({ success: true, data: DiscordStockExpiryAlertBatchSchema.parse(batch) })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      reply.status(400).send({ success: false, error: message })
+    }
+  })
+
+  app.post('/api/internal/discord/stock-expiry-alerts/ack', async (request, reply) => {
+    if (!assertInternalDiscordAuth(request, reply)) return
+
+    try {
+      const body = StockAlertAckSchema.parse(request.body)
+      await markStockExpiryAlertsSent(body.stockIds)
+      reply.send({ success: true, data: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      reply.status(400).send({ success: false, error: message })
+    }
+  })
+
   app.post('/api/internal/discord/photo-analysis', async (request, reply) => {
     if (!assertInternalDiscordAuth(request, reply)) return
 
@@ -320,6 +357,20 @@ export async function registerInternalDiscordRoutes(app: FastifyInstance): Promi
       const params = DraftParamsSchema.parse(request.params)
       const body = SelectDiscordPhotoCandidateRequestSchema.parse(request.body)
       const draft = await selectPhotoCandidate(params.id, body.discordUserId, body.recipeId)
+      reply.send({ success: true, data: draft })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      reply.status(400).send({ success: false, error: message })
+    }
+  })
+
+  app.post('/api/internal/discord/photo-analysis/:id/save-stock', async (request, reply) => {
+    if (!assertInternalDiscordAuth(request, reply)) return
+
+    try {
+      const params = DraftParamsSchema.parse(request.params)
+      const body = SaveDiscordPhotoStockRequestSchema.parse(request.body)
+      const draft = await savePhotoDetectedStocks(params.id, body)
       reply.send({ success: true, data: draft })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

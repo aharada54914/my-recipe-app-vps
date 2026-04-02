@@ -3,12 +3,15 @@ import {
   type CreateDiscordPhotoAnalysisRequest,
   type CreateDiscordRecipeImportDraftRequest,
   type CreateDiscordWeeklyMenuProposalRequest,
+  type DiscordStockExpiryAlertBatch,
   type DiscordWorkflow,
   type KitchenAdviceSessionSummary,
   type PhotoAnalysisDraftSummary,
+  type PhotoStockSaveItem,
   type ReplaceDiscordWeeklyMenuItemRequest,
   type RecipeImportDraftSummary,
   type SelectDiscordPhotoCandidateRequest,
+  type SaveDiscordPhotoStockRequest,
   type UpdateDiscordRecipeImportDraftRequest,
   type UpdateDiscordPhotoAnalysisRequest,
   type WeeklyMenuProposalSummary,
@@ -167,6 +170,19 @@ export async function cancelWeeklyMenuProposal(input: {
   })
 }
 
+export async function getPendingStockExpiryAlerts(guildId: string): Promise<DiscordStockExpiryAlertBatch> {
+  return request<DiscordStockExpiryAlertBatch>(
+    `/api/internal/discord/stock-expiry-alerts?guildId=${encodeURIComponent(guildId)}`,
+  )
+}
+
+export async function acknowledgeStockExpiryAlerts(stockIds: number[]): Promise<void> {
+  await request<true>('/api/internal/discord/stock-expiry-alerts/ack', {
+    method: 'POST',
+    body: JSON.stringify({ stockIds }),
+  })
+}
+
 export async function createPhotoAnalysisDraft(
   input: CreateDiscordPhotoAnalysisRequest,
 ): Promise<PhotoAnalysisDraftSummary> {
@@ -212,6 +228,21 @@ export async function cancelPhotoAnalysisDraft(input: {
   return request<PhotoAnalysisDraftSummary>(`/api/internal/discord/photo-analysis/${input.id}/cancel`, {
     method: 'POST',
     body: JSON.stringify({ discordUserId: input.discordUserId }),
+  })
+}
+
+export async function savePhotoDetectedStocks(input: {
+  id: number
+  discordUserId: string
+  items: PhotoStockSaveItem[]
+}): Promise<PhotoAnalysisDraftSummary> {
+  const payload: SaveDiscordPhotoStockRequest = {
+    discordUserId: input.discordUserId,
+    items: input.items,
+  }
+  return request<PhotoAnalysisDraftSummary>(`/api/internal/discord/photo-analysis/${input.id}/save-stock`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   })
 }
 

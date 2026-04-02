@@ -125,7 +125,7 @@ export async function createKitchenAdviceSession(input: {
   }
 
   const context = await buildAdviceContext(userId, input.requestedServings, [])
-  const response = await askGeminiConsultation(input.question, context)
+  const response = await askGeminiConsultation(input.question, context, 'advice')
   const messages: KitchenAdviceMessage[] = [
     { actor: 'user', content: input.question, createdAt: new Date() },
     { actor: 'assistant', content: response, createdAt: new Date() },
@@ -230,7 +230,7 @@ export async function followUpKitchenAdviceSession(
     current.messages,
     input.prompt,
   )
-  const response = await askGeminiConsultation(input.prompt, context)
+  const response = await askGeminiConsultation(input.prompt, context, 'advice')
   const messages: KitchenAdviceMessage[] = [
     ...current.messages,
     { actor: 'user', content: input.prompt, createdAt: new Date() },

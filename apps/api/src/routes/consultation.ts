@@ -1,22 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { prisma } from '../db/client.js'
-import { askGeminiConsultation } from '../lib/gemini.js'
 import { ConsultationRequestSchema } from '@kitchen/shared-types'
-
-const DAILY_LIMIT = 10
-
-async function getTodayUsageCount(userId: string): Promise<number> {
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
-
-  return prisma.consultationLog.count({
-    where: {
-      userId,
-      createdAt: { gte: todayStart },
-    },
-  })
-}
+import { askConsultation, getTodayUsageCount, DAILY_LIMIT } from '../lib/consultation/service.js'
 
 export async function registerConsultationRoutes(app: FastifyInstance): Promise<void> {
   // Ask consultation (authenticated, rate-limited)
@@ -27,79 +12,11 @@ export async function registerConsultationRoutes(app: FastifyInstance): Promise<
       const userId = request.user.sub
       const body = ConsultationRequestSchema.parse(request.body)
 
-      // Check daily limit
-      const todayCount = await getTodayUsageCount(userId)
-      if (todayCount >= DAILY_LIMIT) {
-        reply.status(429).send({
-          success: false,
-          error: `1日の相談回数上限(${DAILY_LIMIT}回)に達しました。明日またお試しください。`,
-          data: { remaining: 0, limit: DAILY_LIMIT },
-        })
-        return
-      }
-
-      // Build context from user data
-      const [user, stocks] = await Promise.all([
-        prisma.user.findUnique({
-          where: { id: userId },
-          select: { preferences: true },
-        }),
-        prisma.stock.findMany({
-          where: { userId },
-          select: { name: true, inStock: true },
-        }),
-      ])
-
-      const preferences = user?.preferences as Record<string, unknown> | null
-      const userPrompt = typeof preferences?.['userPrompt'] === 'string'
-        ? preferences['userPrompt']
-        : undefined
-
-      // Get today's menu if available
-      let todayMenuTitle: string | undefined
-      let sideMenuTitle: string | undefined
-
-      if (body.context?.todayMenu) {
-        const mainRecipe = await prisma.recipe.findUnique({
-          where: { id: body.context.todayMenu.recipeId },
-          select: { title: true },
-        })
-        todayMenuTitle = mainRecipe?.title ?? undefined
-
-        if (body.context.todayMenu.sideRecipeId) {
-          const sideRecipe = await prisma.recipe.findUnique({
-            where: { id: body.context.todayMenu.sideRecipeId },
-            select: { title: true },
-          })
-          sideMenuTitle = sideRecipe?.title ?? undefined
-        }
-      }
-
-      const response = await askGeminiConsultation(body.message, {
-        todayMenuTitle,
-        sideMenuTitle,
-        stockItems: stocks,
-        userPrompt,
-      })
-
-      // Log the consultation
-      await prisma.consultationLog.create({
-        data: {
-          userId,
-          message: body.message,
-          response,
-        },
-      })
-
-      const remaining = DAILY_LIMIT - todayCount - 1
+      const result = await askConsultation(userId, body)
 
       reply.send({
         success: true,
-        data: {
-          response,
-          remaining,
-          limit: DAILY_LIMIT,
-        },
+        data: result,
       })
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -111,6 +28,14 @@ export async function registerConsultationRoutes(app: FastifyInstance): Promise<
         return
       }
       const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('上限')) {
+        reply.status(429).send({
+          success: false,
+          error: message,
+          data: { remaining: 0, limit: DAILY_LIMIT },
+        })
+        return
+      }
       app.log.error({ err }, 'Consultation error')
       reply.status(500).send({
         success: false,
