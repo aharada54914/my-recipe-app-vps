@@ -23,8 +23,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared-types/package.json packages/shared-types/
 COPY apps/discord-bot/package.json apps/discord-bot/
+COPY scripts/docker/prune-runtime-node-modules.sh /usr/local/bin/prune-runtime-node-modules
 
-RUN npm ci --workspace=apps/discord-bot --workspace=packages/shared-types --omit=dev --ignore-scripts
+RUN npm ci --workspace=apps/discord-bot --workspace=packages/shared-types --omit=dev --ignore-scripts \
+  && sh /usr/local/bin/prune-runtime-node-modules /app/node_modules
 
 COPY --from=builder /app/apps/discord-bot/dist apps/discord-bot/dist/
 COPY --from=builder /app/packages/shared-types/ packages/shared-types/

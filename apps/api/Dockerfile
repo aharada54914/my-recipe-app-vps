@@ -33,9 +33,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared-types/package.json packages/shared-types/
 COPY apps/api/package.json apps/api/
+COPY scripts/docker/prune-runtime-node-modules.sh /usr/local/bin/prune-runtime-node-modules
 
-# Install production dependencies only
-RUN npm ci --workspace=apps/api --workspace=packages/shared-types --omit=dev --ignore-scripts
+# Install production dependencies only, then prune runtime-only metadata in the same layer.
+RUN npm ci --workspace=apps/api --workspace=packages/shared-types --omit=dev --ignore-scripts \
+  && sh /usr/local/bin/prune-runtime-node-modules /app/node_modules
 
 # Copy built output
 COPY --from=builder /app/apps/api/dist apps/api/dist/
