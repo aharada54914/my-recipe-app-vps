@@ -1,170 +1,199 @@
-# Kitchen App — Smart Recipe Manager PWA
+# Kitchen Platform
 
-最終改訂: 2026-03-07
+最終更新: 2026-04-03
 
-ホットクック / ヘルシオ向けのレシピ管理 PWA です。  
-スマホ利用を前提に、`レシピ検索` と `AI 相談` を主導線に置きつつ、週間献立、在庫管理、Google 連携までを 1 つのアプリで扱います。
+Kitchen Platform は、家庭の料理運用をまとめて扱う monorepo です。
+エンドユーザー向けの PWA、Fastify API、Discord bot、MCP サーバー、運用スクリプトを 1 つの repo で管理しています。
 
----
+## 何ができるか
 
-## 主な機能
+- Web アプリでレシピ検索、在庫管理、週間献立、買い物リスト、Google 連携を扱う
+- API で認証、設定保存、週間献立、料理相談、Discord 向け internal endpoint を提供する
+- Discord bot で `週間献立`、`写真で在庫提案`、`料理相談`、`URLレシピ取込` の workflow を運用する
+- MCP サーバーで kitchen context を `prompt` と `resource` 中心に提供する
+- 単一 VPS 上で `web / api / discord-bot / mcp-server / postgres / nginx` を Compose 運用する
 
-- レシピ検索
-  - 約 1,700 件のレシピをあいまい検索
-  - 最近の検索、カテゴリ / 機器 / 時短 / 旬フィルタ
-  - 別グループは AND、同一グループ内は OR の複合絞り込み
-  - カテゴリは横スクロール不要の grid 表示
-  - iPhone Safari の日本語入力で文字順が崩れにくい IME-safe 入力制御
-  - 在庫一致率と好みシグナルによる並び替え
-- AI 相談
-  - URL 取り込み
-  - 写真から食材抽出
-  - 在庫から提案
-  - Gemini チャット履歴保持と再試行導線
-- 週間献立
-  - 7 日分の献立生成
-  - `再生成` 時に unlock 日の主菜を最低 4 日、または 60% 以上変更
-  - 天気考慮スコアリング
-  - 買い物リスト自動生成 / 編集
-  - QR 共有、共有コード取り込み、Google Calendar 登録
-- 在庫管理
-  - 明示的な `+1 / -1 / 数量入力 / 削除`
-  - 最近使った食材からの即時追加
-  - 在庫 QR 共有 / 受信
-- Google 連携
-  - Google ログイン
-  - Google Drive バックアップ / 復元
-  - Google Calendar 連携
-- テーマ / UI
-  - `Warm Tactile Kitchen` ベースの light / dark / system 対応
-  - ラベル付き BottomNav
-  - safe-area 対応の sticky header / bottom nav
-- ヘルプ
-  - `まずはここから / よく使う操作 / 共有・移行 / 困ったとき`
-  - 記事ごとの CTA と状態チップ
-- 品質基盤
-  - Vitest による unit / component test
-  - Playwright による smoke test / visual regression
-  - `ui:class-audit` による glass class 残滓監査
+## リポジトリ構成
 
----
+| パス | 役割 |
+| --- | --- |
+| `apps/web` | React 19 + Vite の PWA |
+| `apps/api` | Fastify + Prisma の API |
+| `apps/discord-bot` | Discord slash command / workflow bot |
+| `apps/mcp-server` | Streamable HTTP の MCP server |
+| `apps/cli` | 補助 CLI |
+| `packages/shared-types` | Web / API / Bot で共有する型 |
+| `scripts/ops` | VPS 運用コマンド |
+| `docs` | セットアップ、運用、QA、設計資料 |
+
+## アーキテクチャ概要
+
+ローカル開発:
+
+```text
+apps/web (5173) -> apps/api (3001) -> postgres
+apps/discord-bot --------^
+apps/mcp-server ---------^
+```
+
+本番 VPS:
+
+```text
+Internet
+  -> front-caddy (host)
+  -> docker compose nginx (127.0.0.1:8081:80)
+     -> web
+     -> api
+     -> mcp-server
+
+discord-bot -> api
+api + mcp-server -> postgres
+```
+
+詳細は [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-vps/docs/ARCHITECTURE.md) を参照してください。
 
 ## クイックスタート
 
-Node.js `24` 推奨です。最低要件は `22.12.0+` です。
+Node.js `24` 推奨、最低 `22.12.0` 以上です。
 
 ```bash
+git clone https://github.com/aharada54914/my-recipe-app-vps.git
+cd my-recipe-app-vps
 npm install
-npm run dev
+cp env.example .env
 ```
 
-この repository は現在 `apps/web`、`apps/api`、`apps/cli`、`packages/shared-types` を含む npm workspace 構成です。
-
-Google OAuth や Gemini を使う場合のみ、ルートに `.env` を作成してください。
+最低限の開発では `.env` に以下があると扱いやすいです。
 
 ```env
-VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
-VITE_GEMINI_API_KEY=your-gemini-api-key
+DB_PASSWORD=change_me
+DATABASE_URL=postgresql://kitchen:change_me@localhost:5432/kitchen_app
+JWT_SECRET=change_me_to_a_random_64_char_string
+JWT_EXPIRES_IN=7d
+API_PORT=3001
+API_HOST=0.0.0.0
+FRONTEND_URL=http://localhost:5173
+TZ=Asia/Tokyo
+ENABLE_WEEKLY_EMAIL_JOB=false
+NODE_ENV=development
+```
+
+よく使う起動方法:
+
+```bash
+npm run dev
+npm run dev:api
+npm run dev:discord-bot
+npm --workspace apps/mcp-server run dev
 ```
 
 補足:
-- `VITE_GOOGLE_CLIENT_ID` がない場合でもアプリ自体は起動します
-- `VITE_GEMINI_API_KEY` は設定画面保存値より `.env` が優先されます
 
----
+- `npm run dev` は Web のみです
+- API を伴う機能確認では `npm run dev:api` が必要です
+- Discord workflow の確認には Discord bot と API の両方が必要です
+- MCP 確認には `apps/mcp-server` を別で起動します
+- Prisma client は root `postinstall` で自動生成されます
 
 ## 主要コマンド
 
 ```bash
-npm run dev
 npm run build
-npm run lint
+npm run build:web
+npm run build:api
+npm run build:discord-bot
+npm run build:mcp-server
+
 npm test
+npm run test:api
+npm run test:web
+npm run test:mcp-server
 npm run test:smoke:ci
+npm run test:visual
+
 npm run ops:ps
 npm run ops:health
 npm run ops:logs
-npm run test:visual
-npm run ui:class-audit
 ```
 
-スナップショット更新:
+各 workspace 直下の主なコマンド:
 
-```bash
-npm run test:visual:update
-```
+- `apps/web`: `dev`, `build`, `test`, `test:smoke:ci`, `test:visual`
+- `apps/api`: `dev`, `build`, `test`, `db:generate`, `db:migrate`, `db:push`, `db:seed`
+- `apps/discord-bot`: `dev`, `build`, `test:e2e`
+- `apps/mcp-server`: `dev`, `build`, `test`
 
----
+## Web アプリの使い方
 
-## QA モード
+主な導線:
 
-Google 実アカウントなしで接続済みフローを検証できます。
+- `/search`: レシピ検索
+- `/stock`: 在庫管理
+- `/weekly-menu`: 週間献立と買い物リスト
+- `/gemini`: 料理相談
+- `/favorites`: お気に入り
+- `/history`: 履歴
+- `/settings/:tab`: 各種設定
 
-- 有効化: `/settings/advanced?qa-google=1`
-- 対象:
-  - Google ログイン済み状態
-  - Google Drive バックアップ / 復元
-  - Google Calendar 予定登録
-- 入口:
-  - `設定 > 詳細設定 > 接続フロー検証`
-  - 旧 URL の `/settings/data?qa-google=1` でも自動で詳細設定へ移動します
+最初に触る順番:
 
-詳細は [docs/TESTING.md](/Users/jrmag/my-recipe-app/docs/TESTING.md) を参照してください。
+1. `/search` でレシピを探す
+2. `/stock` で家にある食材を登録する
+3. `/weekly-menu` で 1 週間分の献立を作る
+4. `/gemini` で料理相談を試す
+5. `/settings` で Google 連携や表示設定を整える
 
----
+## MCP サーバーの使い方
 
-## 主要ルート
+MCP は `apps/mcp-server` で提供しています。現在の主導線は `tool` ではなく `prompt` と `resource` です。
 
-- `/` ホーム
-- `/search` 検索
-- `/stock` 在庫管理
-- `/weekly-menu` 週間献立
-- `/favorites` お気に入り
-- `/history` 履歴
-- `/gemini` AI 提案
-- `/settings/:tab` 設定
+- 公開 endpoint: `http://<host>/mcp`
+- health: `http://<host>/mcp/health`
+- transport: Streamable HTTP
+- auth: `Authorization: Bearer <MCP_AUTH_TOKEN>`
 
-設定タブ:
-- `account`
-- `planning`
-- `ai`
-- `notifications`
-- `appearance`
-- `data`
-- `help`
-- `about`
-- `advanced`
-- `guide`
-- `version`
+主要 surface:
 
----
+- Tool: `search_recipes`
+- Prompts: `kitchen_advice`, `weekly_menu_review`
+- Resources:
+  - `kitchen://service/info`
+  - `kitchen://menu/current-week`
+  - `kitchen://stock/{userId}`
+  - `kitchen://menu/today/{userId}`
+  - `kitchen://menu/weekly/{userId}/{weekStartDate}`
+  - `kitchen://shopping-list/{userId}/{weekStartDate}`
+
+## Discord bot の使い方
+
+Discord bot は API を直接利用し、MCP は使いません。主な slash command:
+
+- `/bind-channel`
+- `/import-url`
+- `/help`
+- `/sync-help`
+- 週間献立 workflow
+- 写真で在庫提案 workflow
+- 料理相談 workflow
+
+workflow ごとにチャンネルを bind してから使います。詳細は [docs/qa/DISCORD_E2E_HARNESS.md](/Users/jrmag/my-recipe-vps/docs/qa/DISCORD_E2E_HARNESS.md) を参照してください。
+
+## 本番運用の前提
+
+- デプロイ先: 単一 Debian VPS
+- 配置先: `/opt/kitchen-app`
+- Compose services: `web`, `api`, `discord-bot`, `mcp-server`, `postgres`, `nginx`
+- 公開経路: host `front-caddy` -> compose `nginx` (`127.0.0.1:8081`)
+
+VPS 運用は [docs/manuals/VPS_PRODUCTION_MANUAL.md](/Users/jrmag/my-recipe-vps/docs/manuals/VPS_PRODUCTION_MANUAL.md) と [OPS_RUNBOOK.md](/Users/jrmag/my-recipe-vps/OPS_RUNBOOK.md) を参照してください。
 
 ## ドキュメント
 
-- [docs/manuals/FIRST_SETUP_LINE_BY_LINE.md](/Users/jrmag/my-recipe-vps/docs/manuals/FIRST_SETUP_LINE_BY_LINE.md) 最初のセットアップを1行ずつ説明
-- [docs/manuals/VPS_PRODUCTION_MANUAL.md](/Users/jrmag/my-recipe-vps/docs/manuals/VPS_PRODUCTION_MANUAL.md) VPS 本番運用マニュアル
-- [docs/FEATURES.md](/Users/jrmag/my-recipe-app/docs/FEATURES.md) 現行機能の要約
-- [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-app/docs/ARCHITECTURE.md) 現行アーキテクチャ
-- [docs/SETUP.md](/Users/jrmag/my-recipe-app/docs/SETUP.md) 開発 / 配布セットアップ
-- [docs/TESTING.md](/Users/jrmag/my-recipe-app/docs/TESTING.md) テスト構成と QA モード
-- [docs/SETTINGS_GUIDE.md](/Users/jrmag/my-recipe-app/docs/SETTINGS_GUIDE.md) 詳細な設定ガイド
-- [SETUP_GUIDE.md](/Users/jrmag/my-recipe-app/SETUP_GUIDE.md) かんたん初期設定ガイド
-- [SETUP_GUIDE_OKAZAKI.md](/Users/jrmag/my-recipe-app/SETUP_GUIDE_OKAZAKI.md) 岡崎弁ガイド
-- [docs/ALGORITHMS.md](/Users/jrmag/my-recipe-app/docs/ALGORITHMS.md) レコメンド / スコアリング仕様
-- [docs/PWA_SPECIFICATION.md](/Users/jrmag/my-recipe-app/docs/PWA_SPECIFICATION.md) PWA の設計仕様
-- [OPS_RUNBOOK.md](/Users/jrmag/my-recipe-vps/OPS_RUNBOOK.md) 単一 VPS での 24/365 運用手順
-
----
-
-## URL インポート対応サイト
-
-- `https://www.kyounoryouri.jp/`
-- `https://oceans-nadia.com/`
-- `https://recipe.rakuten.co.jp/`
-- `https://macaro-ni.jp/`
-- `https://erecipe.woman.excite.co.jp/`
-- `https://www.kikkoman.co.jp/homecook/`
-- `https://park.ajinomoto.co.jp/`
-- `https://foodistnote.recipe-blog.jp/`
-- `https://bazurecipe.com/`
-- `https://cookien.com/`
+- [docs/ARCHITECTURE.md](/Users/jrmag/my-recipe-vps/docs/ARCHITECTURE.md): 現行アーキテクチャとデータフロー
+- [docs/manuals/FIRST_SETUP_LINE_BY_LINE.md](/Users/jrmag/my-recipe-vps/docs/manuals/FIRST_SETUP_LINE_BY_LINE.md): ローカルセットアップを 1 行ずつ説明
+- [docs/manuals/VPS_PRODUCTION_MANUAL.md](/Users/jrmag/my-recipe-vps/docs/manuals/VPS_PRODUCTION_MANUAL.md): VPS 本番運用の正本
+- [OPS_RUNBOOK.md](/Users/jrmag/my-recipe-vps/OPS_RUNBOOK.md): 障害対応と日常運用メモ
+- [docs/MCP_REFACTORING_PLAN_V2.md](/Users/jrmag/my-recipe-vps/docs/MCP_REFACTORING_PLAN_V2.md): MCP 再設計の検討メモ
+- [docs/qa/DISCORD_E2E_HARNESS.md](/Users/jrmag/my-recipe-vps/docs/qa/DISCORD_E2E_HARNESS.md): Discord E2E の進め方
+- [docs/qa/QA_MATRIX_2026-03-28.md](/Users/jrmag/my-recipe-vps/docs/qa/QA_MATRIX_2026-03-28.md): QA ケース一覧
+- [docs/qa/QA_RUN_2026-03-28.md](/Users/jrmag/my-recipe-vps/docs/qa/QA_RUN_2026-03-28.md): QA 実施ログ

@@ -1,129 +1,143 @@
 # OPS Runbook
 
-このドキュメントは、単一 Debian VPS 上で Kitchen App を 24時間365日運用する前提の運用メモです。
+最終更新: 2026-04-03
 
-## 前提
+このドキュメントは、単一 Debian VPS で Kitchen Platform を運用するときの実務メモです。
+詳細手順の正本は [docs/manuals/VPS_PRODUCTION_MANUAL.md](/Users/jrmag/my-recipe-vps/docs/manuals/VPS_PRODUCTION_MANUAL.md) とし、ここでは障害対応と日常運用を短くまとめます。
 
-- 単一ホスト構成
-- 4 vCPU / 8 GB RAM / 80 GB disk
-- Docker Engine と Docker Compose plugin をインストール済み
-- ドメインを `APP_DOMAIN` に向けている
-- SSH コンソールから運用する
+## 本番トポロジ
 
-## 構成
+```text
+Internet
+  -> front-caddy (host)
+  -> 127.0.0.1:8081 (compose nginx)
+     -> web
+     -> api
+     -> mcp-server
 
-- `web`: 静的 frontend 配信
-- `api`: Fastify API と定期ジョブ
-- `discord-bot`: Discord slash command / thread workflow
-- `postgres`: 永続 DB
-- `nginx`: 公開 reverse proxy / TLS 終端
+discord-bot -> api
+api + mcp-server -> postgres
+```
 
-## 重要な運用方針
+Compose services:
 
-- `api` と `web` はホストに直接公開しない
-- 外部公開は `nginx` の 80/443 のみ
-- DB バックアップは日次で取得する
-- TLS は host certbot で更新し、`scripts/ops/sync-letsencrypt.sh` で compose 側へ反映する
-- 初回起動時は self-signed 証明書で nginx を立ち上げ、あとから本番証明書へ差し替える
-- 復旧操作は `scripts/ops/kitchenctl.sh` だけで完結できるようにする
+- `web`
+- `api`
+- `discord-bot`
+- `mcp-server`
+- `postgres`
+- `nginx`
 
-## 初回セットアップ
-
-1. `.env` を `env.example` から作る
-2. `APP_DOMAIN`, `FRONTEND_URL`, `DATABASE_URL`, `DB_PASSWORD`, `JWT_SECRET` を設定する
-3. Discord を使う場合は `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`, `DISCORD_GUILD_ID`, `DISCORD_INTERNAL_API_TOKEN` も設定する
-4. Gemini を分離運用する場合は `GEMINI_PHOTO_*` と `GEMINI_ADVICE_*` を設定する
-5. 旧 `GEMINI_API_KEY` は recipe-import / shopping sort の後方互換 fallback としてだけ残す
-6. `mkdir -p backups ssl`
-7. `bash scripts/ops/kitchenctl.sh up`
-8. 初回 `up` で self-signed 証明書が自動生成される
-9. 初回 TLS 発行後に `bash scripts/ops/kitchenctl.sh sync-cert`
-10. `bash scripts/ops/kitchenctl.sh health`
-11. Discord 上の各チャンネルで `/bind-channel` を実行して workflow を紐付ける
-
-## 日常運用コマンド
+## 最初に見るコマンド
 
 ```bash
+bash scripts/ops/kitchenctl.sh health
 bash scripts/ops/kitchenctl.sh ps
 bash scripts/ops/kitchenctl.sh logs
+```
+
+個別確認:
+
+```bash
 bash scripts/ops/kitchenctl.sh logs api
+bash scripts/ops/kitchenctl.sh logs mcp-server
+bash scripts/ops/kitchenctl.sh logs discord-bot
+```
+
+## 公開 endpoint
+
+- Web: `https://yourdomain.com/`
+- API health: `https://yourdomain.com/api/health`
+- MCP: `https://yourdomain.com/mcp`
+- MCP health: `https://yourdomain.com/mcp/health`
+
+## 日常運用
+
+再起動:
+
+```bash
+bash scripts/ops/kitchenctl.sh restart
 bash scripts/ops/kitchenctl.sh restart api
-bash scripts/ops/kitchenctl.sh health
+bash scripts/ops/kitchenctl.sh restart mcp-server
+```
+
+DB バックアップ:
+
+```bash
 bash scripts/ops/kitchenctl.sh backup-db
 bash scripts/ops/kitchenctl.sh prune-backups
 ```
 
-## localhost トンネルで Google ログイン確認
-
-Google OAuth は raw IP (`http://178.104.88.252`) を Authorized JavaScript origins に入れられないため、
-Mac 側で SSH トンネルを張って `http://localhost:3000` として開く。
-
-```bash
-bash scripts/ops/open-localhost-tunnel.sh
-```
-
-別 port で開きたい場合:
-
-```bash
-bash scripts/ops/open-localhost-tunnel.sh 3001
-```
-
-これで以下の流れになる。
-
-1. Mac の `http://localhost:3000` が VPS の `127.0.0.1:80` を参照する
-2. ブラウザ上の origin は `http://localhost:3000` になる
-3. Google OAuth Console の Authorized JavaScript origins には使う port を含めた `http://localhost:3000` を登録する
-4. ブラウザで `http://localhost:3000/settings` を開き、Google ログインと家族カレンダー設定を行う
-
-注意:
-
-- この方法は「自分の Mac から検証する」ための経路であり、家族向けの正式公開 URL にはならない
-- API は nginx 配下の同一 origin で見えるため、`VITE_API_BASE_URL` を別に切り替える必要はない
-- ログイン状態は `localhost` origin の localStorage に保存されるため、`http://178.104.88.252` 側とは共有されない
-
-## バックアップ
-
-- DB dump は `backups/` に `*.sql.gz` で保存
-- 7日以上残さない場合は host cron または systemd timer 側で削除する
-- 復元:
+復元:
 
 ```bash
 bash scripts/ops/kitchenctl.sh restore-db backups/kitchen_app-YYYYMMDD-HHMMSS.sql.gz
 ```
 
-## TLS 更新
+## よくある確認ポイント
 
-host 側 certbot の deploy hook から以下を呼ぶ:
+### Web が見えない
+
+1. `front-caddy` 側のルーティングを確認
+2. `bash scripts/ops/kitchenctl.sh ps`
+3. `docker compose logs nginx --tail=100`
+4. `docker compose logs web --tail=100`
+
+### API が失敗する
+
+1. `https://yourdomain.com/api/health` を確認
+2. `bash scripts/ops/kitchenctl.sh logs api`
+3. `postgres` health を確認
+4. `.env` の `DATABASE_URL`, `JWT_SECRET` を確認
+
+### MCP がつながらない
+
+1. `https://yourdomain.com/mcp/health` を確認
+2. `bash scripts/ops/kitchenctl.sh logs mcp-server`
+3. `docker compose logs nginx --tail=100`
+4. client が `Authorization: Bearer <MCP_AUTH_TOKEN>` を送っているか確認
+5. `mcp-session-id` 周辺の session ログを確認
+
+### Discord bot が動かない
+
+1. `bash scripts/ops/kitchenctl.sh logs discord-bot`
+2. `.env` の `DISCORD_*` と `KITCHEN_API_BASE_URL` を確認
+3. API internal route の health と auth token を確認
+
+## localhost トンネルでの確認
+
+Google OAuth やローカル origin 確認では SSH トンネルを使います。
 
 ```bash
-bash /path/to/repo/scripts/ops/sync-letsencrypt.sh
+bash scripts/ops/open-localhost-tunnel.sh
 ```
 
-この script は `/etc/letsencrypt/live/$APP_DOMAIN` の証明書を `./ssl` に同期し、`nginx` を再起動する。
+別 port:
 
-本番証明書発行前は self-signed 証明書で起動するため、ブラウザ警告は出る。
+```bash
+bash scripts/ops/open-localhost-tunnel.sh 3001
+```
+
+## deploy 時の実務ルール
+
+1. `.env` は現地のものを保持する
+2. 本番配置が git checkout とは限らない
+3. 同期後は `kitchenctl.sh up` か再 build を実施する
+4. `health` と公開 endpoint を必ず確認する
+5. MCP を触ったら `/mcp/health` と client 接続の両方を確認する
 
 ## systemd
 
-- stack 自動起動: `ops/systemd/kitchen-app.service`
-- 日次バックアップ: `ops/systemd/kitchen-app-backup.service` と `ops/systemd/kitchen-app-backup.timer`
+```bash
+systemctl status kitchen-app.service
+systemctl is-enabled kitchen-app.service
+systemctl list-timers | grep kitchen-app
+journalctl -u kitchen-app.service -n 100 --no-pager
+```
 
-配置先は `/etc/systemd/system/` を想定。
+## 運用メモ
 
-## 既知の制約
-
-- `api` の weekly email job は単一インスタンス前提
-- `discord-bot` は `DISCORD_GUILD_ID` を使った guild command 前提
-- Docker 実行環境がないと Compose 実起動検証はできない
-- 監視通知は別途 Uptime Kuma / Hetzner monitoring / external alerting を追加するとさらに安定する
-
-## Gemini 分離運用
-
-- `photo-analysis` は `GEMINI_PHOTO_API_KEY` と `GEMINI_MODEL_PHOTO_PRIMARY` を使う
-- `kitchen-advice` は `GEMINI_ADVICE_API_KEY` と `GEMINI_MODEL_ADVICE_PRIMARY` を使う
-- どちらも 429 / 一時障害では fallback model へ自動で切り替える
-- alert webhook を使う場合は `GEMINI_ALERT_WEBHOOK_URL` を設定する
-- provider ごとの失敗しきい値:
-  - `GEMINI_PHOTO_ERROR_THRESHOLD`
-  - `GEMINI_ADVICE_ERROR_THRESHOLD`
-- 集計 window は `GEMINI_RATE_LIMIT_WINDOW_MINUTES`
+- `WEEKLY_EMAIL_CRON` は引用符付きで保持する
+- Discord bot は API を直接使う。MCP ではない
+- `api`, `web`, `mcp-server` を host に直接 bind しない
+- 監視を強めるなら外部監視を別途追加する
