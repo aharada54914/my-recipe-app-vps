@@ -179,30 +179,38 @@ function costScore(recipe: PlannerRecipeRecord, preferences: UserPreferences): n
   return 0
 }
 
-function buildDeviceTargets(recipes: PlannerRecipeRecord[]): Record<DeviceType, number> {
+function buildDeviceTargets(
+  recipes: PlannerRecipeRecord[],
+  targetDays: number,
+): Record<DeviceType, number> {
   const counts: Record<DeviceType, number> = { hotcook: 0, healsio: 0, manual: 0 }
   for (const recipe of recipes) {
     counts[toDevice(recipe.device)] += 1
   }
 
   const total = counts.hotcook + counts.healsio + counts.manual
-  if (total === 0) return { hotcook: 0, healsio: 0, manual: 0 }
+  if (total === 0 || targetDays <= 0) return { hotcook: 0, healsio: 0, manual: 0 }
 
-  const targets: Record<DeviceType, number> = {
-    hotcook: Math.max(1, Math.round((counts.hotcook / total) * 7)),
-    healsio: Math.max(1, Math.round((counts.healsio / total) * 7)),
-    manual: Math.max(1, Math.round((counts.manual / total) * 7)),
-  }
+  const devices: DeviceType[] = ['hotcook', 'healsio', 'manual']
+  const targets: Record<DeviceType, number> = { hotcook: 0, healsio: 0, manual: 0 }
+  const remainders = devices.map((device) => {
+    const exact = (counts[device] / total) * targetDays
+    const floorValue = Math.floor(exact)
+    targets[device] = floorValue
+    return { device, remainder: exact - floorValue, count: counts[device] }
+  })
 
-  while (targets.hotcook + targets.healsio + targets.manual > 7) {
-    const device = [...(['manual', 'healsio', 'hotcook'] as const)]
-      .sort((left, right) => targets[right] - targets[left])[0]
-    targets[device] -= 1
-  }
-  while (targets.hotcook + targets.healsio + targets.manual < 7) {
-    const device = [...(['hotcook', 'healsio', 'manual'] as const)]
-      .sort((left, right) => counts[right] - counts[left])[0]
-    targets[device] += 1
+  let assigned = targets.hotcook + targets.healsio + targets.manual
+  while (assigned < targetDays) {
+    const next = [...remainders]
+      .sort((left, right) => {
+        if (right.remainder !== left.remainder) return right.remainder - left.remainder
+        return right.count - left.count
+      })
+      .find((entry) => entry.count > 0)
+    if (!next) break
+    targets[next.device] += 1
+    assigned += 1
   }
 
   return targets
@@ -429,7 +437,7 @@ export function buildWeeklyMenuProposalItems(params: {
     return category === '副菜' || category === 'スープ'
   })
 
-  const deviceTargets = buildDeviceTargets(mains)
+  const deviceTargets = buildDeviceTargets(mains, params.forecastDays.length)
   const selectedRecipeIds = new Set<number>()
   const selectedProteinGroups: ProteinGroup[] = []
   const selectedDevices: DeviceType[] = []

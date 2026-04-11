@@ -173,4 +173,22 @@ describe('buildWeeklyMenuProposalItems', () => {
       initial[0]?.mainCandidates[0]?.proteinGroup,
     )
   })
+
+  it('supports shorter planning windows ending on the next Sunday', () => {
+    const shortForecast = FORECAST.slice(0, 2)
+
+    const items = buildWeeklyMenuProposalItems({
+      recipes: RECIPES,
+      forecastDays: shortForecast,
+      requestedServings: 2,
+      preferences: { ...USER_PREFERENCES_DEFAULTS, updatedAt: new Date() },
+      stockNames: new Set(['鶏もも肉', 'トマト缶']),
+      expiringStockNames: new Set<string>(),
+      recentRecipeIds: new Set<number>(),
+      favoriteRecipeIds: new Set<number>(),
+    })
+
+    expect(items).toHaveLength(2)
+    expect(items.map((item) => item.date)).toEqual(shortForecast.map((day) => day.date))
+  })
 })

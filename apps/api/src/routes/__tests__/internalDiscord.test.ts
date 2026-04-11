@@ -262,8 +262,31 @@ const endpointCases: EndpointCase[] = [
         threadId: 'thread-1',
         discordUserId: 'discord-user-1',
         requestedServings: 4,
+        planningMode: 'week',
         preset: 'fish_more',
         notes: '雨の日向け',
+      })
+    },
+  },
+  {
+    name: 'daily menu create',
+    method: 'POST',
+    url: '/api/internal/discord/weekly-menu-proposals',
+    payload: {
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      discordUserId: 'discord-user-1',
+      requestedServings: 2,
+      planningMode: 'day',
+    },
+    expectedStatus: 201,
+    verify: () => {
+      expect(mocks.createWeeklyMenuProposalMock).toHaveBeenCalledWith({
+        guildId: 'guild-1',
+        channelId: 'channel-1',
+        discordUserId: 'discord-user-1',
+        requestedServings: 2,
+        planningMode: 'day',
       })
     },
   },

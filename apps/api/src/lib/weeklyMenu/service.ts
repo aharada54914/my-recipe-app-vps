@@ -1,5 +1,6 @@
 import type { InputJsonValue } from '@prisma/client/runtime/library'
 import type {
+  MenuPlanningMode,
   ReplaceDiscordWeeklyMenuItemRequest,
   WeeklyMenuCandidate,
   WeeklyMenuProposalItem,
@@ -11,7 +12,7 @@ import type {
 import { prisma } from '../../db/client.js'
 import { ensureDiscordAppUser } from '../discord/userLink.js'
 import { normalizeUserPreferences } from '../userPreferences.js'
-import { getTokyoWeekForecast } from './tokyoWeather.js'
+import { getTokyoMenuForecast } from './tokyoWeather.js'
 import { ensureRecipeCatalogLoaded } from '../recipeCatalog.js'
 import {
   buildWeeklyMenuProposalItems,
@@ -23,6 +24,14 @@ import { registerWeeklyMenuToFamilyCalendar } from '../googleCalendar.js'
 
 function toJsonValue<T>(value: T): InputJsonValue {
   return value as InputJsonValue
+}
+
+function normalizePlanningMode(value: unknown): MenuPlanningMode {
+  return value === 'day' ? 'day' : 'week'
+}
+
+function parseDateAtMidnight(dateString: string): Date {
+  return new Date(`${dateString}T00:00:00+09:00`)
 }
 
 function normalizeProposal(record: {
@@ -61,12 +70,14 @@ function normalizeProposal(record: {
   const preset = metadata.preset === 'washoku_focus' || metadata.preset === 'budget_saver' || metadata.preset === 'fish_more'
     ? metadata.preset as WeeklyMenuPreset
     : undefined
+  const planningMode = normalizePlanningMode(metadata.planningMode)
 
   return {
     id: record.id,
     sessionId: record.sessionId,
     ...(record.session.threadId ? { threadId: record.session.threadId } : {}),
     status: record.status as WeeklyMenuProposalSummary['status'],
+    planningMode,
     requestedServings: record.requestedServings,
     weekStartDate: record.weekStartDate,
     items,
@@ -301,6 +312,7 @@ export async function createWeeklyMenuProposal(input: {
   threadId?: string
   discordUserId: string
   requestedServings: number
+  planningMode?: MenuPlanningMode
   preset?: WeeklyMenuPreset
   notes?: string
 }): Promise<WeeklyMenuProposalSummary> {
@@ -309,8 +321,9 @@ export async function createWeeklyMenuProposal(input: {
     guildId: input.guildId,
   })
 
+  const planningMode = input.planningMode ?? 'week'
   const [forecast, planning] = await Promise.all([
-    getTokyoWeekForecast(),
+    getTokyoMenuForecast({ planningMode }),
     loadWeeklyPlanningContext(userId),
   ])
 
@@ -337,7 +350,9 @@ export async function createWeeklyMenuProposal(input: {
       discordUserId: input.discordUserId,
       requestedServings: input.requestedServings,
       metadata: toJsonValue({
+        planningMode,
         weekStartDate: forecast.weekStartDate,
+        endDate: forecast.endDate,
         excludedRecipeIds: [],
         ...(input.preset ? { preset: input.preset } : {}),
       }),
@@ -368,6 +383,7 @@ export async function createWeeklyMenuProposal(input: {
     actorId: input.discordUserId,
     eventType: 'weekly_menu_created',
     payload: {
+      planningMode,
       requestedServings: input.requestedServings,
       ...(input.preset ? { preset: input.preset } : {}),
       notes: input.notes,
@@ -406,9 +422,15 @@ export async function replaceWeeklyMenuProposalItem(
   }
 
   const planning = await loadWeeklyPlanningContext(existing.userId)
+  const planningMode = normalizePlanningMode(
+    isRecord(existing.session.metadata) ? existing.session.metadata.planningMode : undefined,
+  )
   const forecastDays = Array.isArray(existing.weatherSummary)
     ? (existing.weatherSummary as unknown as PlannerForecastDay[])
-    : (await getTokyoWeekForecast()).days
+    : (await getTokyoMenuForecast({
+        planningMode,
+        referenceDate: parseDateAtMidnight(existing.weekStartDate),
+      })).days
   const currentItems: WeeklyMenuProposalItemType[] = normalizeStoredProposalItems(existing.items)
   const metadata = isRecord(existing.session.metadata) ? existing.session.metadata : {}
   const globalExcludedRecipeIds = new Set<number>(
