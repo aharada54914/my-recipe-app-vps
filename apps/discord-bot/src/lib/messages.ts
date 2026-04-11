@@ -81,6 +81,14 @@ export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSumma
       : proposal.preset === 'fish_more'
         ? '魚多め'
         : undefined
+  const planStartDate = proposal.items[0]?.date ?? proposal.weekStartDate
+  const planEndDate = proposal.items[proposal.items.length - 1]?.date ?? proposal.weekStartDate
+  const targetPeriodLabel = planStartDate === planEndDate
+    ? planStartDate
+    : `${planStartDate} - ${planEndDate}`
+  const proposalTitle = proposal.planningMode === 'day'
+    ? `当日メニュー案 #${proposal.id}`
+    : `週間献立案 #${proposal.id}`
   const calendarSyncLines = proposal.calendarSync
     ? [
       '',
@@ -94,9 +102,9 @@ export function buildWeeklyMenuProposalMessage(proposal: WeeklyMenuProposalSumma
     : []
 
   const embed = new EmbedBuilder()
-    .setTitle(`週間献立案 #${proposal.id}`)
+    .setTitle(proposalTitle)
     .setDescription([
-      `**対象週**: ${proposal.weekStartDate}`,
+      `**対象期間**: ${targetPeriodLabel}`,
       `**人数**: ${proposal.requestedServings}人分`,
       `**状態**: ${proposal.status}`,
       ...(presetLabel ? [`**テンプレ条件**: ${presetLabel}`] : []),
