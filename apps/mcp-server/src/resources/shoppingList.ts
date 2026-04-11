@@ -1,5 +1,5 @@
-import { prisma } from '../db.js'
 import { getCurrentWeekMonday } from '../lib/date.js'
+import { findWeeklyMenuRecord } from './weeklyMenu.js'
 
 export interface ShoppingListResourceData {
   userId: string
@@ -13,25 +13,17 @@ export async function getShoppingListData(input: {
   userId: string
   weekStartDate?: string
 }): Promise<ShoppingListResourceData> {
-  const weekStartDate = input.weekStartDate ?? getCurrentWeekMonday()
+  const fallbackWeekStartDate = input.weekStartDate ?? getCurrentWeekMonday()
 
-  const menu = await prisma.weeklyMenu.findFirst({
-    where: {
-      userId: input.userId,
-      weekStartDate,
-    },
-    select: {
-      weekStartDate: true,
-      shoppingList: true,
-      status: true,
-    },
-    orderBy: { updatedAt: 'desc' },
+  const menu = await findWeeklyMenuRecord({
+    userId: input.userId,
+    ...(input.weekStartDate ? { weekStartDate: input.weekStartDate } : {}),
   })
 
   if (!menu) {
     return {
       userId: input.userId,
-      weekStartDate,
+      weekStartDate: fallbackWeekStartDate,
       shoppingList: null,
       status: null,
       message: '指定した週の献立が見つかりません。',

@@ -1,5 +1,5 @@
 import { prisma } from '../db.js'
-import { getCurrentWeekMonday } from '../lib/date.js'
+import { getCurrentWeekMonday, getLocalDateString } from '../lib/date.js'
 
 export interface WeeklyMenuResourceItem {
   date: string
@@ -41,6 +41,47 @@ function isWeeklyMenuRawItem(value: unknown): value is WeeklyMenuRawItem {
     && typeof obj['mainServings'] === 'number'
 }
 
+function menuContainsDate(menu: { items: unknown }, targetDate: string): boolean {
+  if (!Array.isArray(menu.items)) return false
+  return menu.items.some((item) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return false
+    return (item as { date?: unknown }).date === targetDate
+  })
+}
+
+export async function findWeeklyMenuRecord(input: {
+  userId: string
+  weekStartDate?: string
+  targetDate?: string
+}) {
+  if (input.weekStartDate) {
+    return prisma.weeklyMenu.findFirst({
+      where: {
+        userId: input.userId,
+        weekStartDate: input.weekStartDate,
+      },
+      orderBy: { updatedAt: 'desc' },
+    })
+  }
+
+  const targetDate = input.targetDate ?? getLocalDateString()
+  const recentMenus = await prisma.weeklyMenu.findMany({
+    where: { userId: input.userId },
+    orderBy: { updatedAt: 'desc' },
+    take: 24,
+  })
+  const currentMenu = recentMenus.find((menu) => menuContainsDate(menu, targetDate))
+  if (currentMenu) return currentMenu
+
+  return prisma.weeklyMenu.findFirst({
+    where: {
+      userId: input.userId,
+      weekStartDate: getCurrentWeekMonday(),
+    },
+    orderBy: { updatedAt: 'desc' },
+  })
+}
+
 async function buildWeeklyMenuItems(rawItems: unknown[]): Promise<WeeklyMenuResourceItem[]> {
   const items = rawItems.filter(isWeeklyMenuRawItem)
   const recipeIds = new Set<number>()
@@ -79,20 +120,17 @@ export async function getWeeklyMenuData(input: {
   userId: string
   weekStartDate?: string
 }): Promise<WeeklyMenuResourceData> {
-  const weekStartDate = input.weekStartDate ?? getCurrentWeekMonday()
+  const fallbackWeekStartDate = input.weekStartDate ?? getCurrentWeekMonday()
 
-  const menu = await prisma.weeklyMenu.findFirst({
-    where: {
-      userId: input.userId,
-      weekStartDate,
-    },
-    orderBy: { updatedAt: 'desc' },
+  const menu = await findWeeklyMenuRecord({
+    userId: input.userId,
+    ...(input.weekStartDate ? { weekStartDate: input.weekStartDate } : {}),
   })
 
   if (!menu) {
     return {
       userId: input.userId,
-      weekStartDate,
+      weekStartDate: fallbackWeekStartDate,
       status: null,
       items: [],
       message: '指定した週の献立が見つかりません。',
