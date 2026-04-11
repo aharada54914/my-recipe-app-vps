@@ -22,6 +22,14 @@ import {
 import { WeeklyMenuProposalItemSchema } from '@kitchen/shared-types'
 import { registerWeeklyMenuToFamilyCalendar } from '../googleCalendar.js'
 
+function shuffleInPlace<T>(array: T[]): T[] {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[array[i], array[j]] = [array[j], array[i]]
+  }
+  return array
+}
+
 function toJsonValue<T>(value: T): InputJsonValue {
   return value as InputJsonValue
 }
@@ -293,7 +301,7 @@ async function loadWeeklyPlanningContext(userId: string): Promise<{
   }
 
   return {
-    recipes,
+    recipes: shuffleInPlace(recipes),
     preferences: normalizeUserPreferences(user?.preferences),
     stockNames: new Set(stocks.map((stock) => stock.name)),
     expiringStockNames: new Set(
@@ -596,6 +604,31 @@ export async function approveWeeklyMenuProposal(id: number, discordUserId: strin
       status: 'confirmed',
     },
   })
+
+  // Update user's personal optimal temperature (tOpt) via rolling average
+  try {
+    const weatherDays = Array.isArray(existing.weatherSummary)
+      ? (existing.weatherSummary as Array<{ maxTempC?: unknown }>)
+      : []
+    const validTemps = weatherDays
+      .map((d) => d.maxTempC)
+      .filter((t): t is number => typeof t === 'number' && Number.isFinite(t))
+    if (validTemps.length > 0) {
+      const weekAvgTemp = validTemps.reduce((sum, t) => sum + t, 0) / validTemps.length
+      const userRecord = await prisma.user.findUnique({
+        where: { id: existing.userId },
+        select: { preferences: true },
+      })
+      const currentPrefs = normalizeUserPreferences(userRecord?.preferences)
+      const newTOpt = Math.round((0.7 * currentPrefs.tOpt + 0.3 * weekAvgTemp) * 10) / 10
+      await prisma.user.update({
+        where: { id: existing.userId },
+        data: { preferences: toJsonValue({ ...currentPrefs, tOpt: newTOpt }) },
+      })
+    }
+  } catch {
+    // tOpt update failure is non-critical — do not block approval
+  }
 
   let calendarSync:
     | { status: 'registered'; calendarId: string; registeredCount: number; errors: string[] }

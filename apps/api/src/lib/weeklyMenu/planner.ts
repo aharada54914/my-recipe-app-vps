@@ -1,4 +1,5 @@
 import type { JsonValue } from '@prisma/client/runtime/library'
+import { computeUnifiedWeatherScore } from './recipeWeatherVectors.js'
 import type {
   DeviceType,
   EditableRecipeCategory,
@@ -22,7 +23,10 @@ export interface PlannerForecastDay {
   date: string
   weatherText: string
   maxTempC: number
+  minTempC?: number
   precipitationMm: number
+  humidityPercent?: number
+  weatherCode?: string
 }
 
 interface PlannerContext {
@@ -111,19 +115,6 @@ function seasonScore(recipe: PlannerRecipeRecord): number {
   return 0
 }
 
-function weatherScore(recipe: PlannerRecipeRecord, forecast: PlannerForecastDay): number {
-  const title = normalizeText(recipe.title)
-  let score = 0
-  const rainyOrCold = forecast.precipitationMm >= 3 || forecast.maxTempC <= 14 || /雨|雪/.test(forecast.weatherText)
-  const warm = forecast.maxTempC >= 25
-
-  if (rainyOrCold && /(煮|鍋|スープ|汁|カレー|シチュー|ポトフ|グラタン)/.test(title)) score += 10
-  if (warm && /(蒸し|和え|サラダ|冷|そうめん|そば)/.test(title)) score += 8
-  if (warm && /(鍋|シチュー|グラタン)/.test(title)) score -= 6
-  if (rainyOrCold && toDevice(recipe.device) === 'hotcook') score += 4
-  if (warm && toDevice(recipe.device) === 'manual') score += 3
-  return score
-}
 
 function noteScore(recipe: PlannerRecipeRecord, notes?: string): number {
   if (!notes) return 0
@@ -259,7 +250,9 @@ function scoreMainRecipe(params: {
   const device = toDevice(recipe.device)
   const stockMatches = countStockMatches(recipe, params.context.stockNames)
   const urgentStockMatches = countUrgentStockMatches(recipe, params.context.expiringStockNames)
-  const weather = weatherScore(recipe, params.forecast)
+  const weather = Math.round(
+    computeUnifiedWeatherScore(recipe, params.forecast, params.context.preferences.tOpt) * 20,
+  )
   const season = seasonScore(recipe)
   const note = noteScore(recipe, params.context.notes)
   const preset = presetScore(recipe, params.context.preset)

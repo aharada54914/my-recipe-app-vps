@@ -44,22 +44,22 @@ function parseNumber(value: unknown): number | null {
   return Number.isFinite(num) ? num : null
 }
 
-function monthBaseTemp(month: number): number {
-  if (month >= 6 && month <= 9) return 30
-  if (month <= 2 || month === 12) return 9
-  return 18
+function monthBaseTempRange(month: number): { max: number; min: number } {
+  if (month >= 6 && month <= 9) return { max: 33, min: 24 }
+  if (month <= 2 || month === 12) return { max: 12, min: 3 }
+  return { max: 21, min: 12 }
 }
 
 function buildSyntheticForecast(dates: string[]): DiscordDailyWeather[] {
   const firstDate = dates[0] ? new Date(`${dates[0]}T00:00:00+09:00`) : new Date()
   const month = firstDate.getMonth() + 1
-  const baseTemp = monthBaseTemp(month)
+  const { max: baseMax, min: baseMin } = monthBaseTempRange(month)
 
   return dates.map((date, index) => {
     return {
       date,
-      maxTempC: baseTemp + (index % 3),
-      minTempC: baseTemp - 6 + (index % 2),
+      maxTempC: baseMax + (index % 3) - 1,
+      minTempC: baseMin + (index % 2),
       precipitationMm: index % 4 === 0 ? 8 : 0,
       humidityPercent: 55 + (index % 3) * 5,
       weatherCode: index % 4 === 0 ? '300' : index % 3 === 0 ? '200' : '100',
@@ -72,11 +72,22 @@ function looksTokyoArea(name: string | undefined): boolean {
   return typeof name === 'string' && name.includes('東京')
 }
 
+function normalizeDailyWeather(day: DiscordDailyWeather, fallback: DiscordDailyWeather): DiscordDailyWeather {
+  const rawMax = Number.isFinite(day.maxTempC) ? day.maxTempC : fallback.maxTempC
+  const rawMin = Number.isFinite(day.minTempC) ? day.minTempC : fallback.minTempC
+  return {
+    ...day,
+    maxTempC: Math.max(rawMax, rawMin),
+    minTempC: Math.min(rawMax, rawMin),
+    humidityPercent: Number.isFinite(day.humidityPercent) ? day.humidityPercent : fallback.humidityPercent,
+  }
+}
+
 function ensureForecastDefaults(dates: string[], partial: Map<string, Partial<DiscordDailyWeather>>): DiscordDailyWeather[] {
   const fallback = buildSyntheticForecast(dates)
   return fallback.map((day) => {
     const partialDay = partial.get(day.date)
-    return {
+    const merged: DiscordDailyWeather = {
       date: day.date,
       maxTempC: partialDay?.maxTempC ?? day.maxTempC,
       minTempC: partialDay?.minTempC ?? day.minTempC,
@@ -85,6 +96,7 @@ function ensureForecastDefaults(dates: string[], partial: Map<string, Partial<Di
       weatherCode: partialDay?.weatherCode ?? day.weatherCode,
       weatherText: partialDay?.weatherText ?? day.weatherText,
     }
+    return normalizeDailyWeather(merged, day)
   })
 }
 
