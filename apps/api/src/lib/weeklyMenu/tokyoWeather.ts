@@ -1,3 +1,6 @@
+import type { MenuPlanningMode } from '@kitchen/shared-types'
+import { buildPlanningWindowDates, getPlanningWindow } from './planningWindow.js'
+
 export interface DiscordDailyWeather {
   date: string
   maxTempC: number
@@ -41,44 +44,22 @@ function parseNumber(value: unknown): number | null {
   return Number.isFinite(num) ? num : null
 }
 
-function buildDateString(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+function monthBaseTempRange(month: number): { max: number; min: number } {
+  if (month >= 6 && month <= 9) return { max: 33, min: 24 }
+  if (month <= 2 || month === 12) return { max: 12, min: 3 }
+  return { max: 21, min: 12 }
 }
 
-function addDays(base: Date, days: number): Date {
-  const next = new Date(base)
-  next.setDate(base.getDate() + days)
-  return next
-}
+function buildSyntheticForecast(dates: string[]): DiscordDailyWeather[] {
+  const firstDate = dates[0] ? new Date(`${dates[0]}T00:00:00+09:00`) : new Date()
+  const month = firstDate.getMonth() + 1
+  const { max: baseMax, min: baseMin } = monthBaseTempRange(month)
 
-function startOfWeekDate(base: Date): Date {
-  const start = new Date(base)
-  const day = start.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  start.setDate(start.getDate() + diff)
-  start.setHours(0, 0, 0, 0)
-  return start
-}
-
-function monthBaseTemp(month: number): number {
-  if (month >= 6 && month <= 9) return 30
-  if (month <= 2 || month === 12) return 9
-  return 18
-}
-
-function buildSyntheticForecast(startDate: Date): DiscordDailyWeather[] {
-  const month = startDate.getMonth() + 1
-  const baseTemp = monthBaseTemp(month)
-
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(startDate, index)
+  return dates.map((date, index) => {
     return {
-      date: buildDateString(date),
-      maxTempC: baseTemp + (index % 3),
-      minTempC: baseTemp - 6 + (index % 2),
+      date,
+      maxTempC: baseMax + (index % 3) - 1,
+      minTempC: baseMin + (index % 2),
       precipitationMm: index % 4 === 0 ? 8 : 0,
       humidityPercent: 55 + (index % 3) * 5,
       weatherCode: index % 4 === 0 ? '300' : index % 3 === 0 ? '200' : '100',
@@ -91,11 +72,22 @@ function looksTokyoArea(name: string | undefined): boolean {
   return typeof name === 'string' && name.includes('東京')
 }
 
-function ensureWeekDefaults(startDate: Date, partial: Map<string, Partial<DiscordDailyWeather>>): DiscordDailyWeather[] {
-  const fallback = buildSyntheticForecast(startDate)
+function normalizeDailyWeather(day: DiscordDailyWeather, fallback: DiscordDailyWeather): DiscordDailyWeather {
+  const rawMax = Number.isFinite(day.maxTempC) ? day.maxTempC : fallback.maxTempC
+  const rawMin = Number.isFinite(day.minTempC) ? day.minTempC : fallback.minTempC
+  return {
+    ...day,
+    maxTempC: Math.max(rawMax, rawMin),
+    minTempC: Math.min(rawMax, rawMin),
+    humidityPercent: Number.isFinite(day.humidityPercent) ? day.humidityPercent : fallback.humidityPercent,
+  }
+}
+
+function ensureForecastDefaults(dates: string[], partial: Map<string, Partial<DiscordDailyWeather>>): DiscordDailyWeather[] {
+  const fallback = buildSyntheticForecast(dates)
   return fallback.map((day) => {
     const partialDay = partial.get(day.date)
-    return {
+    const merged: DiscordDailyWeather = {
       date: day.date,
       maxTempC: partialDay?.maxTempC ?? day.maxTempC,
       minTempC: partialDay?.minTempC ?? day.minTempC,
@@ -104,11 +96,12 @@ function ensureWeekDefaults(startDate: Date, partial: Map<string, Partial<Discor
       weatherCode: partialDay?.weatherCode ?? day.weatherCode,
       weatherText: partialDay?.weatherText ?? day.weatherText,
     }
+    return normalizeDailyWeather(merged, day)
   })
 }
 
-function parseTokyoWeeklyForecast(payload: unknown, startDate: Date): DiscordDailyWeather[] {
-  if (!Array.isArray(payload)) return buildSyntheticForecast(startDate)
+function parseTokyoForecast(payload: unknown, dates: string[]): DiscordDailyWeather[] {
+  if (!Array.isArray(payload)) return buildSyntheticForecast(dates)
 
   const daily = new Map<string, Partial<DiscordDailyWeather>>()
 
@@ -136,15 +129,24 @@ function parseTokyoWeeklyForecast(payload: unknown, startDate: Date): DiscordDai
     }
   }
 
-  return ensureWeekDefaults(startDate, daily)
+  return ensureForecastDefaults(dates, daily)
 }
 
-export async function getTokyoWeekForecast(referenceDate = new Date()): Promise<{
+export async function getTokyoMenuForecast(params?: {
+  referenceDate?: Date
+  planningMode?: MenuPlanningMode
+}): Promise<{
+  planningMode: MenuPlanningMode
   weekStartDate: string
+  endDate: string
   days: DiscordDailyWeather[]
 }> {
-  const weekStart = startOfWeekDate(referenceDate)
-  let days = buildSyntheticForecast(weekStart)
+  const planningWindow = getPlanningWindow(
+    params?.planningMode ?? 'week',
+    params?.referenceDate ?? new Date(),
+  )
+  const planningDates = buildPlanningWindowDates(planningWindow)
+  let days = buildSyntheticForecast(planningDates)
 
   try {
     const response = await fetch(JMA_TOKYO_FORECAST_URL, {
@@ -153,13 +155,15 @@ export async function getTokyoWeekForecast(referenceDate = new Date()): Promise<
     })
     if (!response.ok) throw new Error(`JMA forecast fetch failed: ${response.status}`)
     const payload = await response.json()
-    days = parseTokyoWeeklyForecast(payload, weekStart)
+    days = parseTokyoForecast(payload, planningDates)
   } catch {
-    days = buildSyntheticForecast(weekStart)
+    days = buildSyntheticForecast(planningDates)
   }
 
   return {
-    weekStartDate: buildDateString(weekStart),
+    planningMode: planningWindow.planningMode,
+    weekStartDate: planningWindow.startDateString,
+    endDate: planningWindow.endDateString,
     days,
   }
 }

@@ -1,4 +1,5 @@
 import type { JsonValue } from '@prisma/client/runtime/library'
+import { computeUnifiedWeatherScore } from './recipeWeatherVectors.js'
 import type {
   DeviceType,
   EditableRecipeCategory,
@@ -22,7 +23,10 @@ export interface PlannerForecastDay {
   date: string
   weatherText: string
   maxTempC: number
+  minTempC?: number
   precipitationMm: number
+  humidityPercent?: number
+  weatherCode?: string
 }
 
 interface PlannerContext {
@@ -111,19 +115,6 @@ function seasonScore(recipe: PlannerRecipeRecord): number {
   return 0
 }
 
-function weatherScore(recipe: PlannerRecipeRecord, forecast: PlannerForecastDay): number {
-  const title = normalizeText(recipe.title)
-  let score = 0
-  const rainyOrCold = forecast.precipitationMm >= 3 || forecast.maxTempC <= 14 || /雨|雪/.test(forecast.weatherText)
-  const warm = forecast.maxTempC >= 25
-
-  if (rainyOrCold && /(煮|鍋|スープ|汁|カレー|シチュー|ポトフ|グラタン)/.test(title)) score += 10
-  if (warm && /(蒸し|和え|サラダ|冷|そうめん|そば)/.test(title)) score += 8
-  if (warm && /(鍋|シチュー|グラタン)/.test(title)) score -= 6
-  if (rainyOrCold && toDevice(recipe.device) === 'hotcook') score += 4
-  if (warm && toDevice(recipe.device) === 'manual') score += 3
-  return score
-}
 
 function noteScore(recipe: PlannerRecipeRecord, notes?: string): number {
   if (!notes) return 0
@@ -179,30 +170,38 @@ function costScore(recipe: PlannerRecipeRecord, preferences: UserPreferences): n
   return 0
 }
 
-function buildDeviceTargets(recipes: PlannerRecipeRecord[]): Record<DeviceType, number> {
+function buildDeviceTargets(
+  recipes: PlannerRecipeRecord[],
+  targetDays: number,
+): Record<DeviceType, number> {
   const counts: Record<DeviceType, number> = { hotcook: 0, healsio: 0, manual: 0 }
   for (const recipe of recipes) {
     counts[toDevice(recipe.device)] += 1
   }
 
   const total = counts.hotcook + counts.healsio + counts.manual
-  if (total === 0) return { hotcook: 0, healsio: 0, manual: 0 }
+  if (total === 0 || targetDays <= 0) return { hotcook: 0, healsio: 0, manual: 0 }
 
-  const targets: Record<DeviceType, number> = {
-    hotcook: Math.max(1, Math.round((counts.hotcook / total) * 7)),
-    healsio: Math.max(1, Math.round((counts.healsio / total) * 7)),
-    manual: Math.max(1, Math.round((counts.manual / total) * 7)),
-  }
+  const devices: DeviceType[] = ['hotcook', 'healsio', 'manual']
+  const targets: Record<DeviceType, number> = { hotcook: 0, healsio: 0, manual: 0 }
+  const remainders = devices.map((device) => {
+    const exact = (counts[device] / total) * targetDays
+    const floorValue = Math.floor(exact)
+    targets[device] = floorValue
+    return { device, remainder: exact - floorValue, count: counts[device] }
+  })
 
-  while (targets.hotcook + targets.healsio + targets.manual > 7) {
-    const device = [...(['manual', 'healsio', 'hotcook'] as const)]
-      .sort((left, right) => targets[right] - targets[left])[0]
-    targets[device] -= 1
-  }
-  while (targets.hotcook + targets.healsio + targets.manual < 7) {
-    const device = [...(['hotcook', 'healsio', 'manual'] as const)]
-      .sort((left, right) => counts[right] - counts[left])[0]
-    targets[device] += 1
+  let assigned = targets.hotcook + targets.healsio + targets.manual
+  while (assigned < targetDays) {
+    const next = [...remainders]
+      .sort((left, right) => {
+        if (right.remainder !== left.remainder) return right.remainder - left.remainder
+        return right.count - left.count
+      })
+      .find((entry) => entry.count > 0)
+    if (!next) break
+    targets[next.device] += 1
+    assigned += 1
   }
 
   return targets
@@ -251,7 +250,9 @@ function scoreMainRecipe(params: {
   const device = toDevice(recipe.device)
   const stockMatches = countStockMatches(recipe, params.context.stockNames)
   const urgentStockMatches = countUrgentStockMatches(recipe, params.context.expiringStockNames)
-  const weather = weatherScore(recipe, params.forecast)
+  const weather = Math.round(
+    computeUnifiedWeatherScore(recipe, params.forecast, params.context.preferences.tOpt) * 20,
+  )
   const season = seasonScore(recipe)
   const note = noteScore(recipe, params.context.notes)
   const preset = presetScore(recipe, params.context.preset)
@@ -429,7 +430,7 @@ export function buildWeeklyMenuProposalItems(params: {
     return category === '副菜' || category === 'スープ'
   })
 
-  const deviceTargets = buildDeviceTargets(mains)
+  const deviceTargets = buildDeviceTargets(mains, params.forecastDays.length)
   const selectedRecipeIds = new Set<number>()
   const selectedProteinGroups: ProteinGroup[] = []
   const selectedDevices: DeviceType[] = []
@@ -509,7 +510,7 @@ export function buildWeeklyMenuProposalItems(params: {
           .filter((entry) => entry.score > 0)
           .sort((left, right) => right.score - left.score)
           .map((entry) => toCandidate(entry.recipe, entry.score)),
-        6,
+        15,
       )
 
       const nextSideIndex = sideCandidates.length > 0 ? 0 : undefined
@@ -589,7 +590,7 @@ export function buildWeeklyMenuProposalItems(params: {
 
     const mainCandidates = uniqueCandidates(
       scoredMains.map((entry) => toCandidate(entry.recipe, entry.score, entry.reason)),
-      8,
+      30,
     )
     const bestMain = scoredMains[0]
     if (!bestMain || mainCandidates.length === 0) {
@@ -618,7 +619,7 @@ export function buildWeeklyMenuProposalItems(params: {
       .filter((entry) => entry.score > 0)
       .sort((left, right) => right.score - left.score)
       .map((entry) => toCandidate(entry.recipe, entry.score)),
-      6,
+      15,
     )
     const bestSide = sideCandidates[0]
 

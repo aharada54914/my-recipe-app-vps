@@ -27,7 +27,7 @@ function getTransporter(): Transporter {
 
 export interface WeeklyMenuEmailData {
   userName: string
-  weekStartDate: string
+  periodLabel: string
   items: Array<{
     date: string
     dayOfWeek: string
@@ -65,12 +65,12 @@ function buildWeeklyMenuHtml(data: WeeklyMenuEmailData): string {
     <html>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
       <div style="background: linear-gradient(135deg, #F97316, #ea580c); padding: 20px; border-radius: 12px 12px 0 0; color: white;">
-        <h1 style="margin: 0; font-size: 20px;">Kitchen App - 今週の献立</h1>
-        <p style="margin: 4px 0 0; opacity: 0.9;">${data.weekStartDate} からの1週間</p>
+        <h1 style="margin: 0; font-size: 20px;">Kitchen App - 献立</h1>
+        <p style="margin: 4px 0 0; opacity: 0.9;">${data.periodLabel}</p>
       </div>
       <div style="border: 1px solid #eee; border-top: none; border-radius: 0 0 12px 12px; padding: 20px;">
         <p>こんにちは、${data.userName}さん</p>
-        <p>今週の献立をお届けします:</p>
+        <p>献立をお届けします:</p>
         <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
           ${menuRows}
         </table>
@@ -94,7 +94,7 @@ export async function sendWeeklyMenuEmail(
   await transport.sendMail({
     from: `Kitchen App <${from}>`,
     to,
-    subject: `今週の献立 (${data.weekStartDate}~)`,
+    subject: `献立 (${data.periodLabel})`,
     html: buildWeeklyMenuHtml(data),
   })
 }

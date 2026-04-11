@@ -2,7 +2,7 @@ import cron from 'node-cron'
 import { prisma } from '../db/client.js'
 import { sendWeeklyMenuEmail } from '../lib/mailer.js'
 import type { WeeklyMenuEmailData } from '../lib/mailer.js'
-import { format, startOfWeek } from 'date-fns'
+import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'] as const
@@ -11,14 +11,10 @@ async function sendWeeklyEmails(): Promise<void> {
   console.info('[WeeklyEmailJob] Starting weekly email dispatch...')
 
   try {
-    // Get current week's start date (Sunday)
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 })
-    const weekStartDate = format(weekStart, 'yyyy-MM-dd')
+    const today = format(new Date(), 'yyyy-MM-dd')
 
-    // Find all users with confirmed weekly menus for this week
-    const menus = await prisma.weeklyMenu.findMany({
+    const candidateMenus = await prisma.weeklyMenu.findMany({
       where: {
-        weekStartDate,
         status: { in: ['confirmed', 'registered'] },
       },
       include: {
@@ -27,9 +23,22 @@ async function sendWeeklyEmails(): Promise<void> {
         },
       },
     })
+    const menusByUser = new Map<string, typeof candidateMenus[number]>()
+    for (const menu of candidateMenus) {
+      const containsToday = Array.isArray(menu.items) && menu.items.some((item) => {
+        if (typeof item !== 'object' || item == null || Array.isArray(item)) return false
+        return (item as { date?: unknown }).date === today
+      })
+      if (!containsToday) continue
+      const current = menusByUser.get(menu.userId)
+      if (!current || current.updatedAt < menu.updatedAt) {
+        menusByUser.set(menu.userId, menu)
+      }
+    }
+    const menus = Array.from(menusByUser.values())
 
     if (menus.length === 0) {
-      console.info('[WeeklyEmailJob] No confirmed menus found for this week. Skipping.')
+      console.info('[WeeklyEmailJob] No confirmed menus found for today. Skipping.')
       return
     }
 
@@ -82,9 +91,20 @@ async function sendWeeklyEmails(): Promise<void> {
         // Sort by date
         const sortedItems = [...items].sort((a, b) => a.date.localeCompare(b.date))
 
+        const sortedMenuItems = [...menuItems].sort((left, right) => left.date.localeCompare(right.date))
+        const firstItemDate = sortedMenuItems[0]?.date ? new Date(sortedMenuItems[0].date) : null
+        const lastItemDate = sortedMenuItems[sortedMenuItems.length - 1]?.date
+          ? new Date(sortedMenuItems[sortedMenuItems.length - 1]!.date)
+          : null
+        const periodLabel = firstItemDate && lastItemDate
+          ? (format(firstItemDate, 'M月d日', { locale: ja }) === format(lastItemDate, 'M月d日', { locale: ja })
+              ? format(firstItemDate, 'M月d日', { locale: ja })
+              : `${format(firstItemDate, 'M月d日', { locale: ja })}〜${format(lastItemDate, 'M月d日', { locale: ja })}`)
+          : menu.weekStartDate
+
         const emailData: WeeklyMenuEmailData = {
           userName: menu.user.name ?? menu.user.email,
-          weekStartDate: format(weekStart, 'M月d日', { locale: ja }),
+          periodLabel,
           items: sortedItems,
           shoppingList: menu.shoppingList ?? undefined,
         }

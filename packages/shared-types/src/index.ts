@@ -81,6 +81,8 @@ export type Recipe = z.infer<typeof RecipeSchema>
 
 export const WeeklyMenuStatusSchema = z.enum(['draft', 'confirmed', 'registered'])
 export type WeeklyMenuStatus = z.infer<typeof WeeklyMenuStatusSchema>
+export const MenuPlanningModeSchema = z.enum(['week', 'day'])
+export type MenuPlanningMode = z.infer<typeof MenuPlanningModeSchema>
 
 export const WeeklyMenuItemSchema = z.object({
   recipeId: z.number(),
@@ -509,9 +511,10 @@ export const WeeklyMenuProposalSummarySchema = z.object({
   sessionId: z.number().int().positive(),
   threadId: z.string().min(1).optional(),
   status: WeeklyMenuProposalStatusSchema,
+  planningMode: MenuPlanningModeSchema.default('week'),
   requestedServings: z.number().int().positive(),
   weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  items: z.array(WeeklyMenuProposalItemSchema).length(7),
+  items: z.array(WeeklyMenuProposalItemSchema).min(1).max(7),
   preset: WeeklyMenuPresetSchema.optional(),
   notes: z.string().optional(),
   approvedWeeklyMenuId: z.number().int().positive().optional(),
@@ -531,6 +534,7 @@ export const CreateDiscordWeeklyMenuProposalRequestSchema = z.object({
   threadId: z.string().min(1).optional(),
   discordUserId: z.string().min(1),
   requestedServings: z.number().int().positive().min(1).max(20),
+  planningMode: MenuPlanningModeSchema.default('week'),
   preset: WeeklyMenuPresetSchema.optional(),
   notes: z.string().max(400).optional(),
 })

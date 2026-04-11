@@ -38,7 +38,9 @@ import {
   buildStockExpiryAlertMessage,
 } from './lib/messages.js'
 import {
+  buildDailyMenuCommand,
   buildWeeklyMenuCommand,
+  handlePlanDayCommand,
   handlePlanWeekCommand,
   handleWeeklyMenuButton,
   handleWeeklyMenuModal,
@@ -124,6 +126,7 @@ function buildCommands() {
     buildHelpCommand(),
     buildSyncHelpCommand(),
     buildWeeklyMenuCommand(),
+    buildDailyMenuCommand(),
     buildStockPhotoCommand(),
     buildKitchenAdviceCommand(),
   ].map((command) => command.toJSON())
@@ -470,6 +473,10 @@ async function main(): Promise<void> {
         }
         if (interaction.commandName === 'plan-week') {
           await handlePlanWeekCommand(interaction, ensureWorkflowChannel)
+          return
+        }
+        if (interaction.commandName === 'plan-day') {
+          await handlePlanDayCommand(interaction, ensureWorkflowChannel)
           return
         }
         if (interaction.commandName === 'analyze-photo') {

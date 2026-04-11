@@ -1,5 +1,6 @@
 import type { InputJsonValue } from '@prisma/client/runtime/library'
 import type {
+  MenuPlanningMode,
   ReplaceDiscordWeeklyMenuItemRequest,
   WeeklyMenuCandidate,
   WeeklyMenuProposalItem,
@@ -11,7 +12,7 @@ import type {
 import { prisma } from '../../db/client.js'
 import { ensureDiscordAppUser } from '../discord/userLink.js'
 import { normalizeUserPreferences } from '../userPreferences.js'
-import { getTokyoWeekForecast } from './tokyoWeather.js'
+import { getTokyoMenuForecast } from './tokyoWeather.js'
 import { ensureRecipeCatalogLoaded } from '../recipeCatalog.js'
 import {
   buildWeeklyMenuProposalItems,
@@ -21,8 +22,24 @@ import {
 import { WeeklyMenuProposalItemSchema } from '@kitchen/shared-types'
 import { registerWeeklyMenuToFamilyCalendar } from '../googleCalendar.js'
 
+function shuffleInPlace<T>(array: T[]): T[] {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[array[i], array[j]] = [array[j], array[i]]
+  }
+  return array
+}
+
 function toJsonValue<T>(value: T): InputJsonValue {
   return value as InputJsonValue
+}
+
+function normalizePlanningMode(value: unknown): MenuPlanningMode {
+  return value === 'day' ? 'day' : 'week'
+}
+
+function parseDateAtMidnight(dateString: string): Date {
+  return new Date(`${dateString}T00:00:00+09:00`)
 }
 
 function normalizeProposal(record: {
@@ -61,12 +78,14 @@ function normalizeProposal(record: {
   const preset = metadata.preset === 'washoku_focus' || metadata.preset === 'budget_saver' || metadata.preset === 'fish_more'
     ? metadata.preset as WeeklyMenuPreset
     : undefined
+  const planningMode = normalizePlanningMode(metadata.planningMode)
 
   return {
     id: record.id,
     sessionId: record.sessionId,
     ...(record.session.threadId ? { threadId: record.session.threadId } : {}),
     status: record.status as WeeklyMenuProposalSummary['status'],
+    planningMode,
     requestedServings: record.requestedServings,
     weekStartDate: record.weekStartDate,
     items,
@@ -282,7 +301,7 @@ async function loadWeeklyPlanningContext(userId: string): Promise<{
   }
 
   return {
-    recipes,
+    recipes: shuffleInPlace(recipes),
     preferences: normalizeUserPreferences(user?.preferences),
     stockNames: new Set(stocks.map((stock) => stock.name)),
     expiringStockNames: new Set(
@@ -301,6 +320,7 @@ export async function createWeeklyMenuProposal(input: {
   threadId?: string
   discordUserId: string
   requestedServings: number
+  planningMode?: MenuPlanningMode
   preset?: WeeklyMenuPreset
   notes?: string
 }): Promise<WeeklyMenuProposalSummary> {
@@ -309,8 +329,9 @@ export async function createWeeklyMenuProposal(input: {
     guildId: input.guildId,
   })
 
+  const planningMode = input.planningMode ?? 'week'
   const [forecast, planning] = await Promise.all([
-    getTokyoWeekForecast(),
+    getTokyoMenuForecast({ planningMode }),
     loadWeeklyPlanningContext(userId),
   ])
 
@@ -337,7 +358,9 @@ export async function createWeeklyMenuProposal(input: {
       discordUserId: input.discordUserId,
       requestedServings: input.requestedServings,
       metadata: toJsonValue({
+        planningMode,
         weekStartDate: forecast.weekStartDate,
+        endDate: forecast.endDate,
         excludedRecipeIds: [],
         ...(input.preset ? { preset: input.preset } : {}),
       }),
@@ -368,6 +391,7 @@ export async function createWeeklyMenuProposal(input: {
     actorId: input.discordUserId,
     eventType: 'weekly_menu_created',
     payload: {
+      planningMode,
       requestedServings: input.requestedServings,
       ...(input.preset ? { preset: input.preset } : {}),
       notes: input.notes,
@@ -406,9 +430,15 @@ export async function replaceWeeklyMenuProposalItem(
   }
 
   const planning = await loadWeeklyPlanningContext(existing.userId)
+  const planningMode = normalizePlanningMode(
+    isRecord(existing.session.metadata) ? existing.session.metadata.planningMode : undefined,
+  )
   const forecastDays = Array.isArray(existing.weatherSummary)
     ? (existing.weatherSummary as unknown as PlannerForecastDay[])
-    : (await getTokyoWeekForecast()).days
+    : (await getTokyoMenuForecast({
+        planningMode,
+        referenceDate: parseDateAtMidnight(existing.weekStartDate),
+      })).days
   const currentItems: WeeklyMenuProposalItemType[] = normalizeStoredProposalItems(existing.items)
   const metadata = isRecord(existing.session.metadata) ? existing.session.metadata : {}
   const globalExcludedRecipeIds = new Set<number>(
@@ -574,6 +604,31 @@ export async function approveWeeklyMenuProposal(id: number, discordUserId: strin
       status: 'confirmed',
     },
   })
+
+  // Update user's personal optimal temperature (tOpt) via rolling average
+  try {
+    const weatherDays = Array.isArray(existing.weatherSummary)
+      ? (existing.weatherSummary as Array<{ maxTempC?: unknown }>)
+      : []
+    const validTemps = weatherDays
+      .map((d) => d.maxTempC)
+      .filter((t): t is number => typeof t === 'number' && Number.isFinite(t))
+    if (validTemps.length > 0) {
+      const weekAvgTemp = validTemps.reduce((sum, t) => sum + t, 0) / validTemps.length
+      const userRecord = await prisma.user.findUnique({
+        where: { id: existing.userId },
+        select: { preferences: true },
+      })
+      const currentPrefs = normalizeUserPreferences(userRecord?.preferences)
+      const newTOpt = Math.round((0.7 * currentPrefs.tOpt + 0.3 * weekAvgTemp) * 10) / 10
+      await prisma.user.update({
+        where: { id: existing.userId },
+        data: { preferences: toJsonValue({ ...currentPrefs, tOpt: newTOpt }) },
+      })
+    }
+  } catch {
+    // tOpt update failure is non-critical — do not block approval
+  }
 
   let calendarSync:
     | { status: 'registered'; calendarId: string; registeredCount: number; errors: string[] }

@@ -17,13 +17,14 @@ test.describe('Discord help channel and command routing', () => {
     await discord.expectBotMessageContaining('aharada server の使い方')
   })
 
-  test('weekly-menu channel shows channel-specific usage guidance', async ({ page }) => {
+  test('weekly-menu guidance is available from help in the weekly-menu channel', async ({ page }) => {
     const config = getDiscordE2EConfig()
     const discord = new DiscordAppPage(page, config)
 
     await discord.gotoWeeklyMenuChannel()
-    await discord.expectBotMessageContaining('#weekly-menu の使い方')
-    await discord.expectBotMessageContaining('/plan-week')
-    await discord.expectBotMessageContaining('保存して家族カレンダーへ登録')
+    await discord.expectChannelTextContaining(config.weeklyMenuChannelId, '#weekly-menu の使い方')
+    await discord.expectChannelTextContaining(config.weeklyMenuChannelId, '/plan-week')
+    await discord.expectChannelTextContaining(config.weeklyMenuChannelId, '/plan-day')
+    await discord.expectChannelTextContaining(config.weeklyMenuChannelId, '保存して家族カレンダーへ登録')
   })
 })

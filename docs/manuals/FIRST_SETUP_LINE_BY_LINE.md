@@ -1,32 +1,24 @@
 # 最初のセットアップを1行ずつ説明
 
-## このアプリは何をするものか
+最終更新: 2026-04-03
 
-Kitchen App は、料理を助けるためのアプリです。
+## この repository は何をするものか
 
-- レシピを探す
-- 家にある食材を記録する
-- 1週間の献立を考える
-- AI に料理相談をする
-- 個人設定を保存する
+Kitchen Platform は、料理まわりの運用をまとめる monorepo です。
 
-この repository は 1 つの箱ではなく、いくつかの部品でできています。
-
-| 部品 | 役割 |
-| --- | --- |
-| `apps/web` | 画面そのもの |
-| `apps/api` | 裏側の処理、設定保存、認証 |
-| `apps/cli` | ターミナル管理用コマンド |
-| `packages/shared-types` | 共通の型定義 |
+- `apps/web`: 家族が使う PWA
+- `apps/api`: 認証、設定保存、週間献立、料理相談の backend
+- `apps/discord-bot`: Discord workflow bot
+- `apps/mcp-server`: Claude などから使う MCP サーバー
+- `packages/shared-types`: 共通の型
 
 ## 先に必要なもの
 
 - Git
 - Node.js `24` 推奨
-- 最低でも Node.js `22.12.0` 以上
+- 最低でも Node.js `22.12.0`
 - npm
-- ターミナル
-- 本番運用までやるなら Docker
+- Postgres を使うなら Docker または手元の DB
 
 確認コマンド:
 
@@ -37,41 +29,35 @@ git --version
 docker --version
 ```
 
-意味:
-
-- `node -v` は Node.js のバージョン確認です
-- `npm -v` は npm のバージョン確認です
-- `git --version` は Git が入っているかの確認です
-- `docker --version` は Docker が使えるかの確認です
-
 ## セットアップ手順
 
-### 1. コードを自分のPCにコピーする
+### 1. コードをコピーする
 
 ```bash
 git clone https://github.com/aharada54914/my-recipe-app-vps.git
 ```
 
 意味:
-GitHub にあるコードを、自分のPCに丸ごとコピーします。
 
-### 2. 作業フォルダに入る
+GitHub 上の repo を手元に複製します。
+
+### 2. 作業フォルダへ移動する
 
 ```bash
 cd my-recipe-app-vps
 ```
 
-意味:
-このアプリのフォルダの中に移動します。
-
-### 3. 必要なライブラリを全部入れる
+### 3. 依存を入れる
 
 ```bash
 npm install
 ```
 
 意味:
-アプリを動かすために必要な部品をまとめてインストールします。
+
+- root workspace の依存を入れます
+- `packages/shared-types` の build が走ります
+- `apps/api` の Prisma client も生成されます
 
 ### 4. 設定ファイルを作る
 
@@ -79,97 +65,133 @@ npm install
 cp env.example .env
 ```
 
-意味:
-ひな形ファイル `env.example` をコピーして、本物の設定ファイル `.env` を作ります。
-
-### 5. 設定ファイルを開く
+### 5. `.env` を開く
 
 ```bash
 nano .env
 ```
 
-意味:
-`.env` の中身を編集します。
+### 6. 最低限の値を入れる
 
-まず最低限よく使う設定:
+ローカル開発なら最初はこれで十分です。
 
 ```env
-DB_PASSWORD=好きな強いパスワード
-DATABASE_URL=postgresql://kitchen:好きな強いパスワード@postgres:5432/kitchen_app
-JWT_SECRET=長いランダム文字列
+DB_PASSWORD=change_me
+DATABASE_URL=postgresql://kitchen:change_me@localhost:5432/kitchen_app
+JWT_SECRET=change_me_to_a_random_64_char_string
 JWT_EXPIRES_IN=7d
 API_PORT=3001
 API_HOST=0.0.0.0
 FRONTEND_URL=http://localhost:5173
 TZ=Asia/Tokyo
+WEEKLY_EMAIL_CRON="0 8 * * 1"
 ENABLE_WEEKLY_EMAIL_JOB=false
-NODE_ENV=production
+NODE_ENV=development
 ```
 
 意味:
 
-- `DB_PASSWORD` はデータベースのパスワードです
-- `DATABASE_URL` は API が DB に接続する場所です
-- `JWT_SECRET` はログイン状態を守るための秘密鍵です
-- `JWT_EXPIRES_IN` はログインの有効期限です
-- `API_PORT` は API のポート番号です
-- `API_HOST` は API がどこで待ち受けるかです
-- `FRONTEND_URL` は画面のURLです
-- `TZ` はタイムゾーンです
-- `ENABLE_WEEKLY_EMAIL_JOB=false` は週次メール送信を止めます
-- `NODE_ENV=production` は本番向けモードです
+- `DB_PASSWORD`: DB パスワード
+- `DATABASE_URL`: API と MCP server が DB へつなぐ先
+- `JWT_SECRET`: 認証トークンの署名鍵
+- `FRONTEND_URL`: ブラウザ側の origin
+- `WEEKLY_EMAIL_CRON`: 週次ジョブ時刻。引用符付きで入れる
+- `ENABLE_WEEKLY_EMAIL_JOB=false`: ローカルで job を止める
 
-補足:
+必要に応じて追加:
 
-- Google 連携を使うなら `GOOGLE_CLIENT_ID` なども必要です
-- AI 相談を使うなら `GEMINI_API_KEY` も必要です
+- Google 連携: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
+- Gemini: `GEMINI_API_KEY` または `GEMINI_PHOTO_*`, `GEMINI_ADVICE_*`
+- Discord bot: `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`, `DISCORD_GUILD_ID`, `DISCORD_INTERNAL_API_TOKEN`
+- MCP: `MCP_AUTH_TOKEN`
 
-### 6. 画面だけ起動する
+### 7. Web を起動する
 
 ```bash
 npm run dev
 ```
 
 意味:
-ブラウザに見える画面だけ起動します。
 
-### 7. API も別ターミナルで起動する
+Vite dev server が立ち上がります。
+
+### 8. API を別ターミナルで起動する
 
 ```bash
 npm run dev:api
 ```
 
 意味:
-裏側の処理を担当する API を起動します。
 
-注意:
-本当に全部の機能を試すなら、ターミナルを 2 つ使います。
+週間献立、設定保存、料理相談、Discord internal route は API が必要です。
 
-- ターミナル1で `npm run dev`
-- ターミナル2で `npm run dev:api`
-
-### 8. ビルドできるか確認する
+### 9. MCP を使うなら別ターミナルで起動する
 
 ```bash
-npm run build
+npm --workspace apps/mcp-server run dev
 ```
 
 意味:
-本番向けの形にまとめられるか確認します。
 
-### 9. テストする
+Claude などの MCP client から使うサーバーです。
+
+### 10. Discord bot を使うなら別ターミナルで起動する
 
 ```bash
-npm test
+npm run dev:discord-bot
 ```
 
 意味:
-壊れていないか、自動テストで確認します。
+
+Discord workflow の動作確認用です。API が先に起動している必要があります。
+
+### 11. 動作確認する
+
+Web:
+
+```text
+http://localhost:5173
+```
+
+API health:
+
+```text
+http://localhost:3001/api/health
+```
+
+MCP health:
+
+```text
+http://localhost:3002/health
+```
 
 ## 最初に触るおすすめ順
 
-1. レシピ検索を開く
-2. 気になるレシピをお気に入りに入れる
-3. 在庫管理で家の食材を入れる
-4. 週間献立で1週間分を作る
-5. 設定で通知や見た目を調整する
+1. `/search` でレシピ検索
+2. `/stock` で在庫入力
+3. `/weekly-menu` で献立生成
+4. `/gemini` で料理相談
+5. MCP が必要なら client から `/mcp` に接続
+
+## よく使う確認コマンド
+
+```bash
+npm run build
+npm test
+npm run test:api
+npm run test:web
+npm run test:mcp-server
+```
+
+Discord bot だけ確認したい場合:
+
+```bash
+npm --workspace apps/discord-bot run build
+```
+
+## つまずきやすい点
+
+1. `npm run dev` だけでは API も MCP も起動しません
+2. `DATABASE_URL` の host は、自分の起動方法に合わせて変える必要があります
+3. `WEEKLY_EMAIL_CRON` は引用符を外すと shell や Compose で壊れやすいです
+4. Discord bot は API を直接叩くので、MCP を起動しても bot には効きません
