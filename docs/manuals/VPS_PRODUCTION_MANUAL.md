@@ -49,6 +49,7 @@ Internet
 | `/opt/kitchen-app/docker-compose.yml` | 本番 stack 定義 |
 | `/opt/kitchen-app/nginx.conf` | compose nginx ルーティング |
 | `/opt/kitchen-app/scripts/ops/kitchenctl.sh` | 日常運用コマンド |
+| `scripts/ops/sync-vps-runtime.sh` | ローカル作業ツリーを `/opt/kitchen-app` へ同期する補助スクリプト |
 | `/etc/systemd/system/kitchen-app.service` | stack 自動起動 |
 | `/etc/systemd/system/kitchen-app-backup.timer` | DB バックアップ timer |
 
@@ -187,6 +188,19 @@ bash scripts/ops/kitchenctl.sh prune-backups
 2. `docker-compose.yml`, `nginx.conf`, `apps/*`, `packages/*`, `scripts/ops/*` を同期する
 3. `bash scripts/ops/kitchenctl.sh up --build` 相当で再構築する
 4. `health` と公開 endpoint を確認する
+
+推奨手順:
+
+```bash
+bash scripts/ops/sync-vps-runtime.sh
+```
+
+補足:
+
+- remote staging は `/tmp/kitchen-app-sync`
+- 既定では `root@178.104.88.252:/opt/kitchen-app` へ同期する
+- `.env`, `ssl/`, `backups/` は保護して上書きしない
+- build だけ止めたい場合は `bash scripts/ops/sync-vps-runtime.sh --sync-only`
 
 ## systemd 管理
 

@@ -126,6 +126,14 @@ bash scripts/ops/open-localhost-tunnel.sh 3001
 4. `health` と公開 endpoint を必ず確認する
 5. MCP を触ったら `/mcp/health` と client 接続の両方を確認する
 
+標準の同期コマンド:
+
+```bash
+bash scripts/ops/sync-vps-runtime.sh
+```
+
+このコマンドは `root@178.104.88.252:/opt/kitchen-app` へ同期し、`.env`, `ssl/`, `backups/` を保護したまま `kitchenctl.sh up` と `health` まで行う。
+
 ## systemd
 
 ```bash

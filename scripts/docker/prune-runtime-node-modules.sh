@@ -34,8 +34,6 @@ find "$ROOT" -type d \
     -name '__tests__' -o \
     -name example -o \
     -name examples -o \
-    -name docs -o \
-    -name doc -o \
     -name benchmark -o \
     -name benchmarks -o \
     -name coverage -o \
