@@ -510,7 +510,7 @@ export function buildWeeklyMenuProposalItems(params: {
           .filter((entry) => entry.score > 0)
           .sort((left, right) => right.score - left.score)
           .map((entry) => toCandidate(entry.recipe, entry.score)),
-        6,
+        15,
       )
 
       const nextSideIndex = sideCandidates.length > 0 ? 0 : undefined
@@ -590,7 +590,7 @@ export function buildWeeklyMenuProposalItems(params: {
 
     const mainCandidates = uniqueCandidates(
       scoredMains.map((entry) => toCandidate(entry.recipe, entry.score, entry.reason)),
-      8,
+      30,
     )
     const bestMain = scoredMains[0]
     if (!bestMain || mainCandidates.length === 0) {
@@ -619,7 +619,7 @@ export function buildWeeklyMenuProposalItems(params: {
       .filter((entry) => entry.score > 0)
       .sort((left, right) => right.score - left.score)
       .map((entry) => toCandidate(entry.recipe, entry.score)),
-      6,
+      15,
     )
     const bestSide = sideCandidates[0]
 
